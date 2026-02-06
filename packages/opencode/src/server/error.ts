@@ -21,6 +21,38 @@ export const ERRORS = {
       },
     },
   },
+  401: {
+    description: "Unauthorized",
+    content: {
+      "application/json": {
+        schema: resolver(
+          z
+            .object({
+              error: z.string(),
+            })
+            .meta({
+              ref: "UnauthorizedError",
+            }),
+        ),
+      },
+    },
+  },
+  403: {
+    description: "Forbidden",
+    content: {
+      "application/json": {
+        schema: resolver(
+          z
+            .object({
+              error: z.string(),
+            })
+            .meta({
+              ref: "ForbiddenError",
+            }),
+        ),
+      },
+    },
+  },
   404: {
     description: "Not found",
     content: {

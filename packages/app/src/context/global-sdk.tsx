@@ -4,18 +4,24 @@ import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, onCleanup } from "solid-js"
 import { usePlatform } from "./platform"
 import { useServer } from "./server"
+import { useAuth, addAuthInterceptor } from "./auth"
 
 export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleContext({
   name: "GlobalSDK",
   init: () => {
     const server = useServer()
     const platform = usePlatform()
+    const auth = useAuth()
     const abort = new AbortController()
+
+    const addAuth = (client: Parameters<typeof addAuthInterceptor>[0]) =>
+      addAuthInterceptor(client, () => auth.token)
 
     const eventSdk = createOpencodeClient({
       baseUrl: server.url,
       signal: abort.signal,
       fetch: platform.fetch,
+      onClient: addAuth,
     })
     const emitter = createGlobalEmitter<{
       [key: string]: Event
@@ -101,6 +107,7 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
       baseUrl: server.url,
       fetch: platform.fetch,
       throwOnError: true,
+      onClient: addAuth,
     })
 
     return { url: server.url, client: sdk, event: emitter }

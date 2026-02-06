@@ -18,16 +18,35 @@ const disposal = {
   all: undefined as Promise<void> | undefined,
 }
 
+// Lazy import to avoid circular dependency
+const getUserContext = async () => {
+  const { User } = await import("@/user")
+  return User.current()
+}
+
+const getUserWorktree = async (projectID: string, sandbox: string) => {
+  const { UserWorktree } = await import("@/worktree/user-worktree")
+  return UserWorktree.getOrCreate(projectID, sandbox)
+}
+
 export const Instance = {
   async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
-    let existing = cache.get(input.directory)
+    // In multi-user mode, use user-specific cache key
+    const user = await getUserContext()
+    const cacheKey = user ? `${input.directory}:${user.id}` : input.directory
+
+    let existing = cache.get(cacheKey)
     if (!existing) {
-      Log.Default.info("creating instance", { directory: input.directory })
+      Log.Default.info("creating instance", { directory: input.directory, userID: user?.id })
       existing = iife(async () => {
         const { project, sandbox } = await Project.fromDirectory(input.directory)
+
+        // In multi-user mode, get or create a user-specific worktree
+        const worktree = await getUserWorktree(project.id, sandbox)
+
         const ctx = {
           directory: input.directory,
-          worktree: sandbox,
+          worktree,
           project,
         }
         await context.provide(ctx, async () => {
@@ -35,7 +54,7 @@ export const Instance = {
         })
         return ctx
       })
-      cache.set(input.directory, existing)
+      cache.set(cacheKey, existing)
     }
     const ctx = await existing
     return context.provide(ctx, async () => {
@@ -67,9 +86,11 @@ export const Instance = {
     return State.create(() => Instance.directory, init, dispose)
   },
   async dispose() {
-    Log.Default.info("disposing instance", { directory: Instance.directory })
+    const user = await getUserContext()
+    const cacheKey = user ? `${Instance.directory}:${user.id}` : Instance.directory
+    Log.Default.info("disposing instance", { directory: Instance.directory, userID: user?.id })
     await State.dispose(Instance.directory)
-    cache.delete(Instance.directory)
+    cache.delete(cacheKey)
     GlobalBus.emit("event", {
       directory: Instance.directory,
       payload: {

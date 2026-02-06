@@ -4,6 +4,8 @@ import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Storage } from "@/storage/storage"
+import { User } from "@/user"
+import { Flag } from "@/flag/flag"
 import { fn } from "@/util/fn"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
@@ -58,6 +60,56 @@ export namespace PermissionNext {
       )
     }
     return ruleset
+  }
+
+  /**
+   * Get permission ruleset from user's permission settings in multi-user mode.
+   */
+  export function fromUserPermission(): Ruleset {
+    const multiUserEnabled = Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+    if (!multiUserEnabled) return []
+
+    const user = User.current()
+    if (!user) return []
+
+    const permission = user.permission
+    const level = permission.level
+
+    // Full access - no restrictions
+    if (level === "full") return []
+
+    // Read-only - deny all write operations
+    if (level === "readonly") {
+      return [
+        { permission: "edit", action: "deny", pattern: "*" },
+        { permission: "write", action: "deny", pattern: "*" },
+        { permission: "bash", action: "deny", pattern: "*" },
+        { permission: "external_directory", action: "deny", pattern: "*" },
+      ]
+    }
+
+    // Custom - use custom permission settings
+    if (level === "custom" && permission.custom) {
+      const custom = permission.custom
+      const ruleset: Ruleset = []
+
+      if (custom.edit) {
+        ruleset.push({ permission: "edit", action: custom.edit, pattern: "*" })
+      }
+      if (custom.write) {
+        ruleset.push({ permission: "write", action: custom.write, pattern: "*" })
+      }
+      if (custom.bash) {
+        ruleset.push({ permission: "bash", action: custom.bash, pattern: "*" })
+      }
+      if (custom.read) {
+        ruleset.push({ permission: "read", action: custom.read, pattern: "*" })
+      }
+
+      return ruleset
+    }
+
+    return []
   }
 
   export function merge(...rulesets: Ruleset[]): Ruleset {
@@ -229,7 +281,9 @@ export namespace PermissionNext {
   )
 
   export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
-    const merged = merge(...rulesets)
+    // User permissions are applied first (highest priority)
+    const userRuleset = fromUserPermission()
+    const merged = merge(userRuleset, ...rulesets)
     log.info("evaluate", { permission, pattern, ruleset: merged })
     const match = merged.findLast(
       (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),

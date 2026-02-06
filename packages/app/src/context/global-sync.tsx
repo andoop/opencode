@@ -43,6 +43,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import { usePlatform } from "./platform"
 import { useLanguage } from "@/context/language"
+import { useAuth, addAuthInterceptor } from "./auth"
 import { Persist, persisted } from "@/utils/persist"
 
 type ProjectMeta = {
@@ -135,6 +136,7 @@ function createGlobalSync() {
   const globalSDK = useGlobalSDK()
   const platform = usePlatform()
   const language = useLanguage()
+  const auth = useAuth()
   const owner = getOwner()
   if (!owner) throw new Error("GlobalSync must be created within owner")
   const vcsCache = new Map<string, VcsCache>()
@@ -151,6 +153,7 @@ function createGlobalSync() {
       fetch: platform.fetch,
       directory,
       throwOnError: true,
+      onClient: (c) => addAuthInterceptor(c, () => auth.token),
     })
     sdkCache.set(directory, sdk)
     return sdk
@@ -1020,7 +1023,27 @@ function createGlobalSync() {
     setGlobalStore("ready", true)
   }
 
-  onMount(() => {
+  // Track if we've already bootstrapped to prevent double-bootstrap
+  let bootstrapped = false
+  
+  // Use createEffect to wait for auth to be ready before bootstrapping
+  createEffect(() => {
+    // Don't bootstrap more than once
+    if (bootstrapped) return
+    
+    // If multi-user mode is enabled and auth is still loading, wait
+    if (auth.isMultiUserEnabled && auth.loading) return
+    
+    // If multi-user mode is enabled and user is not authenticated, skip bootstrap
+    // (AuthGuard will redirect to login page)
+    if (auth.isMultiUserEnabled && !auth.isAuthenticated) {
+      // Set ready so the UI doesn't show loading forever
+      setGlobalStore("ready", true)
+      return
+    }
+    
+    // Auth is ready, proceed with bootstrap
+    bootstrapped = true
     bootstrap()
   })
 

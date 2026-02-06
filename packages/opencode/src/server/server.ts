@@ -40,6 +40,10 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import { User } from "../user"
+import { UserAuth } from "../user/auth"
+import { UserAuthRoutes } from "./routes/user-auth"
+import { UserRoutes } from "./routes/user"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -77,11 +81,88 @@ export namespace Server {
             status: 500,
           })
         })
-        .use((c, next) => {
-          const password = Flag.OPENCODE_SERVER_PASSWORD
-          if (!password) return next()
-          const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
-          return basicAuth({ username, password })(c, next)
+        // CORS must come BEFORE authentication to handle preflight OPTIONS requests
+        .use(
+          cors({
+            origin(input) {
+              if (!input) return
+
+              if (input.startsWith("http://localhost:")) return input
+              if (input.startsWith("http://127.0.0.1:")) return input
+              if (input === "tauri://localhost" || input === "http://tauri.localhost") return input
+
+              // Allow private IP addresses (10.x.x.x, 192.168.x.x, 172.16-31.x.x)
+              const privateIpPattern = /^http:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+):/
+              if (privateIpPattern.test(input)) {
+                return input
+              }
+
+              // *.opencode.ai (https only, adjust if needed)
+              if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
+                return input
+              }
+              if (_corsWhitelist.includes(input)) {
+                return input
+              }
+
+              return
+            },
+          }),
+        )
+        // Ensure Content-Type is present for mutation requests.
+        // Some SDK clients strip Content-Type when the body is empty/undefined;
+        // patch both the header and an empty body so Hono's JSON validator can proceed.
+        .use(async (c, next) => {
+          const method = c.req.method
+          if ((method === "POST" || method === "PUT" || method === "PATCH") && !c.req.header("content-type")) {
+            const body = c.req.raw.body
+            const headers = new Headers([...c.req.raw.headers.entries(), ["content-type", "application/json"]])
+            c.req.raw = body
+              ? new Request(c.req.raw, { headers })
+              : new Request(c.req.raw.url, { method, headers, body: "{}" })
+          }
+          return next()
+        })
+        .use(async (c, next) => {
+          // Check if multi-user mode is enabled
+          const multiUserEnabled = Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+          
+          if (!multiUserEnabled) {
+            // Fall back to basic auth if configured
+            const password = Flag.OPENCODE_SERVER_PASSWORD
+            if (password) {
+              const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
+              return basicAuth({ username, password })(c, next)
+            }
+            return next()
+          }
+
+          // Multi-user JWT authentication
+          // Public routes that don't require authentication
+          const publicPaths = [
+            "/user-auth/login",
+            "/health",
+            "/global/health",
+            "/doc",
+            "/config",
+          ]
+          if (publicPaths.some((p) => c.req.path === p || c.req.path.startsWith(p + "/"))) {
+            return next()
+          }
+
+          const authHeader = c.req.header("Authorization")
+          if (!authHeader?.startsWith("Bearer ")) {
+            return c.json({ error: "Authentication required" }, 401)
+          }
+
+          const token = authHeader.slice(7)
+          const userContext = await UserAuth.getUserContext(token)
+          if (!userContext) {
+            return c.json({ error: "Invalid or expired token" }, 401)
+          }
+
+          // Provide user context for the request
+          return User.provide(userContext, () => next())
         })
         .use(async (c, next) => {
           const skipLogging = c.req.path === "/log"
@@ -100,28 +181,56 @@ export namespace Server {
             timer.stop()
           }
         })
-        .use(
-          cors({
-            origin(input) {
-              if (!input) return
-
-              if (input.startsWith("http://localhost:")) return input
-              if (input.startsWith("http://127.0.0.1:")) return input
-              if (input === "tauri://localhost" || input === "http://tauri.localhost") return input
-
-              // *.opencode.ai (https only, adjust if needed)
-              if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
-                return input
-              }
-              if (_corsWhitelist.includes(input)) {
-                return input
-              }
-
-              return
+        .get(
+          "/health",
+          describeRoute({
+            summary: "Health check",
+            description: "Check if the server is running",
+            operationId: "health.check",
+            responses: {
+              200: {
+                description: "Server is healthy",
+                content: {
+                  "application/json": {
+                    schema: resolver(z.object({ status: z.string() })),
+                  },
+                },
+              },
             },
           }),
+          async (c) => {
+            return c.json({ status: "ok" })
+          },
+        )
+        .get(
+          "/config",
+          describeRoute({
+            summary: "Get server configuration",
+            description: "Get public server configuration",
+            operationId: "config.public",
+            responses: {
+              200: {
+                description: "Server configuration",
+                content: {
+                  "application/json": {
+                    schema: resolver(
+                      z.object({
+                        multiUser: z.boolean(),
+                      }),
+                    ),
+                  },
+                },
+              },
+            },
+          }),
+          async (c) => {
+            const multiUserEnabled = Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+            return c.json({ multiUser: multiUserEnabled })
+          },
         )
         .route("/global", GlobalRoutes())
+        .route("/user-auth", UserAuthRoutes())
+        .route("/user", UserRoutes())
         .put(
           "/auth/:providerID",
           describeRoute({
@@ -571,6 +680,15 @@ export namespace Server {
     cors?: string[]
   }) {
     _corsWhitelist = opts.cors ?? []
+
+    // Initialize admin user if multi-user mode is enabled and no users exist
+    const multiUserEnabled = Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+    if (multiUserEnabled) {
+      // Run async initialization in the background
+      User.initAdmin().catch((err) => {
+        log.error("failed to initialize admin", { error: err })
+      })
+    }
 
     const args = {
       hostname: opts.hostname,

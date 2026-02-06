@@ -22,12 +22,40 @@ import { Snapshot } from "@/snapshot"
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
 import { Global } from "@/global"
+import { User } from "@/user"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
 
   const parentTitlePrefix = "New session - "
   const childTitlePrefix = "Child session - "
+
+  // Helper to check if multi-user mode is enabled
+  function isMultiUserMode(): boolean {
+    return Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+  }
+
+  // Get current user ID in multi-user mode
+  function currentUserID(): string | undefined {
+    if (!isMultiUserMode()) return undefined
+    return User.current()?.id
+  }
+
+  // Build storage key for session (handles multi-user mode)
+  function sessionKey(projectID: string, sessionID: string, userID?: string): string[] {
+    if (isMultiUserMode() && userID) {
+      return ["user_session", userID, projectID, sessionID]
+    }
+    return ["session", projectID, sessionID]
+  }
+
+  // Build storage prefix for listing sessions
+  function sessionListPrefix(projectID: string, userID?: string): string[] {
+    if (isMultiUserMode() && userID) {
+      return ["user_session", userID, projectID]
+    }
+    return ["session", projectID]
+  }
 
   function createDefaultTitle(isChild = false) {
     return (isChild ? childTitlePrefix : parentTitlePrefix) + new Date().toISOString()
@@ -55,6 +83,7 @@ export namespace Session {
       slug: z.string(),
       projectID: z.string(),
       directory: z.string(),
+      userID: Identifier.schema("user").optional(), // User who owns this session (multi-user mode)
       parentID: Identifier.schema("session").optional(),
       summary: z
         .object({
@@ -209,13 +238,16 @@ export namespace Session {
     parentID?: string
     directory: string
     permission?: PermissionNext.Ruleset
+    userID?: string
   }) {
+    const userID = input.userID ?? currentUserID()
     const result: Info = {
       id: Identifier.descending("session", input.id),
       slug: Slug.create(),
       version: Installation.VERSION,
       projectID: Instance.project.id,
       directory: input.directory,
+      userID,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
       permission: input.permission,
@@ -225,7 +257,7 @@ export namespace Session {
       },
     }
     log.info("created", result)
-    await Storage.write(["session", Instance.project.id, result.id], result)
+    await Storage.write(sessionKey(Instance.project.id, result.id, userID), result)
     Bus.publish(Event.Created, {
       info: result,
     })
@@ -254,7 +286,9 @@ export namespace Session {
   }
 
   export const get = fn(Identifier.schema("session"), async (id) => {
-    const read = await Storage.read<Info>(["session", Instance.project.id, id])
+    const userID = currentUserID()
+    const key = sessionKey(Instance.project.id, id, userID)
+    const read = await Storage.read<Info>(key)
     return read as Info
   })
 
@@ -296,7 +330,10 @@ export namespace Session {
 
   export async function update(id: string, editor: (session: Info) => void, options?: { touch?: boolean }) {
     const project = Instance.project
-    const result = await Storage.update<Info>(["session", project.id, id], (draft) => {
+    const userID = currentUserID()
+    const key = sessionKey(project.id, id, userID)
+    
+    const result = await Storage.update<Info>(key, (draft) => {
       editor(draft)
       if (options?.touch !== false) {
         draft.time.updated = Date.now()
@@ -331,7 +368,10 @@ export namespace Session {
 
   export async function* list() {
     const project = Instance.project
-    for (const item of await Storage.list(["session", project.id])) {
+    const userID = currentUserID()
+    const prefix = sessionListPrefix(project.id, userID)
+    
+    for (const item of await Storage.list(prefix)) {
       const session = await Storage.read<Info>(item).catch(() => undefined)
       if (!session) continue
       yield session
@@ -340,8 +380,10 @@ export namespace Session {
 
   export const children = fn(Identifier.schema("session"), async (parentID) => {
     const project = Instance.project
+    const userID = currentUserID()
+    const prefix = sessionListPrefix(project.id, userID)
     const result = [] as Session.Info[]
-    for (const item of await Storage.list(["session", project.id])) {
+    for (const item of await Storage.list(prefix)) {
       const session = await Storage.read<Info>(item).catch(() => undefined)
       if (!session) continue
       if (session.parentID !== parentID) continue
@@ -352,6 +394,7 @@ export namespace Session {
 
   export const remove = fn(Identifier.schema("session"), async (sessionID) => {
     const project = Instance.project
+    const userID = currentUserID()
     try {
       const session = await get(sessionID)
       for (const child of await children(sessionID)) {
@@ -364,7 +407,7 @@ export namespace Session {
         }
         await Storage.remove(msg)
       }
-      await Storage.remove(["session", project.id, sessionID])
+      await Storage.remove(sessionKey(project.id, sessionID, session.userID ?? userID))
       Bus.publish(Event.Deleted, {
         info: session,
       })

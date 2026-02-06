@@ -1,6 +1,6 @@
 import "@/index.css"
-import { ErrorBoundary, Show, lazy, type ParentProps } from "solid-js"
-import { Router, Route, Navigate } from "@solidjs/router"
+import { ErrorBoundary, Show, lazy, type ParentProps, createEffect, createSignal } from "solid-js"
+import { Router, Route, Navigate, useNavigate } from "@solidjs/router"
 import { MetaProvider } from "@solidjs/meta"
 import { Font } from "@opencode-ai/ui/font"
 import { MarkedProvider } from "@opencode-ai/ui/context/marked"
@@ -27,6 +27,7 @@ import { CommandProvider } from "@/context/command"
 import { LanguageProvider, useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { HighlightsProvider } from "@/context/highlights"
+import { AuthProvider, useAuth } from "@/context/auth"
 import Layout from "@/pages/layout"
 import DirectoryLayout from "@/pages/directory-layout"
 import { ErrorPage } from "./pages/error"
@@ -34,7 +35,47 @@ import { Suspense } from "solid-js"
 
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
+const Login = lazy(() => import("@/pages/login"))
+const Admin = lazy(() => import("@/pages/admin"))
 const Loading = () => <div class="size-full" />
+
+function AuthGuard(props: ParentProps) {
+  const auth = useAuth()
+  const navigate = useNavigate()
+
+  createEffect(() => {
+    if (auth.isMultiUserEnabled && !auth.loading && !auth.isAuthenticated) {
+      navigate("/login")
+    }
+  })
+
+  // Wait for auth to finish loading before rendering protected content
+  // If still loading, show loading state
+  // If multi-user is disabled, render children immediately
+  // If multi-user is enabled, only render children when authenticated
+  return (
+    <Show when={!auth.loading && (!auth.isMultiUserEnabled || auth.isAuthenticated)} fallback={<Loading />}>
+      {props.children}
+    </Show>
+  )
+}
+
+function AdminGuard(props: ParentProps) {
+  const auth = useAuth()
+  const navigate = useNavigate()
+
+  createEffect(() => {
+    if (!auth.loading && !auth.isAdmin) {
+      navigate("/")
+    }
+  })
+
+  return (
+    <Show when={auth.isAdmin} fallback={<Loading />}>
+      {props.children}
+    </Show>
+  )
+}
 
 function UiI18nBridge(props: ParentProps) {
   const language = useLanguage()
@@ -99,8 +140,12 @@ export function AppInterface(props: { defaultUrl?: string }) {
     if (props.defaultUrl) return props.defaultUrl
     if (stored) return stored
     if (location.hostname.includes("opencode.ai")) return "http://localhost:4096"
-    if (import.meta.env.DEV)
-      return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
+    if (import.meta.env.DEV) {
+      // 使用访问的主机名而不是固定的 localhost，这样从其他设备访问也能工作
+      const host = import.meta.env.VITE_OPENCODE_SERVER_HOST ?? window.location.hostname
+      const port = import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
+      return `http://${host}:${port}`
+    }
 
     return window.location.origin
   }
@@ -108,59 +153,83 @@ export function AppInterface(props: { defaultUrl?: string }) {
   return (
     <ServerProvider defaultUrl={defaultServerUrl()}>
       <ServerKey>
-        <GlobalSDKProvider>
-          <GlobalSyncProvider>
-            <Router
-              root={(props) => (
-                <SettingsProvider>
-                  <PermissionProvider>
-                    <LayoutProvider>
-                      <NotificationProvider>
-                        <ModelsProvider>
-                          <CommandProvider>
-                            <HighlightsProvider>
-                              <Layout>{props.children}</Layout>
-                            </HighlightsProvider>
-                          </CommandProvider>
-                        </ModelsProvider>
-                      </NotificationProvider>
-                    </LayoutProvider>
-                  </PermissionProvider>
-                </SettingsProvider>
-              )}
-            >
-              <Route
-                path="/"
-                component={() => (
-                  <Suspense fallback={<Loading />}>
-                    <Home />
-                  </Suspense>
+        <AuthProvider>
+          <GlobalSDKProvider>
+            <GlobalSyncProvider>
+              <Router
+                root={(props) => (
+                  <SettingsProvider>
+                    <PermissionProvider>
+                      <LayoutProvider>
+                        <NotificationProvider>
+                          <ModelsProvider>
+                            <CommandProvider>
+                              <HighlightsProvider>
+                                <Layout>{props.children}</Layout>
+                              </HighlightsProvider>
+                            </CommandProvider>
+                          </ModelsProvider>
+                        </NotificationProvider>
+                      </LayoutProvider>
+                    </PermissionProvider>
+                  </SettingsProvider>
                 )}
-              />
-              <Route path="/:dir" component={DirectoryLayout}>
-                <Route path="/" component={() => <Navigate href="session" />} />
+              >
                 <Route
-                  path="/session/:id?"
-                  component={(p) => (
-                    <Show when={p.params.id ?? "new"}>
-                      <TerminalProvider>
-                        <FileProvider>
-                          <PromptProvider>
-                            <CommentsProvider>
-                              <Suspense fallback={<Loading />}>
-                                <Session />
-                              </Suspense>
-                            </CommentsProvider>
-                          </PromptProvider>
-                        </FileProvider>
-                      </TerminalProvider>
-                    </Show>
+                  path="/login"
+                  component={() => (
+                    <Suspense fallback={<Loading />}>
+                      <Login />
+                    </Suspense>
                   )}
                 />
-              </Route>
-            </Router>
-          </GlobalSyncProvider>
-        </GlobalSDKProvider>
+                <Route
+                  path="/admin"
+                  component={() => (
+                    <AdminGuard>
+                      <Suspense fallback={<Loading />}>
+                        <Admin />
+                      </Suspense>
+                    </AdminGuard>
+                  )}
+                />
+                <Route
+                  path="/"
+                  component={() => (
+                    <AuthGuard>
+                      <Suspense fallback={<Loading />}>
+                        <Home />
+                      </Suspense>
+                    </AuthGuard>
+                  )}
+                />
+                <Route path="/:dir" component={DirectoryLayout}>
+                  <Route path="/" component={() => <Navigate href="session" />} />
+                  <Route
+                    path="/session/:id?"
+                    component={(p) => (
+                      <AuthGuard>
+                        <Show when={p.params.id ?? "new"}>
+                          <TerminalProvider>
+                            <FileProvider>
+                              <PromptProvider>
+                                <CommentsProvider>
+                                  <Suspense fallback={<Loading />}>
+                                    <Session />
+                                  </Suspense>
+                                </CommentsProvider>
+                              </PromptProvider>
+                            </FileProvider>
+                          </TerminalProvider>
+                        </Show>
+                      </AuthGuard>
+                    )}
+                  />
+                </Route>
+              </Router>
+            </GlobalSyncProvider>
+          </GlobalSDKProvider>
+        </AuthProvider>
       </ServerKey>
     </ServerProvider>
   )

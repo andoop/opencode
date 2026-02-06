@@ -4,12 +4,14 @@ import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { createEffect, createMemo, onCleanup } from "solid-js"
 import { useGlobalSDK } from "./global-sdk"
 import { usePlatform } from "./platform"
+import { useAuth, addAuthInterceptor } from "./auth"
 
 export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
   name: "SDK",
   init: (props: { directory: string }) => {
     const platform = usePlatform()
     const globalSDK = useGlobalSDK()
+    const auth = useAuth()
 
     const directory = createMemo(() => props.directory)
     const client = createMemo(() =>
@@ -18,6 +20,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         fetch: platform.fetch,
         directory: directory(),
         throwOnError: true,
+        onClient: (c) => addAuthInterceptor(c, () => auth.token),
       }),
     )
 
