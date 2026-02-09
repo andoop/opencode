@@ -253,21 +253,54 @@ export default function Page() {
   // Get session directory (may be worktree) to read data from correct store
   // First try to get from sync.session.get (project root), but if not found,
   // we'll find it in sessionSyncData after checking worktree stores
+  //
+  // Cache the last resolved directory per session to prevent flip-flop when the
+  // session is temporarily removed from the project root store (e.g. by trimSessions).
+  // Without this, sending a message from a history session can cause the page to switch
+  // from watching the worktree store back to the project root store, losing events.
+  let cachedDirForSession: string | undefined
+  let cachedDirSessionId: string | undefined
+
   const sessionDirectory = createMemo(() => {
     const sessionID = params.id
-    if (!sessionID) return sdk.directory
+    if (!sessionID) {
+      cachedDirForSession = undefined
+      cachedDirSessionId = undefined
+      return sdk.directory
+    }
+    if (sessionID !== cachedDirSessionId) {
+      cachedDirForSession = undefined
+      cachedDirSessionId = sessionID
+    }
     // Try project root first
     const rootSession = sync.session.get(sessionID)
-    if (rootSession?.directory) return rootSession.directory
+    if (rootSession?.directory) {
+      cachedDirForSession = rootSession.directory
+      return rootSession.directory
+    }
+    // If the session was previously resolved to a specific directory, keep using it
+    // instead of falling back to sdk.directory (prevents store flip-flop)
+    if (cachedDirForSession) return cachedDirForSession
     // Fall back to project directory - sessionSyncData will find the correct store
     return sdk.directory
   })
   // Get sync data from session directory, not project directory
   // If session is found in this store and has a different directory, use that
   // Also check if messages exist in this store to determine if it's the correct store
+  //
+  // Similarly cache the resolved actual directory to prevent flip-flop.
+  let resolvedDir: string | undefined
+  let resolvedDirSessionId: string | undefined
+
   const sessionSyncResult = createMemo(() => {
     const dir = sessionDirectory()
     const sessionID = params.id
+
+    if (sessionID !== resolvedDirSessionId) {
+      resolvedDir = undefined
+      resolvedDirSessionId = sessionID
+    }
+
     let data = globalSync.child(dir)[0]
     let actualDir = dir
     
@@ -282,27 +315,34 @@ export default function Page() {
           data = globalSync.child(actualDir)[0]
         }
       } else {
-        // Session not found in session list, but check if messages exist
-        const hasMessages = data.message[sessionID] !== undefined
-        if (!hasMessages && dir === sdk.directory) {
-          // No messages in project root, try to find session in worktree stores
-          const project = layout.projects.list().find((p) => p.worktree === sdk.directory)
-          if (project) {
-            const sandboxes = [project.worktree, ...(project.sandboxes ?? [])]
-            for (const sandboxDir of sandboxes) {
-              const sandboxData = globalSync.child(sandboxDir)[0]
-              if (sandboxData.message[sessionID] !== undefined && sandboxData.message[sessionID].length > 0) {
-                actualDir = sandboxDir
-                data = sandboxData
-                break
-              }
-              const sandboxMatch = Binary.search(sandboxData.session, sessionID, (s) => s.id)
-              if (sandboxMatch.found) {
-                const foundSandboxSession = sandboxData.session[sandboxMatch.index]
-                if (foundSandboxSession?.directory) {
-                  actualDir = foundSandboxSession.directory
-                  data = globalSync.child(actualDir)[0]
+        // Session not found in session list - prefer the previously resolved directory
+        // to avoid switching stores when the session is temporarily trimmed
+        if (resolvedDir && resolvedDir !== dir) {
+          actualDir = resolvedDir
+          data = globalSync.child(actualDir)[0]
+        } else {
+          // First-time resolution: check if messages exist or search sandboxes
+          const hasMessages = data.message[sessionID] !== undefined
+          if (!hasMessages && dir === sdk.directory) {
+            // No messages in project root, try to find session in worktree stores
+            const project = layout.projects.list().find((p) => p.worktree === sdk.directory)
+            if (project) {
+              const sandboxes = [project.worktree, ...(project.sandboxes ?? [])]
+              for (const sandboxDir of sandboxes) {
+                const sandboxData = globalSync.child(sandboxDir)[0]
+                if (sandboxData.message[sessionID] !== undefined && sandboxData.message[sessionID].length > 0) {
+                  actualDir = sandboxDir
+                  data = sandboxData
                   break
+                }
+                const sandboxMatch = Binary.search(sandboxData.session, sessionID, (s) => s.id)
+                if (sandboxMatch.found) {
+                  const foundSandboxSession = sandboxData.session[sandboxMatch.index]
+                  if (foundSandboxSession?.directory) {
+                    actualDir = foundSandboxSession.directory
+                    data = globalSync.child(actualDir)[0]
+                    break
+                  }
                 }
               }
             }
@@ -310,18 +350,46 @@ export default function Page() {
         }
       }
     }
+
+    // Cache the resolved directory so we don't lose it if the session is trimmed
+    if (actualDir !== sdk.directory) {
+      resolvedDir = actualDir
+    }
+
     return { data, directory: actualDir }
   })
   const sessionSyncData = createMemo(() => sessionSyncResult().data)
   const actualSessionDir = createMemo(() => sessionSyncResult().directory)
   // Get session info from sessionSyncData (which may be from worktree store)
+  // Cache the result to prevent losing session info when the session is temporarily
+  // removed from the store by trimSessions.
+  let cachedInfo: ReturnType<typeof sync.session.get>
+  let cachedInfoSessionId: string | undefined
   const info = createMemo(() => {
-    if (!params.id) return undefined
+    if (!params.id) {
+      cachedInfo = undefined
+      cachedInfoSessionId = undefined
+      return undefined
+    }
+    if (params.id !== cachedInfoSessionId) {
+      cachedInfo = undefined
+      cachedInfoSessionId = params.id
+    }
     const data = sessionSyncData()
     const match = Binary.search(data.session, params.id, (s) => s.id)
-    if (match.found) return data.session[match.index]
+    if (match.found) {
+      cachedInfo = data.session[match.index]
+      return data.session[match.index]
+    }
     // Fallback to project root store
-    return sync.session.get(params.id)
+    const root = sync.session.get(params.id)
+    if (root) {
+      cachedInfo = root
+      return root
+    }
+    // Use cached info to prevent transient undefined
+    if (cachedInfo) return cachedInfo
+    return undefined
   })
 
   const request = createMemo(() => {
@@ -2311,6 +2379,7 @@ export default function Page() {
                     inputRef = el
                   }}
                   onSubmit={resumeScroll}
+                  resolvedSessionDir={actualSessionDir()}
                 />
               </Show>
             </div>

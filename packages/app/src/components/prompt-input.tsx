@@ -77,6 +77,9 @@ interface PromptInputProps {
   newSessionWorktree?: string
   onNewSessionWorktreeReset?: () => void
   onSubmit?: () => void
+  /** Resolved session directory (may be worktree). Allows prompt-input to find
+   *  sessions that only exist in a worktree store, not the project root store. */
+  resolvedSessionDir?: string
 }
 
 const EXAMPLES = [
@@ -224,13 +227,60 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     return paths
   })
-  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
-  const status = createMemo(
-    () =>
-      sync.data.session_status[params.id ?? ""] ?? {
-        type: "idle",
-      },
-  )
+  // Find the session from the correct store. For worktree sessions, the session only
+  // exists in the worktree store, NOT in the project root store. Use resolvedSessionDir
+  // prop (from session.tsx) to look in the right place.
+  const findSession = (sessionID: string) => {
+    // Try project root store first
+    const root = sync.session.get(sessionID)
+    if (root) return root
+    // Try the resolved session directory's store (worktree)
+    const dir = props.resolvedSessionDir
+    if (dir && dir !== sdk.directory) {
+      const [store] = globalSync.child(dir, { bootstrap: false })
+      const match = Binary.search(store.session, sessionID, (s) => s.id)
+      if (match.found) return store.session[match.index]
+    }
+    return undefined
+  }
+
+  let cachedSession: ReturnType<typeof sync.session.get>
+  let cachedSessionId: string | undefined
+  const info = createMemo(() => {
+    const sessionID = params.id
+    if (!sessionID) {
+      cachedSession = undefined
+      cachedSessionId = undefined
+      return undefined
+    }
+    if (sessionID !== cachedSessionId) {
+      cachedSession = undefined
+      cachedSessionId = sessionID
+    }
+    const session = findSession(sessionID)
+    if (session) {
+      cachedSession = session
+      return session
+    }
+    // If the session was previously found, keep using the cached version
+    // to prevent losing session info when the session is trimmed from the store
+    if (cachedSession) return cachedSession
+    return undefined
+  })
+  // Also read session status from the correct store (worktree or project root)
+  const status = createMemo(() => {
+    const sessionID = params.id ?? ""
+    const rootStatus = sync.data.session_status[sessionID]
+    if (rootStatus) return rootStatus
+    // Check worktree store for status
+    const dir = props.resolvedSessionDir
+    if (dir && dir !== sdk.directory) {
+      const [store] = globalSync.child(dir, { bootstrap: false })
+      const s = store.session_status[sessionID]
+      if (s) return s
+    }
+    return { type: "idle" as const }
+  })
   const working = createMemo(() => status()?.type !== "idle")
   const imageAttachments = createMemo(
     () => prompt.current().filter((part) => part.type === "image") as ImageAttachmentPart[],
@@ -241,7 +291,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const sessionInfo = createMemo(() => {
     const sessionID = params.id
     if (!sessionID) return undefined
-    return sync.session.get(sessionID)
+    return findSession(sessionID) ?? cachedSession
   })
   const sessionDirectory = createMemo(() => sessionInfo()?.directory ?? sdk.directory)
   const projectDirectory = createMemo(() => sdk.directory)
