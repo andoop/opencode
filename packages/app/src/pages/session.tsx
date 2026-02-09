@@ -60,6 +60,8 @@ import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
 import { usePermission } from "@/context/permission"
 import { decode64 } from "@/utils/base64"
 import { showToast } from "@opencode-ai/ui/toast"
+import { useGlobalSDK } from "@/context/global-sdk"
+import { useGlobalSync } from "@/context/global-sync"
 import {
   SessionHeader,
   SessionContextTab,
@@ -240,6 +242,8 @@ export default function Page() {
   const prompt = usePrompt()
   const comments = useComments()
   const permission = usePermission()
+  const globalSDK = useGlobalSDK()
+  const globalSync = useGlobalSync()
 
   const request = createMemo(() => {
     const sessionID = params.id
@@ -436,7 +440,6 @@ export default function Page() {
     messageId: undefined as string | undefined,
     turnStart: 0,
     mobileTab: "session" as "session" | "changes",
-    newSessionWorktree: "main",
     promptHeight: 0,
   })
 
@@ -676,7 +679,56 @@ export default function Page() {
       category: language.t("command.category.session"),
       keybind: "mod+shift+s",
       slash: "new",
-      onSelect: () => navigate(`/${params.dir}/session`),
+      onSelect: async () => {
+        const project = layout.projects.list().find((p) => p.worktree === decode64(params.dir) || p.sandboxes?.includes(decode64(params.dir) ?? ""))
+        if (project) {
+          const created = await globalSDK.client.session
+            .create({ directory: project.worktree })
+            .then((x) => x.data)
+            .catch((err) => {
+              showToast({
+                title: language.t("prompt.toast.sessionCreateFailed.title"),
+                description: err instanceof Error ? err.message : String(err),
+              })
+              return undefined
+            })
+          
+          if (created) {
+            const sessionDirectory = created.directory
+            const projectDirectory = project.worktree
+            
+            if (sessionDirectory !== projectDirectory) {
+              const { Worktree: WorktreeState } = await import("@/utils/worktree")
+              WorktreeState.pending(sessionDirectory)
+              
+              const timeoutMs = 5 * 60 * 1000
+              const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
+                setTimeout(() => {
+                  resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
+                }, timeoutMs)
+              })
+              
+              const result = await Promise.race([
+                WorktreeState.wait(sessionDirectory),
+                timeout,
+              ])
+              
+              if (result.status === "failed") {
+                showToast({
+                  title: language.t("prompt.toast.sessionCreateFailed.title"),
+                  description: result.message,
+                })
+                return
+              }
+            }
+            
+            globalSync.child(sessionDirectory)
+            navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
+          }
+        } else {
+          navigate(`/${params.dir}/session`)
+        }
+      },
     },
     {
       id: "file.open",
@@ -2061,23 +2113,7 @@ export default function Page() {
                 </Show>
               </Match>
               <Match when={true}>
-                <NewSessionView
-                  worktree={newSessionWorktree()}
-                  onWorktreeChange={(value) => {
-                    if (value === "create") {
-                      setStore("newSessionWorktree", value)
-                      return
-                    }
-
-                    setStore("newSessionWorktree", "main")
-
-                    const target = value === "main" ? sync.project?.worktree : value
-                    if (!target) return
-                    if (target === sync.data.path.directory) return
-                    layout.projects.open(target)
-                    navigate(`/${base64Encode(target)}/session`)
-                  }}
-                />
+                <NewSessionView />
               </Match>
             </Switch>
           </div>
@@ -2155,8 +2191,6 @@ export default function Page() {
                   ref={(el) => {
                     inputRef = el
                   }}
-                  newSessionWorktree={newSessionWorktree()}
-                  onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
                   onSubmit={resumeScroll}
                 />
               </Show>

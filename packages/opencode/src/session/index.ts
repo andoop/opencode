@@ -1,5 +1,7 @@
 import { Slug } from "@opencode-ai/util/slug"
 import path from "path"
+import fs from "fs/promises"
+import { $ } from "bun"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Decimal } from "decimal.js"
@@ -18,11 +20,14 @@ import { SessionPrompt } from "./prompt"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
+import { Project } from "../project/project"
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
 import { Global } from "@/global"
 import { User } from "@/user"
+import { GlobalBus } from "@/bus/global"
+import { Worktree } from "@/worktree"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -55,6 +60,48 @@ export namespace Session {
       return ["user_session", userID, projectID]
     }
     return ["session", projectID]
+  }
+
+  // Check if a directory is a session worktree
+  function isSessionWorktree(directory: string, projectID: string): boolean {
+    const worktreeRoot = path.join(Global.Path.data, "worktree", projectID)
+    return directory.startsWith(worktreeRoot + path.sep) || directory === worktreeRoot
+  }
+
+  // Get session worktree root directory
+  function getSessionWorktreeRoot(projectID: string): string {
+    return path.join(Global.Path.data, "worktree", projectID)
+  }
+
+  // Clean up worktree for a session
+  async function cleanupWorktree(session: Info): Promise<void> {
+    if (Instance.project.vcs !== "git") return
+    if (!isSessionWorktree(session.directory, session.projectID)) return
+
+    try {
+      const { Worktree } = await import("@/worktree")
+      await Worktree.remove({ directory: session.directory }).catch((error) => {
+        log.warn("failed to remove worktree for session", {
+          sessionID: session.id,
+          directory: session.directory,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+
+      // Remove from project sandboxes
+      await Project.removeSandbox(session.projectID, session.directory).catch(() => undefined)
+
+      log.info("cleaned_up_session_worktree", {
+        sessionID: session.id,
+        directory: session.directory,
+      })
+    } catch (error) {
+      log.warn("failed to cleanup worktree for session", {
+        sessionID: session.id,
+        directory: session.directory,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   function createDefaultTitle(isChild = false) {
@@ -241,12 +288,129 @@ export namespace Session {
     userID?: string
   }) {
     const userID = input.userID ?? currentUserID()
+    
+    // Generate session ID first to use for worktree branch name
+    const sessionID = Identifier.descending("session", input.id)
+    
+    // For new root sessions (not child sessions), create a dedicated worktree if git project
+    let sessionDirectory = input.directory
+    if (!input.parentID && Instance.project.vcs === "git") {
+      try {
+        const branch = `session/${sessionID}`
+        const root = getSessionWorktreeRoot(Instance.project.id)
+        await fs.mkdir(root, { recursive: true })
+        
+        // Use session ID as base name, sanitize for filesystem
+        const name = sessionID.replace(/[^a-z0-9-]/gi, "-").toLowerCase()
+        const worktreeDir = path.join(root, name)
+        
+        // Check if directory already exists (shouldn't happen with unique session IDs)
+        const dirExists = await fs.stat(worktreeDir).then(() => true).catch(() => false)
+        if (dirExists) {
+          // Verify it's a valid git worktree
+          const gitDirCheck = await $`git rev-parse --git-dir`.quiet().nothrow().cwd(worktreeDir)
+          if (gitDirCheck.exitCode === 0) {
+            log.warn("worktree directory already exists, using existing", { directory: worktreeDir })
+            sessionDirectory = worktreeDir
+            
+            // Publish worktree ready event since worktree already exists and is ready
+            const worktreeName = name
+            GlobalBus.emit("event", {
+              directory: worktreeDir,
+              payload: {
+                type: Worktree.Event.Ready.type,
+                properties: {
+                  name: worktreeName,
+                  branch,
+                },
+              },
+            })
+          } else {
+            // Directory exists but is not a valid git repo, try to remove it and create fresh
+            log.warn("directory exists but is not a valid git worktree, removing and recreating", {
+              directory: worktreeDir,
+            })
+            await fs.rm(worktreeDir, { recursive: true, force: true }).catch(() => undefined)
+            
+            // Create worktree with session ID-based branch
+            const created = await $`git worktree add --no-checkout -b ${branch} ${worktreeDir}`
+              .quiet()
+              .nothrow()
+              .cwd(Instance.worktree)
+            
+            if (created.exitCode === 0) {
+              await $`git reset --hard`.quiet().nothrow().cwd(worktreeDir)
+              await Project.addSandbox(Instance.project.id, worktreeDir).catch(() => undefined)
+              sessionDirectory = worktreeDir
+              
+              // Publish worktree ready event since worktree is already created and populated
+              const worktreeName = name
+              GlobalBus.emit("event", {
+                directory: worktreeDir,
+                payload: {
+                  type: Worktree.Event.Ready.type,
+                  properties: {
+                    name: worktreeName,
+                    branch,
+                  },
+                },
+              })
+              
+              log.info("created_session_worktree", { sessionID, branch, directory: worktreeDir })
+            }
+          }
+        } else {
+          // Create worktree with session ID-based branch
+          const created = await $`git worktree add --no-checkout -b ${branch} ${worktreeDir}`
+            .quiet()
+            .nothrow()
+            .cwd(Instance.worktree)
+          
+          if (created.exitCode === 0) {
+            // Populate worktree
+            await $`git reset --hard`.quiet().nothrow().cwd(worktreeDir)
+            
+            // Add to project sandboxes
+            await Project.addSandbox(Instance.project.id, worktreeDir).catch(() => undefined)
+            
+            sessionDirectory = worktreeDir
+            
+            // Publish worktree ready event since worktree is already created and populated
+            const worktreeName = name
+            GlobalBus.emit("event", {
+              directory: worktreeDir,
+              payload: {
+                type: Worktree.Event.Ready.type,
+                properties: {
+                  name: worktreeName,
+                  branch,
+                },
+              },
+            })
+            
+            log.info("created_session_worktree", { sessionID, branch, directory: worktreeDir })
+          } else {
+            const errorMsg = created.stderr?.toString() || created.stdout?.toString() || "Unknown error"
+            log.warn("failed to create worktree for session, using project directory", {
+              sessionID,
+              error: errorMsg,
+            })
+          }
+        }
+      } catch (error) {
+        log.warn("failed to create worktree for session, using project directory", {
+          sessionID,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+    
     const result: Info = {
-      id: Identifier.descending("session", input.id),
+      id: sessionID,
       slug: Slug.create(),
       version: Installation.VERSION,
       projectID: Instance.project.id,
-      directory: input.directory,
+      directory: sessionDirectory,
       userID,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
@@ -407,6 +571,10 @@ export namespace Session {
         }
         await Storage.remove(msg)
       }
+      
+      // Clean up worktree if this session has one
+      await cleanupWorktree(session)
+      
       await Storage.remove(sessionKey(project.id, sessionID, session.userID ?? userID))
       Bus.publish(Event.Deleted, {
         info: session,

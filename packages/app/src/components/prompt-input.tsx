@@ -39,6 +39,7 @@ import type { IconName } from "@opencode-ai/ui/icons/provider"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
+import { Popover } from "@opencode-ai/ui/popover"
 import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
@@ -234,6 +235,27 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const imageAttachments = createMemo(
     () => prompt.current().filter((part) => part.type === "image") as ImageAttachmentPart[],
   )
+
+  // Git branch and worktree info
+  const currentBranch = createMemo(() => sync.data.vcs?.branch)
+  const currentDirectory = createMemo(() => sync.data.path.directory)
+  const projectDirectory = createMemo(() => sdk.directory)
+  const project = createMemo(() => {
+    const directory = projectDirectory()
+    if (!directory) return
+    return layout.projects.list().find((p) => p.worktree === directory || p.sandboxes?.includes(directory))
+  })
+  const isWorktree = createMemo(() => {
+    const proj = project()
+    if (!proj) return false
+    return currentDirectory() !== proj.worktree
+  })
+  const worktreeDisplay = createMemo(() => {
+    const dir = currentDirectory()
+    if (!isWorktree()) return null
+    return getFilename(dir)
+  })
+  const showGitInfo = createMemo(() => currentBranch() || isWorktree())
 
   const [store, setStore] = createStore<{
     popover: "at" | "slash" | null
@@ -1162,72 +1184,25 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     setStore("historyIndex", -1)
     setStore("savedPrompt", null)
 
-    const projectDirectory = sdk.directory
-    const isNewSession = !params.id
-    const worktreeSelection = props.newSessionWorktree ?? "main"
-
-    let sessionDirectory = projectDirectory
-    let client = sdk.client
-
-    if (isNewSession) {
-      if (worktreeSelection === "create") {
-        const createdWorktree = await client.worktree
-          .create({ directory: projectDirectory })
-          .then((x) => x.data)
-          .catch((err) => {
-            showToast({
-              title: language.t("prompt.toast.worktreeCreateFailed.title"),
-              description: errorMessage(err),
-            })
-            return undefined
-          })
-
-        if (!createdWorktree?.directory) {
-          showToast({
-            title: language.t("prompt.toast.worktreeCreateFailed.title"),
-            description: language.t("common.requestFailed"),
-          })
-          return
-        }
-        WorktreeState.pending(createdWorktree.directory)
-        sessionDirectory = createdWorktree.directory
-      }
-
-      if (worktreeSelection !== "main" && worktreeSelection !== "create") {
-        sessionDirectory = worktreeSelection
-      }
-
-      if (sessionDirectory !== projectDirectory) {
-        client = createOpencodeClient({
-          baseUrl: sdk.url,
-          fetch: platform.fetch,
-          directory: sessionDirectory,
-          throwOnError: true,
-          onClient: (c) => addAuthInterceptor(c, () => auth.token),
-        })
-        globalSync.child(sessionDirectory)
-      }
-
-      props.onNewSessionWorktreeReset?.()
+    const session = info()
+    if (!session) {
+      // Session should have been created when user clicked "New Session" button
+      // If we're here without a session, navigate back to new session page
+      navigate(`/${base64Encode(sdk.directory)}/session`)
+      return
     }
-
-    let session = info()
-    if (!session && isNewSession) {
-      session = await client.session
-        .create()
-        .then((x) => x.data ?? undefined)
-        .catch((err) => {
-          showToast({
-            title: language.t("prompt.toast.sessionCreateFailed.title"),
-            description: errorMessage(err),
-          })
-          return undefined
-        })
-      if (session) navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}`)
-    }
-    if (!session) return
 
     props.onSubmit?.()
+
+    const sessionDirectory = session.directory
+    const projectDirectory = sdk.directory
+    const client = createOpencodeClient({
+      baseUrl: sdk.url,
+      fetch: platform.fetch,
+      directory: sessionDirectory,
+      throwOnError: true,
+      onClient: (c) => addAuthInterceptor(c, () => auth.token),
+    })
 
     const model = {
       modelID: currentModel.id,
@@ -1522,7 +1497,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     const waitForWorktree = async () => {
       const worktree = WorktreeState.get(sessionDirectory)
-      if (!worktree || worktree.status !== "pending") return true
+      
+      if (!worktree || worktree.status !== "pending") {
+        return true
+      }
 
       if (sessionDirectory === projectDirectory) {
         sync.set("session_status", session.id, { type: "busy" })
@@ -1577,15 +1555,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         if (timer.id === undefined) return
         clearTimeout(timer.id)
       })
+      
       pending.delete(session.id)
-      if (controller.signal.aborted) return false
-      if (result.status === "failed") throw new Error(result.message)
+      if (controller.signal.aborted) {
+        return false
+      }
+      if (result.status === "failed") {
+        throw new Error(result.message)
+      }
       return true
     }
 
     const send = async () => {
       const ok = await waitForWorktree()
-      if (!ok) return
+      
+      if (!ok) {
+        return
+      }
+      
       await client.session.prompt({
         sessionID: session.id,
         agent,
@@ -2047,6 +2034,37 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     <Icon name="photo" class="size-4.5" />
                   </Button>
                 </Tooltip>
+              </Show>
+              <Show when={showGitInfo()}>
+                <Popover
+                  title="Git Information"
+                  placement="top"
+                  gutter={8}
+                  triggerAs={Button}
+                  triggerProps={{
+                    variant: "ghost",
+                    class: "size-6 px-1",
+                    "aria-label": "Git branch and worktree information",
+                  }}
+                  trigger={<Icon name="branch" class="size-4.5" />}
+                >
+                  <div class="flex flex-col gap-2 min-w-[200px]">
+                    <Show when={currentBranch()}>
+                      <div class="flex items-center gap-2">
+                        <Icon name="branch" size="small" class="text-icon-weak" />
+                        <span class="text-12-medium text-text-weak">Branch:</span>
+                        <span class="text-12-medium text-text-strong">{currentBranch()}</span>
+                      </div>
+                    </Show>
+                    <Show when={isWorktree() && worktreeDisplay()}>
+                      <div class="flex items-center gap-2">
+                        <Icon name="folder" size="small" class="text-icon-weak" />
+                        <span class="text-12-medium text-text-weak">Worktree:</span>
+                        <span class="text-12-medium text-text-strong truncate">{worktreeDisplay()}</span>
+                      </div>
+                    </Show>
+                  </div>
+                </Popover>
               </Show>
             </div>
             <Tooltip

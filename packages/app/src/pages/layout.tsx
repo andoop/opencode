@@ -2707,6 +2707,66 @@ export default function Layout(props: ParentProps) {
     layout.mobileSidebar.hide()
   }
 
+  const createSession = async (project: LocalProject) => {
+    if (!layout.sidebar.opened()) {
+      setState("hoverSession", undefined)
+      setState("hoverProject", undefined)
+    }
+
+    // Create session immediately - this will also create worktree and branch
+    const created = await globalSDK.client.session
+      .create({ directory: project.worktree })
+      .then((x) => x.data)
+      .catch((err) => {
+        showToast({
+          title: language.t("prompt.toast.sessionCreateFailed.title"),
+          description: errorMessage(err),
+        })
+        return undefined
+      })
+
+    if (!created) return
+
+    const sessionDirectory = created.directory
+    const projectDirectory = project.worktree
+
+    // If session has a different directory (worktree), wait for it to be ready
+    if (sessionDirectory !== projectDirectory) {
+      setBusy(sessionDirectory, true)
+      WorktreeState.pending(sessionDirectory)
+      
+      // Wait for worktree to be ready
+      const timeoutMs = 5 * 60 * 1000
+      const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
+        setTimeout(() => {
+          resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
+        }, timeoutMs)
+      })
+
+      const result = await Promise.race([
+        WorktreeState.wait(sessionDirectory),
+        timeout,
+      ])
+
+      setBusy(sessionDirectory, false)
+
+      if (result.status === "failed") {
+        showToast({
+          title: language.t("prompt.toast.sessionCreateFailed.title"),
+          description: result.message,
+        })
+        return
+      }
+    }
+
+    // Initialize global sync for the session directory
+    globalSync.child(sessionDirectory)
+
+    // Navigate to the session
+    navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
+    layout.mobileSidebar.hide()
+  }
+
   const SidebarPanel = (panelProps: { project: LocalProject | undefined; mobile?: boolean }) => {
     const projectName = createMemo(() => {
       const project = panelProps.project
@@ -2826,14 +2886,7 @@ export default function Layout(props: ParentProps) {
                             size="large"
                             icon="plus-small"
                             class="w-full"
-                            onClick={() => {
-                              if (!layout.sidebar.opened()) {
-                                setState("hoverSession", undefined)
-                                setState("hoverProject", undefined)
-                              }
-                              navigate(`/${base64Encode(p().worktree)}/session`)
-                              layout.mobileSidebar.hide()
-                            }}
+                            onClick={() => createSession(p())}
                           >
                             {language.t("command.session.new")}
                           </Button>

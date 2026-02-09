@@ -128,21 +128,23 @@ export function SessionHeader() {
       <Show when={centerMount()}>
         {(mount) => (
           <Portal mount={mount()}>
-            <button
-              type="button"
-              class="hidden md:flex w-[320px] max-w-full min-w-0 p-1 pl-1.5 items-center gap-2 justify-between rounded-md border border-border-weak-base bg-surface-raised-base transition-colors cursor-default hover:bg-surface-raised-base-hover focus-visible:bg-surface-raised-base-hover active:bg-surface-raised-base-active"
-              onClick={() => command.trigger("file.open")}
-              aria-label={language.t("session.header.searchFiles")}
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2 overflow-visible">
-                <Icon name="magnifying-glass" size="normal" class="icon-base shrink-0" />
-                <span class="flex-1 min-w-0 text-14-regular text-text-weak truncate h-4.5 flex items-center">
-                  {language.t("session.header.search.placeholder", { project: name() })}
-                </span>
-              </div>
+            <div class="hidden md:flex items-center gap-2 w-[320px] max-w-full min-w-0">
+              <button
+                type="button"
+                class="flex-1 min-w-0 p-1 pl-1.5 items-center gap-2 justify-between rounded-md border border-border-weak-base bg-surface-raised-base transition-colors cursor-default hover:bg-surface-raised-base-hover focus-visible:bg-surface-raised-base-hover active:bg-surface-raised-base-active"
+                onClick={() => command.trigger("file.open")}
+                aria-label={language.t("session.header.searchFiles")}
+              >
+                <div class="flex min-w-0 flex-1 items-center gap-2 overflow-visible">
+                  <Icon name="magnifying-glass" size="normal" class="icon-base shrink-0" />
+                  <span class="flex-1 min-w-0 text-14-regular text-text-weak truncate h-4.5 flex items-center">
+                    {language.t("session.header.search.placeholder", { project: name() })}
+                  </span>
+                </div>
 
-              <Show when={hotkey()}>{(keybind) => <Keybind class="shrink-0">{keybind()}</Keybind>}</Show>
-            </button>
+                <Show when={hotkey()}>{(keybind) => <Keybind class="shrink-0">{keybind()}</Keybind>}</Show>
+              </button>
+            </div>
           </Portal>
         )}
       </Show>
