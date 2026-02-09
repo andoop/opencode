@@ -1,14 +1,14 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
-import { List } from "@opencode-ai/ui/list"
+import { Icon } from "@opencode-ai/ui/icon"
+import { Button } from "@opencode-ai/ui/button"
+import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import fuzzysort from "fuzzysort"
-import { createMemo, createResource, createSignal } from "solid-js"
+import { createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
-import type { ListRef } from "@opencode-ai/ui/list"
 
 interface DialogSelectDirectoryProps {
   title?: string
@@ -16,9 +16,12 @@ interface DialogSelectDirectoryProps {
   onSelect: (result: string | string[] | null) => void
 }
 
-type Row = {
-  absolute: string
-  search: string
+type DirectoryNode = {
+  path: string
+  name: string
+  expanded: boolean
+  loading: boolean
+  children: DirectoryNode[]
 }
 
 export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
@@ -27,9 +30,12 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   const dialog = useDialog()
   const language = useLanguage()
 
-  const [filter, setFilter] = createSignal("")
-
-  let list: ListRef | undefined
+  const [searchQuery, setSearchQuery] = createSignal("")
+  const [selectedPaths, setSelectedPaths] = createSignal<Set<string>>(new Set())
+  const [expandedPaths, setExpandedPaths] = createSignal<Set<string>>(new Set([""]))
+  const [loadingPaths, setLoadingPaths] = createSignal<Set<string>>(new Set())
+  const [directoryCache, setDirectoryCache] = createSignal<Map<string, DirectoryNode[]>>(new Map())
+  const [currentPath, setCurrentPath] = createSignal<string>("")
 
   const missingBase = createMemo(() => !(sync.data.path.home || sync.data.path.directory))
 
@@ -46,16 +52,9 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
   const home = createMemo(() => sync.data.path.home || fallbackPath()?.home || "")
 
-  const start = createMemo(
-    () => sync.data.path.home || sync.data.path.directory || fallbackPath()?.home || fallbackPath()?.directory,
+  const rootPath = createMemo(
+    () => sync.data.path.home || sync.data.path.directory || fallbackPath()?.home || fallbackPath()?.directory || "/",
   )
-
-  const cache = new Map<string, Promise<Array<{ name: string; absolute: string }>>>()
-
-  const clean = (value: string) => {
-    const first = (value ?? "").split(/\r?\n/)[0] ?? ""
-    return first.replace(/[\u0000-\u001F\u007F]/g, "").trim()
-  }
 
   function normalize(input: string) {
     const v = input.replaceAll("\\", "/")
@@ -63,35 +62,21 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     return v.replace(/\/+/g, "/")
   }
 
-  function normalizeDriveRoot(input: string) {
-    const v = normalize(input)
-    if (/^[A-Za-z]:$/.test(v)) return v + "/"
-    return v
-  }
-
   function trimTrailing(input: string) {
-    const v = normalizeDriveRoot(input)
+    const v = normalize(input)
     if (v === "/") return v
     if (v === "//") return v
     if (/^[A-Za-z]:\/$/.test(v)) return v
     return v.replace(/\/+$/, "")
   }
 
-  function join(base: string | undefined, rel: string) {
-    const b = trimTrailing(base ?? "")
+  function join(base: string, rel: string) {
+    const b = trimTrailing(base)
     const r = trimTrailing(rel).replace(/^\/+/, "")
     if (!b) return r
     if (!r) return b
     if (b.endsWith("/")) return b + r
     return b + "/" + r
-  }
-
-  function rootOf(input: string) {
-    const v = normalizeDriveRoot(input)
-    if (v.startsWith("//")) return "//"
-    if (v.startsWith("/")) return "/"
-    if (/^[A-Za-z]:\//.test(v)) return v.slice(0, 3)
-    return ""
   }
 
   function parentOf(input: string) {
@@ -106,221 +91,307 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     return v.slice(0, i)
   }
 
-  function modeOf(input: string) {
-    const raw = normalizeDriveRoot(input.trim())
-    if (!raw) return "relative" as const
-    if (raw.startsWith("~")) return "tilde" as const
-    if (rootOf(raw)) return "absolute" as const
-    return "relative" as const
-  }
-
-  function display(path: string, input: string) {
-    const full = trimTrailing(path)
-    if (modeOf(input) === "absolute") return full
-
-    return tildeOf(full) || full
-  }
-
-  function tildeOf(absolute: string) {
-    const full = trimTrailing(absolute)
+  function displayPath(path: string) {
     const h = home()
-    if (!h) return ""
-
+    if (!h) return path
     const hn = trimTrailing(h)
+    const full = trimTrailing(path)
     const lc = full.toLowerCase()
     const hc = hn.toLowerCase()
     if (lc === hc) return "~"
     if (lc.startsWith(hc + "/")) return "~" + full.slice(hn.length)
-    return ""
+    return full
   }
 
-  function row(absolute: string): Row {
-    const full = trimTrailing(absolute)
-    const tilde = tildeOf(full)
+  async function loadDirectory(path: string): Promise<DirectoryNode[]> {
+    const cached = directoryCache().get(path)
+    if (cached) return cached
 
-    const withSlash = (value: string) => {
-      if (!value) return ""
-      if (value.endsWith("/")) return value
-      return value + "/"
+    const key = trimTrailing(path)
+    setLoadingPaths((prev) => new Set(prev).add(key))
+
+    try {
+      const nodes = await sdk.client.file.list({ directory: key, path: "" }).then((x) => x.data ?? [])
+      const dirs = nodes
+        .filter((n) => n.type === "directory")
+        .map((n) => ({
+          path: trimTrailing(normalize(n.absolute)),
+          name: n.name,
+          expanded: false,
+          loading: false,
+          children: [],
+        }))
+
+      setDirectoryCache((prev) => {
+        const next = new Map(prev)
+        next.set(key, dirs)
+        return next
+      })
+      return dirs
+    } catch (err) {
+      console.error("Failed to load directory:", err)
+      return []
+    } finally {
+      setLoadingPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
     }
-
-    const search = Array.from(
-      new Set([full, withSlash(full), tilde, withSlash(tilde), getFilename(full)].filter(Boolean)),
-    ).join("\n")
-    return { absolute: full, search }
   }
 
-  function scoped(value: string) {
-    const base = start()
-    if (!base) return
+  const [rootDirectories] = createResource(
+    () => rootPath(),
+    async (path) => {
+      return await loadDirectory(path)
+    },
+  )
 
-    const raw = normalizeDriveRoot(value)
-    if (!raw) return { directory: trimTrailing(base), path: "" }
+  async function toggleExpand(path: string) {
+    const key = trimTrailing(path)
+    const expanded = expandedPaths()
+    const isExpanded = expanded.has(key)
 
-    const h = home()
-    if (raw === "~") return { directory: trimTrailing(h ?? base), path: "" }
-    if (raw.startsWith("~/")) return { directory: trimTrailing(h ?? base), path: raw.slice(2) }
-
-    const root = rootOf(raw)
-    if (root) return { directory: trimTrailing(root), path: raw.slice(root.length) }
-    return { directory: trimTrailing(base), path: raw }
-  }
-
-  async function dirs(dir: string) {
-    const key = trimTrailing(dir)
-    const existing = cache.get(key)
-    if (existing) return existing
-
-    const request = sdk.client.file
-      .list({ directory: key, path: "" })
-      .then((x) => x.data ?? [])
-      .catch(() => [])
-      .then((nodes) =>
-        nodes
-          .filter((n) => n.type === "directory")
-          .map((n) => ({
-            name: n.name,
-            absolute: trimTrailing(normalizeDriveRoot(n.absolute)),
-          })),
-      )
-
-    cache.set(key, request)
-    return request
-  }
-
-  async function match(dir: string, query: string, limit: number) {
-    const items = await dirs(dir)
-    if (!query) return items.slice(0, limit).map((x) => x.absolute)
-    return fuzzysort.go(query, items, { key: "name", limit }).map((x) => x.obj.absolute)
-  }
-
-  const directories = async (filter: string) => {
-    const value = clean(filter)
-    const scopedInput = scoped(value)
-    if (!scopedInput) return [] as string[]
-
-    const raw = normalizeDriveRoot(value)
-    const isPath = raw.startsWith("~") || !!rootOf(raw) || raw.includes("/")
-
-    const query = normalizeDriveRoot(scopedInput.path)
-
-    const find = () =>
-      sdk.client.find
-        .files({ directory: scopedInput.directory, query, type: "directory", limit: 50 })
-        .then((x) => x.data ?? [])
-        .catch(() => [])
-
-    if (!isPath) {
-      const results = await find()
-
-      return results.map((rel) => join(scopedInput.directory, rel)).slice(0, 50)
-    }
-
-    const segments = query.replace(/^\/+/, "").split("/")
-    const head = segments.slice(0, segments.length - 1).filter((x) => x && x !== ".")
-    const tail = segments[segments.length - 1] ?? ""
-
-    const cap = 12
-    const branch = 4
-    let paths = [scopedInput.directory]
-    for (const part of head) {
-      if (part === "..") {
-        paths = paths.map(parentOf)
-        continue
+    if (isExpanded) {
+      setExpandedPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    } else {
+      setExpandedPaths((prev) => new Set(prev).add(key))
+      // 加载子目录
+      const children = await loadDirectory(key)
+      // 如果有子目录，自动展开第一个（可选）
+      if (children.length > 0 && children.length === 1) {
+        setExpandedPaths((prev) => new Set(prev).add(children[0].path))
       }
-
-      const next = (await Promise.all(paths.map((p) => match(p, part, branch)))).flat()
-      paths = Array.from(new Set(next)).slice(0, cap)
-      if (paths.length === 0) return [] as string[]
     }
-
-    const out = (await Promise.all(paths.map((p) => match(p, tail, 50)))).flat()
-    const deduped = Array.from(new Set(out))
-    const base = raw.startsWith("~") ? trimTrailing(scopedInput.directory) : ""
-    const expand = !raw.endsWith("/")
-    if (!expand || !tail) {
-      const items = base ? Array.from(new Set([base, ...deduped])) : deduped
-      return items.slice(0, 50)
-    }
-
-    const needle = tail.toLowerCase()
-    const exact = deduped.filter((p) => getFilename(p).toLowerCase() === needle)
-    const target = exact[0]
-    if (!target) return deduped.slice(0, 50)
-
-    const children = await match(target, "", 30)
-    const items = Array.from(new Set([...deduped, ...children]))
-    return (base ? Array.from(new Set([base, ...items])) : items).slice(0, 50)
   }
 
-  const items = async (value: string) => {
-    const results = await directories(value)
-    return results.map(row)
+  function toggleSelect(path: string) {
+    if (!props.multiple) {
+      resolve(path)
+      return
+    }
+
+    setSelectedPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
   }
 
-  function resolve(absolute: string) {
-    props.onSelect(props.multiple ? [absolute] : absolute)
+  function resolve(path?: string) {
+    if (props.multiple) {
+      const selected = Array.from(selectedPaths())
+      props.onSelect(selected.length > 0 ? selected : null)
+    } else {
+      props.onSelect(path ?? null)
+    }
     dialog.close()
   }
 
+  function getBreadcrumbs(path: string): string[] {
+    const parts: string[] = []
+    let current = trimTrailing(path)
+    while (current && current !== "/" && current !== rootPath()) {
+      parts.unshift(current)
+      current = parentOf(current)
+    }
+    if (rootPath() !== "/") {
+      parts.unshift(rootPath())
+    }
+    return parts
+  }
+
+  function DirectoryItem(props: { path: string; level: number }) {
+    const path = () => props.path
+    const name = () => {
+      const p = path()
+      const root = rootPath()
+      if (p === root) return displayPath(root)
+      return getFilename(p)
+    }
+    const isExpanded = () => expandedPaths().has(path())
+    const isLoading = () => loadingPaths().has(path())
+    const isSelected = () => selectedPaths().has(path())
+    const children = createMemo(() => directoryCache().get(path()) ?? [])
+
   return (
-    <Dialog title={props.title ?? language.t("command.project.open")}>
-      <List
-        search={{ placeholder: language.t("dialog.directory.search.placeholder"), autofocus: true }}
-        emptyMessage={language.t("dialog.directory.empty")}
-        loadingMessage={language.t("common.loading")}
-        items={items}
-        key={(x) => x.absolute}
-        filterKeys={["search"]}
-        ref={(r) => (list = r)}
-        onFilter={(value) => setFilter(clean(value))}
-        onKeyEvent={(e, item) => {
-          if (e.key !== "Tab") return
-          if (e.shiftKey) return
-          if (!item) return
-
-          e.preventDefault()
+      <div>
+        <div
+          classList={{
+            "flex items-center gap-x-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-surface-raised-base-hover transition-colors": true,
+            "bg-surface-base-active": isSelected(),
+          }}
+          style={`padding-left: ${8 + props.level * 16}px`}
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleSelect(path())
+          }}
+          onDblClick={(e) => {
           e.stopPropagation()
-
-          const value = display(item.absolute, filter())
-          list?.setFilter(value.endsWith("/") ? value : value + "/")
-        }}
-        onSelect={(path) => {
-          if (!path) return
-          resolve(path.absolute)
-        }}
-      >
-        {(item) => {
-          const path = display(item.absolute, filter())
-          if (path === "~") {
-            return (
-              <div class="w-full flex items-center justify-between rounded-md">
-                <div class="flex items-center gap-x-3 grow min-w-0">
-                  <FileIcon node={{ path: item.absolute, type: "directory" }} class="shrink-0 size-4" />
-                  <div class="flex items-center text-14-regular min-w-0">
-                    <span class="text-text-strong whitespace-nowrap">~</span>
-                    <span class="text-text-weak whitespace-nowrap">/</span>
+            if (!multiple()) {
+              resolve(path())
+            } else {
+              toggleExpand(path())
+            }
+          }}
+        >
+          <button
+            class="shrink-0 w-4 h-4 flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleExpand(path())
+            }}
+          >
+            <Show when={children().length > 0} fallback={<div class="w-4" />}>
+              <Icon
+                name={isExpanded() ? "chevron-down" : "chevron-right"}
+                class="size-3 text-icon-weak"
+              />
+            </Show>
+            <Show when={children().length === 0 && isLoading()}>
+              <div class="size-3 border-2 border-icon-weak border-t-transparent rounded-full animate-spin" />
+            </Show>
+          </button>
+          <FileIcon node={{ path: path(), type: "directory" }} class="shrink-0 size-4" />
+          <span class="flex-1 text-14-regular text-text-strong truncate">{name()}</span>
+          <Show when={multiple() && isSelected()}>
+            <Icon name="check" class="size-4 text-icon-success-base" />
+          </Show>
                   </div>
-                </div>
+        <Show when={isExpanded()}>
+          <Collapsible open={isExpanded()}>
+            <Collapsible.Content>
+              <For each={children()}>
+                {(child) => <DirectoryItem path={child.path} level={props.level + 1} />}
+              </For>
+            </Collapsible.Content>
+          </Collapsible>
+        </Show>
               </div>
             )
           }
+
+  const multiple = () => props.multiple ?? false
+
+  // 搜索模式
+  const [searchResults] = createResource(
+    () => searchQuery().trim(),
+    async (query) => {
+      if (!query) return []
+
+      try {
+        const results = await sdk.client.find
+          .files({ directory: rootPath(), query, type: "directory", limit: 100 })
+          .then((x) => x.data ?? [])
+          .catch(() => [])
+
+        return results.map((rel) => join(rootPath(), rel))
+      } catch {
+        return []
+      }
+    },
+  )
+
           return (
-            <div class="w-full flex items-center justify-between rounded-md">
-              <div class="flex items-center gap-x-3 grow min-w-0">
-                <FileIcon node={{ path: item.absolute, type: "directory" }} class="shrink-0 size-4" />
-                <div class="flex items-center text-14-regular min-w-0">
-                  <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
-                    {getDirectory(path)}
-                  </span>
-                  <span class="text-text-strong whitespace-nowrap">{getFilename(path)}</span>
-                  <span class="text-text-weak whitespace-nowrap">/</span>
+    <Dialog title={props.title ?? language.t("command.project.open")} class="!max-w-2xl">
+      <div class="flex flex-col gap-3 h-[500px]">
+        {/* 搜索框 */}
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder={language.t("dialog.directory.search.placeholder")}
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            class="flex-1 px-3 py-2 rounded-md border border-border-base bg-background-base text-14-regular text-text-strong focus:outline-none focus:ring-2 focus:ring-border-strong-base"
+          />
+          <Show when={multiple() && selectedPaths().size > 0}>
+            <Button variant="primary" onClick={() => resolve()}>
+              {language.t("common.submit")} ({selectedPaths().size})
+            </Button>
+          </Show>
+          <Button variant="ghost" onClick={() => resolve()}>
+            {language.t("common.cancel")}
+          </Button>
+        </div>
+
+        {/* 面包屑导航 */}
+        <Show when={currentPath() && currentPath() !== rootPath()}>
+          <div class="flex items-center gap-1 text-12-regular text-text-weak">
+            <button
+              onClick={() => {
+                setCurrentPath("")
+                setExpandedPaths(new Set([""]))
+              }}
+              class="hover:text-text-strong"
+            >
+              {displayPath(rootPath())}
+            </button>
+            <For each={getBreadcrumbs(currentPath()).slice(1)}>
+              {(part) => (
+                <>
+                  <Icon name="chevron-right" class="size-3" />
+                  <button
+                    onClick={() => {
+                      setCurrentPath(part)
+                      setExpandedPaths((prev) => new Set(prev).add(part))
+                    }}
+                    class="hover:text-text-strong"
+                  >
+                    {getFilename(part)}
+                  </button>
+                </>
+              )}
+            </For>
+          </div>
+        </Show>
+
+        {/* 目录树或搜索结果 */}
+        <div class="flex-1 overflow-y-auto border border-border-base rounded-md bg-background-frame">
+            <Show
+            when={searchQuery().trim()}
+            fallback={
+              <Show when={rootDirectories()}>
+                <div class="p-2">
+                  <For each={rootDirectories()}>
+                    {(dir) => <DirectoryItem path={dir.path} level={0} />}
+                  </For>
                 </div>
+              </Show>
+            }
+          >
+            <Show when={searchResults()}>
+              <div class="p-2">
+                <For each={searchResults()}>
+                  {(path) => (
+                  <div
+                    classList={{
+                      "flex items-center gap-x-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-surface-raised-base-hover transition-colors": true,
+                      "bg-surface-base-active": selectedPaths().has(path),
+                    }}
+                    onClick={() => toggleSelect(path)}
+                    onDblClick={() => resolve(path)}
+                  >
+                    <FileIcon node={{ path, type: "directory" }} class="shrink-0 size-4" />
+                    <span class="flex-1 text-14-regular text-text-strong">{displayPath(path)}</span>
+                    <Show when={multiple() && selectedPaths().has(path)}>
+                      <Icon name="check" class="size-4 text-icon-success-base" />
+                    </Show>
+                  </div>
+                )}
+              </For>
+              </div>
+            </Show>
+          </Show>
               </div>
             </div>
-          )
-        }}
-      </List>
     </Dialog>
   )
 }
