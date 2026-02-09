@@ -1,6 +1,6 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { batch, createEffect, createMemo, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { usePlatform } from "@/context/platform"
 import { Persist, persisted } from "@/utils/persist"
@@ -152,14 +152,21 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       })
     })
 
-    const origin = createMemo(() => projectsKey(state.active))
+    // User ID suffix for per-user project isolation in multi-user mode
+    const [userID, setUserID] = createSignal("")
+    const origin = createMemo(() => {
+      const key = projectsKey(state.active)
+      const uid = userID()
+      return uid ? `${key}:${uid}` : key
+    })
     const projectsList = createMemo(() => store.projects[origin()] ?? [])
-    const isLocal = createMemo(() => origin() === "local")
+    const isLocal = createMemo(() => origin().startsWith("local"))
 
     return {
       ready: isReady,
       healthy,
       isLocal,
+      setUserID,
       get url() {
         return state.active
       },

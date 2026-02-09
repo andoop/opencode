@@ -55,6 +55,9 @@ export PATH="$HOME/.bun/bin:$PATH"
 export XDG_STATE_HOME="$HOME/.local/state-opencode"
 mkdir -p "$XDG_STATE_HOME"
 
+# Enable multi-user mode for user data isolation
+export OPENCODE_MULTI_USER=true
+
 # Start backend server
 echo -e "${GREEN}Starting backend server on port 4096...${NC}"
 cd "$PROJECT_ROOT"

@@ -31,8 +31,9 @@ export namespace Project {
       // Use require for synchronous lazy loading to break circular dependency
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { User } = require("../user")
-      return User.current()?.id
-    } catch (error) {
+      const user = User.current()
+      return user?.id
+    } catch {
       // If require fails (e.g., module not loaded yet), return undefined
       // This is safe because the function is only called when multi-user mode is enabled
       // and the User module should be available at runtime
@@ -326,42 +327,18 @@ export namespace Project {
     // In multi-user mode, require a user to be logged in
     if (isMultiUserMode()) {
       const userID = currentUserID()
-      // #region agent log
-      const logData = { isMultiUser: true, userID, hasUserID: !!userID }
-      try {
-        const file = Bun.file("/Users/ke/Documents/project2/opencode/opencode/.cursor/debug.log")
-        const existing = await file.exists() ? await file.text() : ""
-        await Bun.write(file, existing + JSON.stringify({ location: "project.ts:328", message: "Project.list called", data: logData, timestamp: Date.now(), runId: "debug", hypothesisId: "D" }) + "\n")
-      } catch {}
-      // #endregion
       if (!userID) {
-        // No user logged in, return empty list
-        // #region agent log
-        try {
-          const file = Bun.file("/Users/ke/Documents/project2/opencode/opencode/.cursor/debug.log")
-          const existing = await file.exists() ? await file.text() : ""
-          await Bun.write(file, existing + JSON.stringify({ location: "project.ts:336", message: "Project.list returning empty for unauthenticated user", data: {}, timestamp: Date.now(), runId: "debug", hypothesisId: "D" }) + "\n")
-        } catch {}
-        // #endregion
         return []
       }
       const prefix = projectListPrefix(userID)
       const keys = await Storage.list(prefix)
       const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
-      const filtered = projects
+      return projects
         .filter((p): p is Info => !!p)
         .map((project) => ({
           ...project,
           sandboxes: project.sandboxes?.filter((x) => existsSync(x)),
         }))
-      // #region agent log
-      try {
-        const file = Bun.file("/Users/ke/Documents/project2/opencode/opencode/.cursor/debug.log")
-        const existing = await file.exists() ? await file.text() : ""
-        await Bun.write(file, existing + JSON.stringify({ location: "project.ts:350", message: "Project.list returning filtered projects", data: { userID, prefix, keysCount: keys.length, projectsCount: filtered.length }, timestamp: Date.now(), runId: "debug", hypothesisId: "D" }) + "\n")
-      } catch {}
-      // #endregion
-      return filtered
     }
     // Single-user mode: return all projects
     const prefix = projectListPrefix()

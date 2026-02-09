@@ -4,6 +4,7 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
 import { useServer } from "./server"
+import { useAuth } from "./auth"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 import { same } from "@/utils/same"
@@ -45,6 +46,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     const globalSdk = useGlobalSDK()
     const globalSync = useGlobalSync()
     const server = useServer()
+    const auth = useAuth()
 
     const isRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === "object" && value !== null && !Array.isArray(value)
@@ -336,25 +338,24 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       })
     })
 
+    // Track user ID reactively to switch server.projects storage per user
+    createEffect(() => {
+      const uid = auth.user?.id ?? ""
+      server.setUserID(uid)
+    })
+
     const enriched = createMemo(() => {
       const list = server.projects.list()
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.tsx:339',message:'enriched memo computed',data:{serverProjectsCount:list.length,serverProjects:list.map(p=>({worktree:p.worktree,expanded:p.expanded}))},timestamp:Date.now(),runId:'debug',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       return list.map(enrich)
     })
     const list = createMemo(() => {
       const projects = enriched()
-      const result = projects.map((project) => {
+      return projects.map((project) => {
         const color = project.icon?.color ?? colors[project.worktree]
         if (!color) return project
         const icon = project.icon ? { ...project.icon, color } : { color }
         return { ...project, icon }
       })
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.tsx:348',message:'layout.projects.list computed',data:{projectsCount:result.length,projects:result.map(p=>({worktree:p.worktree,id:p.id}))},timestamp:Date.now(),runId:'debug',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      return result
     })
 
     createEffect(() => {
