@@ -1,12 +1,16 @@
 import { createEffect, createMemo, createRoot, onCleanup } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import type { FileContent, FileNode } from "@opencode-ai/sdk/v2"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useParams } from "@solidjs/router"
 import { getFilename } from "@opencode-ai/util/path"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
+import { useGlobalSync } from "./global-sync"
+import { usePlatform } from "./platform"
+import { useAuth, addAuthInterceptor } from "./auth"
 import { useLanguage } from "@/context/language"
 import { Persist, persisted } from "@/utils/persist"
 
@@ -272,12 +276,43 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
   init: () => {
     const sdk = useSDK()
     const sync = useSync()
+    const globalSync = useGlobalSync()
+    const platform = usePlatform()
+    const auth = useAuth()
     const params = useParams()
     const language = useLanguage()
 
-    const scope = createMemo(() => sdk.directory)
+    // Use session worktree directory if available, otherwise project root
+    const sessionDir = createMemo(() => {
+      const id = params.id
+      if (!id) return undefined
+      const session = sync.session.get(id)
+      return session?.directory
+    })
 
-    const directory = createMemo(() => sync.data.path.directory)
+    const scope = createMemo(() => sessionDir() ?? sdk.directory)
+
+    // Create a SDK client that uses the correct directory (worktree or project root)
+    const client = createMemo(() => {
+      const dir = scope()
+      if (dir === sdk.directory) return sdk.client
+      return createOpencodeClient({
+        baseUrl: sdk.url,
+        fetch: platform.fetch,
+        directory: dir,
+        throwOnError: true,
+        onClient: (c) => addAuthInterceptor(c, () => auth.token),
+      })
+    })
+
+    const directory = createMemo(() => {
+      const dir = sessionDir()
+      if (dir) {
+        const child = globalSync.child(dir)[0]
+        if (child.path.directory) return child.path.directory
+      }
+      return sync.data.path.directory
+    })
 
     function normalize(input: string) {
       const root = directory()
@@ -318,7 +353,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const treeInflight = new Map<string, Promise<void>>()
 
     const search = (query: string, dirs: "true" | "false") =>
-      sdk.client.find.files({ query, dirs }).then(
+      client().find.files({ query, dirs }).then(
         (x) => (x.data ?? []).map(normalize),
         () => [],
       )
@@ -428,7 +463,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
 
       const directory = scope()
       const key = `${directory}\n${path}`
-      const client = sdk.client
+      const c = client()
 
       ensure(path)
 
@@ -447,7 +482,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
         }),
       )
 
-      const promise = client.file
+      const promise = c.file
         .read({ path })
         .then((x) => {
           if (scope() !== directory) return
@@ -520,7 +555,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
 
       const directory = scope()
 
-      const promise = sdk.client.file
+      const promise = client().file
         .list({ path: dir })
         .then((x) => {
           if (scope() !== directory) return
