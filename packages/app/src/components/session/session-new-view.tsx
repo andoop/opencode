@@ -28,12 +28,14 @@ export function NewSessionView(props: NewSessionViewProps) {
         </div>
       </div>
       <Show when={currentBranch()}>
-        <div class="flex justify-center items-center gap-1">
-          <Icon name="branch" size="small" />
-          <div class="text-12-medium text-text-weak select-text ml-2">
-            {language.t("session.new.worktree.mainWithBranch", { branch: currentBranch() })}
+        {(branch) => (
+          <div class="flex justify-center items-center gap-1">
+            <Icon name="branch" size="small" />
+            <div class="text-12-medium text-text-weak select-text ml-2">
+              {language.t("session.new.worktree.mainWithBranch", { branch: branch() })}
+            </div>
           </div>
-        </div>
+        )}
       </Show>
       <div class="text-12-regular text-text-weaker text-center max-w-[400px]">
         {language.t("session.new.autoWorktree")}

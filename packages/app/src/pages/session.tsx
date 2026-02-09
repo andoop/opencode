@@ -457,13 +457,6 @@ export default function Page() {
     },
   )
 
-  const newSessionWorktree = createMemo(() => {
-    if (store.newSessionWorktree === "create") return "create"
-    const project = sync.project
-    if (project && sync.data.path.directory !== project.worktree) return sync.data.path.directory
-    return "main"
-  })
-
   const activeMessage = createMemo(() => {
     if (!store.messageId) return lastUserMessage()
     const found = visibleUserMessages()?.find((m) => m.id === store.messageId)
