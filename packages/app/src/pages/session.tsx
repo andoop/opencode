@@ -97,6 +97,7 @@ interface SessionReviewTabProps {
   onFocusedCommentChange?: (focus: { file: string; id: string } | null) => void
   focusedFile?: string
   onScrollRef?: (el: HTMLDivElement) => void
+  readFile?: (path: string) => Promise<import("@opencode-ai/sdk/v2").FileContent | undefined>
   classes?: {
     root?: string
     header?: string
@@ -149,12 +150,12 @@ function SessionReviewTab(props: SessionReviewTabProps) {
 
   const sdk = useSDK()
 
-  const readFile = async (path: string) => {
+  const readFile = props.readFile ?? (async (path: string) => {
     return sdk.client.file
       .read({ path })
       .then((x) => x.data)
       .catch(() => undefined)
-  }
+  })
 
   const restoreScroll = () => {
     const el = scroll
@@ -264,7 +265,7 @@ export default function Page() {
   // Get sync data from session directory, not project directory
   // If session is found in this store and has a different directory, use that
   // Also check if messages exist in this store to determine if it's the correct store
-  const sessionSyncData = createMemo(() => {
+  const sessionSyncResult = createMemo(() => {
     const dir = sessionDirectory()
     const sessionID = params.id
     let data = globalSync.child(dir)[0]
@@ -282,23 +283,19 @@ export default function Page() {
         }
       } else {
         // Session not found in session list, but check if messages exist
-        // If messages exist in this store, it might be the correct store even if session list hasn't loaded yet
         const hasMessages = data.message[sessionID] !== undefined
         if (!hasMessages && dir === sdk.directory) {
           // No messages in project root, try to find session in worktree stores
-          // Check project sandboxes (which include session worktrees)
           const project = layout.projects.list().find((p) => p.worktree === sdk.directory)
           if (project) {
             const sandboxes = [project.worktree, ...(project.sandboxes ?? [])]
             for (const sandboxDir of sandboxes) {
               const sandboxData = globalSync.child(sandboxDir)[0]
-              // Check if this sandbox has messages for this session
               if (sandboxData.message[sessionID] !== undefined && sandboxData.message[sessionID].length > 0) {
                 actualDir = sandboxDir
                 data = sandboxData
                 break
               }
-              // Also check if session is in this sandbox's session list
               const sandboxMatch = Binary.search(sandboxData.session, sessionID, (s) => s.id)
               if (sandboxMatch.found) {
                 const foundSandboxSession = sandboxData.session[sandboxMatch.index]
@@ -313,8 +310,10 @@ export default function Page() {
         }
       }
     }
-    return data
+    return { data, directory: actualDir }
   })
+  const sessionSyncData = createMemo(() => sessionSyncResult().data)
+  const actualSessionDir = createMemo(() => sessionSyncResult().directory)
   // Get session info from sessionSyncData (which may be from worktree store)
   const info = createMemo(() => {
     if (!params.id) return undefined
@@ -636,42 +635,12 @@ export default function Page() {
 
   createEffect(() => {
     if (!params.id) return
-    // Get session info to determine the correct directory (may be worktree)
-    const sessionInfo = sync.session.get(params.id)
-    // Use session directory if available, otherwise fall back to sdk.directory
-    const sessionDirectory = sessionInfo?.directory ?? sdk.directory
-    const projectDirectory = sdk.directory
+    // Use actualSessionDir which resolves the correct worktree directory
+    const dir = actualSessionDir()
     // Ensure the session directory is bootstrapped
-    if (sessionDirectory) {
-      globalSync.child(sessionDirectory)
-    }
-    // Sync using the session directory, not the project directory
-    if (sessionDirectory !== projectDirectory && params.id) {
-      // Use globalSync directly for worktree sessions
-      const [store, setStore] = globalSync.child(sessionDirectory)
-      const client = globalSDK.client
-      // Check if already synced
-      const hasMessages = store.message[params.id] !== undefined
-      if (!hasMessages) {
-        // Load messages from the session directory
-        const sessionID = params.id
-        if (!sessionID) return
-        client.session.messages({ sessionID, limit: 400 }).then((messages) => {
-          const items = (messages.data ?? []).filter((x) => !!x?.info?.id)
-          const next = items
-            .map((x) => x.info)
-            .filter((m) => !!m?.id)
-            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-          setStore("message", sessionID, next)
-          for (const message of items) {
-            setStore("part", message.info.id, message.parts.filter((p) => !!p?.id).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
-          }
-        }).catch(() => {})
-      }
-    } else {
-      // Use normal sync for project root sessions
-      sync.session.sync(params.id).catch(() => {})
-    }
+    if (dir) globalSync.child(dir)
+    // Sync using the session directory (handles both worktree and project root)
+    sync.session.sync(params.id, dir !== sdk.directory ? dir : undefined).catch(() => {})
   })
 
   createEffect(() => {
@@ -1327,6 +1296,7 @@ export default function Page() {
                 onDiffStyleChange={layout.review.setDiffStyle}
                 onScrollRef={setReviewScroll}
                 focusedFile={activeDiff()}
+                readFile={file.readFile}
                 onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
                 comments={comments.all()}
                 focusedComment={comments.focus()}
@@ -1481,7 +1451,8 @@ export default function Page() {
     if (sessionSyncData().session_diff[id] !== undefined) return
     if (sync.status === "loading") return
 
-    void sync.session.diff(id)
+    const dir = actualSessionDir()
+    void sync.session.diff(id, dir !== sdk.directory ? dir : undefined)
   })
 
   createEffect(() => {

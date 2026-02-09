@@ -50,6 +50,11 @@ export namespace UserWorktree {
     const user = User.current()
     if (!user) return directory
 
+    // If directory is already a session worktree (under opencode/worktree/), use it directly
+    // Session worktrees are already per-session isolated, no need for additional user worktree
+    const worktreeBase = path.join(Global.Path.data, "worktree")
+    if (directory.startsWith(worktreeBase)) return directory
+
     // Check if the project uses git
     const isGit = await fs.stat(path.join(directory, ".git")).then(() => true).catch(() => false)
     if (!isGit) return directory

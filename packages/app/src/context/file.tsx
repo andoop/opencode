@@ -726,8 +726,15 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       disposeViews()
     })
 
+    const readFile = async (path: string) =>
+      client().file
+        .read({ path })
+        .then((x) => x.data)
+        .catch(() => undefined)
+
     return {
       ready: () => view().ready(),
+      readFile,
       normalize,
       tab,
       pathFromTab,

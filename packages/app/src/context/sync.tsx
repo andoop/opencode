@@ -3,8 +3,11 @@ import { createStore, produce, reconcile } from "solid-js/store"
 import { Binary } from "@opencode-ai/util/binary"
 import { retry } from "@opencode-ai/util/retry"
 import { createSimpleContext } from "@opencode-ai/ui/context"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { useGlobalSync } from "./global-sync"
 import { useSDK } from "./sdk"
+import { usePlatform } from "./platform"
+import { useAuth, addAuthInterceptor } from "./auth"
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
 
 const keyFor = (directory: string, id: string) => `${directory}\n${id}`
@@ -16,9 +19,28 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   init: () => {
     const globalSync = useGlobalSync()
     const sdk = useSDK()
+    const platform = usePlatform()
+    const auth = useAuth()
 
     type Child = ReturnType<(typeof globalSync)["child"]>
     type Setter = Child[1]
+
+    // Cache for directory-specific SDK clients
+    const clientCache = new Map<string, ReturnType<typeof createOpencodeClient>>()
+    const clientFor = (directory: string) => {
+      if (directory === sdk.directory) return sdk.client
+      const cached = clientCache.get(directory)
+      if (cached) return cached
+      const c = createOpencodeClient({
+        baseUrl: sdk.url,
+        fetch: platform.fetch,
+        directory,
+        throwOnError: true,
+        onClient: (client) => addAuthInterceptor(client, () => auth.token),
+      })
+      clientCache.set(directory, c)
+      return c
+    }
 
     const current = createMemo(() => globalSync.child(sdk.directory))
     const absolute = (path: string) => (current()[0].path.directory + "/" + path).replace("//", "/")
@@ -135,9 +157,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             }),
           )
         },
-        async sync(sessionID: string) {
-          const directory = sdk.directory
-          const client = sdk.client
+        async sync(sessionID: string, sessionDir?: string) {
+          const directory = sessionDir ?? sdk.directory
+          const client = clientFor(directory)
           const [store, setStore] = globalSync.child(directory)
           const key = keyFor(directory, sessionID)
           const hasSession = (() => {
@@ -192,9 +214,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           inflight.set(key, promise)
           return promise
         },
-        async diff(sessionID: string) {
-          const directory = sdk.directory
-          const client = sdk.client
+        async diff(sessionID: string, sessionDir?: string) {
+          const directory = sessionDir ?? sdk.directory
+          const client = clientFor(directory)
           const [store, setStore] = globalSync.child(directory)
           if (store.session_diff[sessionID] !== undefined) return
 
@@ -213,9 +235,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           inflightDiff.set(key, promise)
           return promise
         },
-        async todo(sessionID: string) {
-          const directory = sdk.directory
-          const client = sdk.client
+        async todo(sessionID: string, sessionDir?: string) {
+          const directory = sessionDir ?? sdk.directory
+          const client = clientFor(directory)
           const [store, setStore] = globalSync.child(directory)
           if (store.todo[sessionID] !== undefined) return
 
