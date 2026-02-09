@@ -237,18 +237,42 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   // Git branch and worktree info
-  const currentBranch = createMemo(() => sync.data.vcs?.branch)
-  const currentDirectory = createMemo(() => sync.data.path.directory)
+  // Get session directory (may be worktree) for correct Git info
+  const sessionInfo = createMemo(() => {
+    const sessionID = params.id
+    if (!sessionID) return undefined
+    return sync.session.get(sessionID)
+  })
+  const sessionDirectory = createMemo(() => sessionInfo()?.directory ?? sdk.directory)
   const projectDirectory = createMemo(() => sdk.directory)
+  // Ensure the session directory is bootstrapped to get correct Git info
+  createEffect(() => {
+    const dir = sessionDirectory()
+    if (dir) {
+      globalSync.child(dir)
+    }
+  })
+  // Get Git info from session directory, not project directory
+  const sessionSyncData = createMemo(() => {
+    const dir = sessionDirectory()
+    if (!dir) return sync.data
+    return globalSync.child(dir)[0]
+  })
+  const currentBranch = createMemo(() => {
+    return sessionSyncData().vcs?.branch
+  })
+  const currentDirectory = createMemo(() => sessionSyncData().path.directory)
   const project = createMemo(() => {
-    const directory = projectDirectory()
-    if (!directory) return
-    return layout.projects.list().find((p) => p.worktree === directory || p.sandboxes?.includes(directory))
+    const dir = projectDirectory()
+    if (!dir) return
+    return layout.projects.list().find((p) => p.worktree === dir || p.sandboxes?.includes(dir))
   })
   const isWorktree = createMemo(() => {
     const proj = project()
     if (!proj) return false
-    return currentDirectory() !== proj.worktree
+    const currentDir = currentDirectory()
+    // Check if current directory is a worktree (different from project root or in sandboxes)
+    return currentDir !== proj.worktree && (proj.sandboxes?.includes(currentDir) ?? false)
   })
   const worktreeDisplay = createMemo(() => {
     const dir = currentDirectory()

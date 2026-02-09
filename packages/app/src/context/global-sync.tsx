@@ -785,21 +785,23 @@ function createGlobalSync() {
         break
       }
       case "message.updated": {
-        const messages = store.message[event.properties.info.sessionID]
+        const sessionID = event.properties.info.sessionID
+        const messageInfo = event.properties.info
+        const messages = store.message[sessionID]
         if (!messages) {
-          setStore("message", event.properties.info.sessionID, [event.properties.info])
+          setStore("message", sessionID, [messageInfo])
           break
         }
-        const result = Binary.search(messages, event.properties.info.id, (m) => m.id)
+        const result = Binary.search(messages, messageInfo.id, (m) => m.id)
         if (result.found) {
-          setStore("message", event.properties.info.sessionID, result.index, reconcile(event.properties.info))
+          setStore("message", sessionID, result.index, reconcile(messageInfo))
           break
         }
         setStore(
           "message",
-          event.properties.info.sessionID,
+          sessionID,
           produce((draft) => {
-            draft.splice(result.index, 0, event.properties.info)
+            draft.splice(result.index, 0, messageInfo)
           }),
         )
         break

@@ -2401,10 +2401,18 @@ export default function Layout(props: ParentProps) {
     }
 
     const sessions = (directory: string) => {
-      const [data] = globalSync.child(directory, { bootstrap: false })
-      const root = workspaceKey(directory)
+      // Bootstrap to ensure sessions are loaded
+      const [data] = globalSync.child(directory)
+      // Sessions are stored in the sync store for the directory, but their directory field
+      // may point to worktree directories. We need to match sessions that belong to this directory.
+      const normalizedDir = workspaceKey(directory)
       return data.session
-        .filter((session) => workspaceKey(session.directory) === root)
+        .filter((session) => {
+          const sessionDir = session.directory
+          const normalizedSessionDir = workspaceKey(sessionDir)
+          // Match if session directory matches the workspace directory
+          return normalizedSessionDir === normalizedDir
+        })
         .filter((session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now()))
         .slice(0, 2)
@@ -2412,11 +2420,37 @@ export default function Layout(props: ParentProps) {
 
     const projectSessions = () => {
       const directory = props.project.worktree
-      const [data] = globalSync.child(directory, { bootstrap: false })
-      const root = workspaceKey(directory)
-      return data.session
-        .filter((session) => workspaceKey(session.directory) === root)
-        .filter((session) => !session.parentID && !session.time?.archived)
+      // Collect sessions from project directory and all sandboxes (including session worktrees)
+      const projectDirs = [directory, ...(props.project.sandboxes ?? [])]
+      const [projectData] = globalSync.child(directory)
+      type Session = typeof projectData.session[number]
+      const allSessions: Session[] = []
+      const seenIds = new Set<string>()
+      
+      // Load sessions from each directory
+      for (const dir of projectDirs) {
+        const [dirData] = globalSync.child(dir)
+        for (const session of dirData.session) {
+          // Deduplicate by session ID
+          if (seenIds.has(session.id)) continue
+          seenIds.add(session.id)
+          allSessions.push(session)
+        }
+      }
+      
+      // Filter sessions that belong to this project
+      // Sessions created with worktrees will have directory pointing to worktree directory
+      return allSessions
+        .filter((session: Session) => {
+          const sessionDir = session.directory
+          // Check if session directory matches any project directory
+          return projectDirs.some((dir) => {
+            const normalizedDir = workspaceKey(dir)
+            const normalizedSessionDir = workspaceKey(sessionDir)
+            return normalizedSessionDir === normalizedDir
+          })
+        })
+        .filter((session: Session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now()))
         .slice(0, 2)
     }
@@ -2534,6 +2568,25 @@ export default function Layout(props: ParentProps) {
                   />
                 </Tooltip>
               </div>
+              <div class="px-2 pb-2">
+                <Button
+                  variant="ghost"
+                  class="flex w-full text-left justify-start text-14-regular text-text-strong px-2 py-1 hover:bg-surface-raised-base-hover"
+                  onClick={() => {
+                    setOpen(false)
+                    createSession(props.project)
+                  }}
+                >
+                  <div class="flex items-center gap-1 w-full">
+                    <div class="shrink-0 size-6 flex items-center justify-center">
+                      <Icon name="plus-small" size="small" class="text-icon-weak" />
+                    </div>
+                    <span class="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate">
+                      {language.t("command.session.new")}
+                    </span>
+                  </div>
+                </Button>
+              </div>
               <div class="px-4 pb-2 text-12-medium text-text-weak">{language.t("sidebar.project.recentSessions")}</div>
               <div class="px-2 pb-2 flex flex-col gap-2">
                 <Show
@@ -2603,12 +2656,37 @@ export default function Layout(props: ParentProps) {
   const LocalWorkspace = (props: { project: LocalProject; mobile?: boolean }): JSX.Element => {
     const [workspaceStore, setWorkspaceStore] = globalSync.child(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
-    const sessions = createMemo(() =>
-      workspaceStore.session
-        .filter((session) => session.directory === workspaceStore.path.directory)
+    const sessions = createMemo(() => {
+      // Collect sessions from project directory and all sandboxes (including session worktrees)
+      const projectDirs = [props.project.worktree, ...(props.project.sandboxes ?? [])]
+      const allSessions: typeof workspaceStore.session[number][] = []
+      const seenIds = new Set<string>()
+      
+      // Load sessions from each directory
+      for (const dir of projectDirs) {
+        const [dirData] = globalSync.child(dir)
+        for (const session of dirData.session) {
+          // Deduplicate by session ID
+          if (seenIds.has(session.id)) continue
+          seenIds.add(session.id)
+          allSessions.push(session)
+        }
+      }
+      
+      // Filter sessions that belong to this project
+      return allSessions
+        .filter((session) => {
+          const sessionDir = session.directory
+          const normalizedSessionDir = workspaceKey(sessionDir)
+          // Match if session directory matches any project directory
+          return projectDirs.some((dir) => {
+            const normalizedDir = workspaceKey(dir)
+            return normalizedSessionDir === normalizedDir
+          })
+        })
         .filter((session) => !session.parentID && !session.time?.archived)
-        .toSorted(sortSessions(Date.now())),
-    )
+        .toSorted(sortSessions(Date.now()))
+    })
     const children = createMemo(() => {
       const map = new Map<string, string[]>()
       for (const session of workspaceStore.session) {

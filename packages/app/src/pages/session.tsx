@@ -41,6 +41,7 @@ import { useLayout } from "@/context/layout"
 import { Terminal } from "@/components/terminal"
 import { checksum, base64Encode } from "@opencode-ai/util/encode"
 import { findLast } from "@opencode-ai/util/array"
+import { Binary } from "@opencode-ai/util/binary"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import FileTree from "@/components/file-tree"
@@ -52,6 +53,7 @@ import { useLanguage } from "@/context/language"
 import { useNavigate, useParams } from "@solidjs/router"
 import { UserMessage } from "@opencode-ai/sdk/v2"
 import type { FileDiff } from "@opencode-ai/sdk/v2/client"
+import type { QuestionAnswer } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { useComments, type LineComment } from "@/context/comments"
@@ -72,6 +74,8 @@ import {
 } from "@/components/session"
 import { navMark, navParams } from "@/utils/perf"
 import { same } from "@/utils/same"
+import { DataProvider } from "@opencode-ai/ui/context"
+import { iife } from "@opencode-ai/util/iife"
 
 type DiffStyle = "unified" | "split"
 
@@ -245,10 +249,86 @@ export default function Page() {
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
 
+  // Get session directory (may be worktree) to read data from correct store
+  // First try to get from sync.session.get (project root), but if not found,
+  // we'll find it in sessionSyncData after checking worktree stores
+  const sessionDirectory = createMemo(() => {
+    const sessionID = params.id
+    if (!sessionID) return sdk.directory
+    // Try project root first
+    const rootSession = sync.session.get(sessionID)
+    if (rootSession?.directory) return rootSession.directory
+    // Fall back to project directory - sessionSyncData will find the correct store
+    return sdk.directory
+  })
+  // Get sync data from session directory, not project directory
+  // If session is found in this store and has a different directory, use that
+  // Also check if messages exist in this store to determine if it's the correct store
+  const sessionSyncData = createMemo(() => {
+    const dir = sessionDirectory()
+    const sessionID = params.id
+    let data = globalSync.child(dir)[0]
+    let actualDir = dir
+    
+    // Try to find session in this store
+    if (sessionID) {
+      const match = Binary.search(data.session, sessionID, (s) => s.id)
+      if (match.found) {
+        const foundSession = data.session[match.index]
+        // If session has a directory and it's different from current dir, use that
+        if (foundSession?.directory && foundSession.directory !== dir) {
+          actualDir = foundSession.directory
+          data = globalSync.child(actualDir)[0]
+        }
+      } else {
+        // Session not found in session list, but check if messages exist
+        // If messages exist in this store, it might be the correct store even if session list hasn't loaded yet
+        const hasMessages = data.message[sessionID] !== undefined
+        if (!hasMessages && dir === sdk.directory) {
+          // No messages in project root, try to find session in worktree stores
+          // Check project sandboxes (which include session worktrees)
+          const project = layout.projects.list().find((p) => p.worktree === sdk.directory)
+          if (project) {
+            const sandboxes = [project.worktree, ...(project.sandboxes ?? [])]
+            for (const sandboxDir of sandboxes) {
+              const sandboxData = globalSync.child(sandboxDir)[0]
+              // Check if this sandbox has messages for this session
+              if (sandboxData.message[sessionID] !== undefined && sandboxData.message[sessionID].length > 0) {
+                actualDir = sandboxDir
+                data = sandboxData
+                break
+              }
+              // Also check if session is in this sandbox's session list
+              const sandboxMatch = Binary.search(sandboxData.session, sessionID, (s) => s.id)
+              if (sandboxMatch.found) {
+                const foundSandboxSession = sandboxData.session[sandboxMatch.index]
+                if (foundSandboxSession?.directory) {
+                  actualDir = foundSandboxSession.directory
+                  data = globalSync.child(actualDir)[0]
+                  break
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return data
+  })
+  // Get session info from sessionSyncData (which may be from worktree store)
+  const info = createMemo(() => {
+    if (!params.id) return undefined
+    const data = sessionSyncData()
+    const match = Binary.search(data.session, params.id, (s) => s.id)
+    if (match.found) return data.session[match.index]
+    // Fallback to project root store
+    return sync.session.get(params.id)
+  })
+
   const request = createMemo(() => {
     const sessionID = params.id
     if (!sessionID) return
-    const next = sync.data.permission[sessionID]?.[0]
+    const next = sessionSyncData().permission[sessionID]?.[0]
     if (!next) return
     if (next.tool) return
     return next
@@ -322,7 +402,7 @@ export default function Page() {
     createEffect(() => {
       const id = params.id
       if (!id) return
-      if (sync.data.message[id] === undefined) return
+      if (sessionSyncData().message[id] === undefined) return
       navMark({ dir: params.dir, to: id, name: "session:data-ready" })
     })
   }
@@ -381,16 +461,23 @@ export default function Page() {
     tabs().setActive(normalized)
   })
 
-  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
-  const diffs = createMemo(() => (params.id ? (sync.data.session_diff[params.id] ?? []) : []))
+  const diffs = createMemo(() => (params.id ? (sessionSyncData().session_diff[params.id] ?? []) : []))
   const reviewCount = createMemo(() => Math.max(info()?.summary?.files ?? 0, diffs().length))
   const hasReview = createMemo(() => reviewCount() > 0)
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
-  const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
+  const messages = createMemo(() => {
+    const id = params.id
+    if (!id) return []
+    // Use sessionSyncData which already handles finding the correct store (worktree or project root)
+    const data = sessionSyncData()
+    // Access message property to create reactive dependency
+    const msgs = data.message[id] ?? []
+    return msgs
+  })
   const messagesReady = createMemo(() => {
     const id = params.id
     if (!id) return true
-    return sync.data.message[id] !== undefined
+    return sessionSyncData().message[id] !== undefined
   })
   const historyMore = createMemo(() => {
     const id = params.id
@@ -402,17 +489,25 @@ export default function Page() {
     if (!id) return false
     return sync.session.history.loading(id)
   })
+  // Track messages changes for debugging
+  createEffect(() => {
+    messages()
+  })
+
   const emptyUserMessages: UserMessage[] = []
   const userMessages = createMemo(
-    () => messages().filter((m) => m.role === "user") as UserMessage[],
+    () => {
+      const msgs = messages().filter((m) => m.role === "user") as UserMessage[]
+      return msgs
+    },
     emptyUserMessages,
     { equals: same },
   )
   const visibleUserMessages = createMemo(
     () => {
       const revert = revertMessageID()
-      if (!revert) return userMessages()
-      return userMessages().filter((m) => m.id < revert)
+      const msgs = !revert ? userMessages() : userMessages().filter((m) => m.id < revert)
+      return msgs
     },
     emptyUserMessages,
     {
@@ -447,9 +542,8 @@ export default function Page() {
     () => {
       const msgs = visibleUserMessages()
       const start = store.turnStart
-      if (start <= 0) return msgs
-      if (start >= msgs.length) return emptyUserMessages
-      return msgs.slice(start)
+      const result = start <= 0 ? msgs : (start >= msgs.length ? emptyUserMessages : msgs.slice(start))
+      return result
     },
     emptyUserMessages,
     {
@@ -515,7 +609,7 @@ export default function Page() {
     const id = params.id
     if (!id) return true
     if (!hasReview()) return true
-    return sync.data.session_diff[id] !== undefined
+    return sessionSyncData().session_diff[id] !== undefined
   })
 
   const idle = { type: "idle" as const }
@@ -542,7 +636,42 @@ export default function Page() {
 
   createEffect(() => {
     if (!params.id) return
-    sync.session.sync(params.id)
+    // Get session info to determine the correct directory (may be worktree)
+    const sessionInfo = sync.session.get(params.id)
+    // Use session directory if available, otherwise fall back to sdk.directory
+    const sessionDirectory = sessionInfo?.directory ?? sdk.directory
+    const projectDirectory = sdk.directory
+    // Ensure the session directory is bootstrapped
+    if (sessionDirectory) {
+      globalSync.child(sessionDirectory)
+    }
+    // Sync using the session directory, not the project directory
+    if (sessionDirectory !== projectDirectory && params.id) {
+      // Use globalSync directly for worktree sessions
+      const [store, setStore] = globalSync.child(sessionDirectory)
+      const client = globalSDK.client
+      // Check if already synced
+      const hasMessages = store.message[params.id] !== undefined
+      if (!hasMessages) {
+        // Load messages from the session directory
+        const sessionID = params.id
+        if (!sessionID) return
+        client.session.messages({ sessionID, limit: 400 }).then((messages) => {
+          const items = (messages.data ?? []).filter((x) => !!x?.info?.id)
+          const next = items
+            .map((x) => x.info)
+            .filter((m) => !!m?.id)
+            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+          setStore("message", sessionID, next)
+          for (const message of items) {
+            setStore("part", message.info.id, message.parts.filter((p) => !!p?.id).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
+          }
+        }).catch(() => {})
+      }
+    } else {
+      // Use normal sync for project root sessions
+      sync.session.sync(params.id).catch(() => {})
+    }
   })
 
   createEffect(() => {
@@ -606,7 +735,7 @@ export default function Page() {
     ),
   )
 
-  const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? idle)
+  const status = createMemo(() => sessionSyncData().session_status[params.id ?? ""] ?? idle)
 
   createEffect(
     on(
@@ -922,7 +1051,7 @@ export default function Page() {
         if (!message) return
         await sdk.client.session.revert({ sessionID, messageID: message.id })
         // Restore the prompt from the reverted message
-        const parts = sync.data.part[message.id]
+        const parts = sessionSyncData().part[message.id]
         if (parts) {
           const restored = extractPromptFromParts(parts, { directory: sdk.directory })
           prompt.set(restored)
@@ -1349,7 +1478,7 @@ export default function Page() {
 
     const wants = isDesktop() ? layout.fileTree.opened() && fileTreeTab() === "changes" : store.mobileTab === "changes"
     if (!wants) return
-    if (sync.data.session_diff[id] !== undefined) return
+    if (sessionSyncData().session_diff[id] !== undefined) return
     if (sync.status === "loading") return
 
     void sync.session.diff(id)
@@ -2018,88 +2147,114 @@ export default function Page() {
                           </div>
                         </Show>
 
-                        <div
-                          ref={autoScroll.contentRef}
-                          role="log"
-                          class="flex flex-col gap-12 items-start justify-start pb-[calc(var(--prompt-height,8rem)+64px)] md:pb-[calc(var(--prompt-height,10rem)+64px)] transition-[margin]"
-                          classList={{
-                            "w-full": true,
-                            "md:max-w-200 md:mx-auto 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]":
-                              centered(),
-                            "mt-0.5": centered(),
-                            "mt-0": !centered(),
-                          }}
-                        >
-                          <Show when={store.turnStart > 0}>
-                            <div class="w-full flex justify-center">
-                              <Button
-                                variant="ghost"
-                                size="large"
-                                class="text-12-medium opacity-50"
-                                onClick={() => setStore("turnStart", 0)}
-                              >
-                                {language.t("session.messages.renderEarlier")}
-                              </Button>
-                            </div>
-                          </Show>
-                          <Show when={historyMore()}>
-                            <div class="w-full flex justify-center">
-                              <Button
-                                variant="ghost"
-                                size="large"
-                                class="text-12-medium opacity-50"
-                                disabled={historyLoading()}
-                                onClick={() => {
-                                  const id = params.id
-                                  if (!id) return
-                                  setStore("turnStart", 0)
-                                  sync.session.history.loadMore(id)
+                        {iife(() => {
+                          const sessionData = sessionSyncData()
+                          const sessionDir = sessionDirectory()
+                          const respond = (input: {
+                            sessionID: string
+                            permissionID: string
+                            response: "once" | "always" | "reject"
+                          }) => sdk.client.permission.respond(input)
+                          const replyToQuestion = (input: { requestID: string; answers: QuestionAnswer[] }) =>
+                            sdk.client.question.reply(input)
+                          const rejectQuestion = (input: { requestID: string }) => sdk.client.question.reject(input)
+                          const navigateToSession = (sessionID: string) => {
+                            navigate(`/${params.dir}/session/${sessionID}`)
+                          }
+                          return (
+                            <DataProvider
+                              data={sessionData}
+                              directory={sessionDir}
+                              onPermissionRespond={respond}
+                              onQuestionReply={replyToQuestion}
+                              onQuestionReject={rejectQuestion}
+                              onNavigateToSession={navigateToSession}
+                            >
+                              <div
+                                ref={autoScroll.contentRef}
+                                role="log"
+                                class="flex flex-col gap-12 items-start justify-start pb-[calc(var(--prompt-height,8rem)+64px)] md:pb-[calc(var(--prompt-height,10rem)+64px)] transition-[margin]"
+                                classList={{
+                                  "w-full": true,
+                                  "md:max-w-200 md:mx-auto 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]":
+                                    centered(),
+                                  "mt-0.5": centered(),
+                                  "mt-0": !centered(),
                                 }}
                               >
-                                {historyLoading()
-                                  ? language.t("session.messages.loadingEarlier")
-                                  : language.t("session.messages.loadEarlier")}
-                              </Button>
-                            </div>
-                          </Show>
-                          <For each={renderedUserMessages()}>
-                            {(message) => {
-                              if (import.meta.env.DEV) {
-                                onMount(() => {
-                                  const id = params.id
-                                  if (!id) return
-                                  navMark({ dir: params.dir, to: id, name: "session:first-turn-mounted" })
-                                })
-                              }
-
-                              return (
-                                <div
-                                  id={anchor(message.id)}
-                                  data-message-id={message.id}
-                                  classList={{
-                                    "min-w-0 w-full max-w-full": true,
-                                    "md:max-w-200 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]": centered(),
-                                  }}
-                                >
-                                  <SessionTurn
-                                    sessionID={params.id!}
-                                    messageID={message.id}
-                                    lastUserMessageID={lastUserMessage()?.id}
-                                    stepsExpanded={store.expanded[message.id] ?? false}
-                                    onStepsExpandedToggle={() =>
-                                      setStore("expanded", message.id, (open: boolean | undefined) => !open)
+                                <Show when={store.turnStart > 0}>
+                                  <div class="w-full flex justify-center">
+                                    <Button
+                                      variant="ghost"
+                                      size="large"
+                                      class="text-12-medium opacity-50"
+                                      onClick={() => setStore("turnStart", 0)}
+                                    >
+                                      {language.t("session.messages.renderEarlier")}
+                                    </Button>
+                                  </div>
+                                </Show>
+                                <Show when={historyMore()}>
+                                  <div class="w-full flex justify-center">
+                                    <Button
+                                      variant="ghost"
+                                      size="large"
+                                      class="text-12-medium opacity-50"
+                                      disabled={historyLoading()}
+                                      onClick={() => {
+                                        const id = params.id
+                                        if (!id) return
+                                        setStore("turnStart", 0)
+                                        sync.session.history.loadMore(id)
+                                      }}
+                                    >
+                                      {historyLoading()
+                                        ? language.t("session.messages.loadingEarlier")
+                                        : language.t("session.messages.loadEarlier")}
+                                    </Button>
+                                  </div>
+                                </Show>
+                                <For each={renderedUserMessages()}>
+                                  {(message) => {
+                                    if (import.meta.env.DEV) {
+                                      onMount(() => {
+                                        const id = params.id
+                                        if (!id) return
+                                        navMark({ dir: params.dir, to: id, name: "session:first-turn-mounted" })
+                                      })
                                     }
-                                    classes={{
-                                      root: "min-w-0 w-full relative",
-                                      content: "flex flex-col justify-between !overflow-visible",
-                                      container: "w-full px-4 md:px-6",
-                                    }}
-                                  />
-                                </div>
-                              )
-                            }}
-                          </For>
-                        </div>
+
+                                    return (
+                                      <div
+                                        id={anchor(message.id)}
+                                        data-message-id={message.id}
+                                        classList={{
+                                          "min-w-0 w-full max-w-full": true,
+                                          "md:max-w-200 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]": centered(),
+                                        }}
+                                      >
+                                        <SessionTurn
+                                          sessionID={params.id!}
+                                          messageID={message.id}
+                                          lastUserMessageID={lastUserMessage()?.id}
+                                          stepsExpanded={store.expanded[message.id] ?? false}
+                                          onStepsExpandedToggle={() =>
+                                            setStore("expanded", message.id, (open: boolean | undefined) => !open)
+                                          }
+                                          classes={{
+                                            root: "min-w-0 w-full relative",
+                                            content: "flex flex-col justify-between !overflow-visible",
+                                            container: "w-full px-4 md:px-6",
+                                          }}
+                                        />
+                                      </div>
+                                    )
+                                  }}
+                                </For>
+                              </div>
+                            </DataProvider>
+                          )
+                        })}
                       </div>
                     </div>
                   </Show>
