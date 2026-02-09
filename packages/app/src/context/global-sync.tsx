@@ -28,6 +28,7 @@ import {
   batch,
   createContext,
   createEffect,
+  createMemo,
   untrack,
   getOwner,
   runWithOwner,
@@ -44,7 +45,7 @@ import { getFilename } from "@opencode-ai/util/path"
 import { usePlatform } from "./platform"
 import { useLanguage } from "@/context/language"
 import { useAuth, addAuthInterceptor } from "./auth"
-import { Persist, persisted } from "@/utils/persist"
+import { Persist, persisted, removePersisted } from "@/utils/persist"
 
 type ProjectMeta = {
   name?: string
@@ -159,10 +160,17 @@ function createGlobalSync() {
     return sdk
   }
 
+  // Note: persisted() doesn't support dynamic keys, so we use a static key
+  // and manually clear it when user changes (see user change effect below)
   const [projectCache, setProjectCache, , projectCacheReady] = persisted(
     Persist.global("globalSync.project", ["globalSync.project.v1"]),
     createStore({ value: [] as Project[] }),
   )
+  // #region agent log
+  createEffect(() => {
+    fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:165',message:'projectCache initialized',data:{cacheReady:projectCacheReady(),cacheLength:projectCache.value.length,projects:projectCache.value.map(p=>({id:p.id,name:p.name}))},timestamp:Date.now(),runId:'debug',hypothesisId:'A'})}).catch(()=>{});
+  });
+  // #endregion
 
   const sanitizeProject = (project: Project) => {
     if (!project.icon?.url && !project.icon?.override) return project
@@ -193,6 +201,11 @@ function createGlobalSync() {
     config: {},
     reload: undefined,
   })
+  // #region agent log
+  createEffect(() => {
+    fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:195',message:'globalStore initialized',data:{initialProjectCount:projectCache.value.length,projects:projectCache.value.map(p=>({id:p.id,name:p.name})),currentUserID:auth.user?.id},timestamp:Date.now(),runId:'debug',hypothesisId:'E'})}).catch(()=>{});
+  });
+  // #endregion
 
   const queued = new Set<string>()
   let root = false
@@ -265,9 +278,20 @@ function createGlobalSync() {
   createEffect(() => {
     if (!projectCacheReady()) return
     if (globalStore.project.length !== 0) return
+    // In multi-user mode, don't restore from cache if user is not authenticated
+    if (auth.isMultiUserEnabled && !auth.user) {
+      setGlobalStore("project", [])
+      return
+    }
     const cached = projectCache.value
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:268',message:'restoring projects from cache',data:{cachedLength:cached.length,projects:cached.map(p=>({id:p.id,name:p.name})),globalStoreLength:globalStore.project.length,isAuthenticated:!!auth.user},timestamp:Date.now(),runId:'debug',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     if (cached.length === 0) return
     setGlobalStore("project", cached)
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:271',message:'restored projects from cache',data:{restoredCount:cached.length},timestamp:Date.now(),runId:'debug',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
   })
 
   createEffect(() => {
@@ -284,6 +308,53 @@ function createGlobalSync() {
     if (globalStore.reload !== "complete") return
     setGlobalStore("reload", undefined)
     refresh()
+  })
+
+  // Clear cache and reload when user changes
+  // Track initial user to detect changes even after page refresh
+  let lastUserID: string | null | undefined = undefined
+  createEffect(() => {
+    // auth.user is a getter that returns the current user value
+    // Access it directly (not as a function) to establish reactivity
+    const currentUser = auth.user
+    const currentUserID = currentUser?.id ?? null
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:295',message:'user change detection',data:{lastUserID,currentUserID,willClear:lastUserID!==undefined&&lastUserID!==currentUserID,projectCacheLength:projectCache.value.length,globalStoreLength:globalStore.project.length},timestamp:Date.now(),runId:'debug',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    // Clear cache if user changed (including from undefined to a user, or from one user to another)
+    if (lastUserID !== undefined && lastUserID !== currentUserID) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:297',message:'clearing cache on user change',data:{lastUserID,currentUserID,beforeProjectCacheLength:projectCache.value.length,beforeGlobalStoreLength:globalStore.project.length},timestamp:Date.now(),runId:'debug',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      // User changed, clear cache and reload
+      setGlobalStore("project", [])
+      setProjectCache("value", [])
+      // Clear persisted storage to prevent cross-user data leakage
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:320',message:'clearing old projectCache on user change',data:{lastUserID,currentUserID},timestamp:Date.now(),runId:'debug',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      removePersisted(Persist.global("globalSync.project"))
+      setGlobalStore("ready", false)
+      // Clear all child stores
+      for (const directory of Object.keys(children)) {
+        delete children[directory]
+      }
+      // Clear caches
+      vcsCache.clear()
+      metaCache.clear()
+      iconCache.clear()
+      sdkCache.clear()
+      sessionLoads.clear()
+      sessionMeta.clear()
+      booting.clear()
+      queued.clear()
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:315',message:'cache cleared, after state',data:{afterProjectCacheLength:projectCache.value.length,afterGlobalStoreLength:globalStore.project.length},timestamp:Date.now(),runId:'debug',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      // Reload
+      refresh()
+    }
+    lastUserID = currentUserID
   })
 
   const children: Record<string, [Store<State>, SetStoreFunction<State>]> = {}
@@ -976,6 +1047,13 @@ function createGlobalSync() {
       return
     }
 
+    // In multi-user mode, skip bootstrap if user is not authenticated
+    if (auth.isMultiUserEnabled && !auth.user) {
+      setGlobalStore("project", [])
+      setGlobalStore("ready", true)
+      return
+    }
+
     const tasks = [
       retry(() =>
         globalSDK.client.path.get().then((x) => {
@@ -994,7 +1072,24 @@ function createGlobalSync() {
             .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
             .slice()
             .sort((a, b) => cmp(a.id, b.id))
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:1007',message:'loaded projects from API',data:{projectCount:projects.length,projects:projects.map(p=>({id:p.id,name:p.name})),currentUserID:auth.user?.id,isAuthenticated:!!auth.user},timestamp:Date.now(),runId:'debug',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
+          // In multi-user mode, if user is not authenticated, clear projects to prevent showing other users' data
+          if (auth.isMultiUserEnabled && !auth.user) {
+            setGlobalStore("project", [])
+            return
+          }
           setGlobalStore("project", projects)
+        }).catch((err) => {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a069dba4-d784-4905-a832-9213ba8ab106',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'global-sync.tsx:1015',message:'failed to load projects from API',data:{error:err.message,currentUserID:auth.user?.id,isAuthenticated:!!auth.user},timestamp:Date.now(),runId:'debug',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
+          // If API call fails (e.g., 401 unauthorized), clear projects
+          if (auth.isMultiUserEnabled && !auth.user) {
+            setGlobalStore("project", [])
+          }
+          throw err
         }),
       ),
       retry(() =>

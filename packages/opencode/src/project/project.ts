@@ -16,6 +16,46 @@ import { existsSync } from "fs"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
+
+  // Helper to check if multi-user mode is enabled
+  function isMultiUserMode(): boolean {
+    return Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+  }
+
+  // Get current user ID in multi-user mode (lazy import to avoid circular dependency)
+  // Use a lazy getter pattern to avoid circular dependency with User module
+  // User imports Bus, Bus imports Instance, Instance imports Project, creating a cycle
+  function currentUserID(): string | undefined {
+    if (!isMultiUserMode()) return undefined
+    try {
+      // Use require for synchronous lazy loading to break circular dependency
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { User } = require("../user")
+      return User.current()?.id
+    } catch (error) {
+      // If require fails (e.g., module not loaded yet), return undefined
+      // This is safe because the function is only called when multi-user mode is enabled
+      // and the User module should be available at runtime
+      return undefined
+    }
+  }
+
+  // Build storage key for project (handles multi-user mode)
+  function projectKey(projectID: string, userID?: string): string[] {
+    if (isMultiUserMode() && userID) {
+      return ["user_project", userID, projectID]
+    }
+    return ["project", projectID]
+  }
+
+  // Build storage prefix for listing projects
+  function projectListPrefix(userID?: string): string[] {
+    if (isMultiUserMode() && userID) {
+      return ["user_project", userID]
+    }
+    return ["project"]
+  }
+
   export const Info = z
     .object({
       id: z.string(),
@@ -175,7 +215,9 @@ export namespace Project {
       }
     })
 
-    let existing = await Storage.read<Info>(["project", id]).catch(() => undefined)
+    const userID = currentUserID()
+    const key = projectKey(id, userID)
+    let existing = await Storage.read<Info>(key).catch(() => undefined)
     if (!existing) {
       existing = {
         id,
@@ -208,7 +250,7 @@ export namespace Project {
     }
     if (sandbox !== result.worktree && !result.sandboxes.includes(sandbox)) result.sandboxes.push(sandbox)
     result.sandboxes = result.sandboxes.filter((x) => existsSync(x))
-    await Storage.write<Info>(["project", id], result)
+    await Storage.write<Info>(key, result)
     GlobalBus.emit("event", {
       payload: {
         type: Event.Updated.type,
@@ -273,18 +315,64 @@ export namespace Project {
   }
 
   export async function setInitialized(projectID: string) {
-    await Storage.update<Info>(["project", projectID], (draft) => {
+    const userID = currentUserID()
+    const key = projectKey(projectID, userID)
+    await Storage.update<Info>(key, (draft) => {
       draft.time.initialized = Date.now()
     })
   }
 
   export async function list() {
-    const keys = await Storage.list(["project"])
-    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x)))
-    return projects.map((project) => ({
-      ...project,
-      sandboxes: project.sandboxes?.filter((x) => existsSync(x)),
-    }))
+    // In multi-user mode, require a user to be logged in
+    if (isMultiUserMode()) {
+      const userID = currentUserID()
+      // #region agent log
+      const logData = { isMultiUser: true, userID, hasUserID: !!userID }
+      try {
+        const file = Bun.file("/Users/ke/Documents/project2/opencode/opencode/.cursor/debug.log")
+        const existing = await file.exists() ? await file.text() : ""
+        await Bun.write(file, existing + JSON.stringify({ location: "project.ts:328", message: "Project.list called", data: logData, timestamp: Date.now(), runId: "debug", hypothesisId: "D" }) + "\n")
+      } catch {}
+      // #endregion
+      if (!userID) {
+        // No user logged in, return empty list
+        // #region agent log
+        try {
+          const file = Bun.file("/Users/ke/Documents/project2/opencode/opencode/.cursor/debug.log")
+          const existing = await file.exists() ? await file.text() : ""
+          await Bun.write(file, existing + JSON.stringify({ location: "project.ts:336", message: "Project.list returning empty for unauthenticated user", data: {}, timestamp: Date.now(), runId: "debug", hypothesisId: "D" }) + "\n")
+        } catch {}
+        // #endregion
+        return []
+      }
+      const prefix = projectListPrefix(userID)
+      const keys = await Storage.list(prefix)
+      const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
+      const filtered = projects
+        .filter((p): p is Info => !!p)
+        .map((project) => ({
+          ...project,
+          sandboxes: project.sandboxes?.filter((x) => existsSync(x)),
+        }))
+      // #region agent log
+      try {
+        const file = Bun.file("/Users/ke/Documents/project2/opencode/opencode/.cursor/debug.log")
+        const existing = await file.exists() ? await file.text() : ""
+        await Bun.write(file, existing + JSON.stringify({ location: "project.ts:350", message: "Project.list returning filtered projects", data: { userID, prefix, keysCount: keys.length, projectsCount: filtered.length }, timestamp: Date.now(), runId: "debug", hypothesisId: "D" }) + "\n")
+      } catch {}
+      // #endregion
+      return filtered
+    }
+    // Single-user mode: return all projects
+    const prefix = projectListPrefix()
+    const keys = await Storage.list(prefix)
+    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
+    return projects
+      .filter((p): p is Info => !!p)
+      .map((project) => ({
+        ...project,
+        sandboxes: project.sandboxes?.filter((x) => existsSync(x)),
+      }))
   }
 
   export const update = fn(
@@ -295,7 +383,9 @@ export namespace Project {
       commands: Info.shape.commands.optional(),
     }),
     async (input) => {
-      const result = await Storage.update<Info>(["project", input.projectID], (draft) => {
+      const userID = currentUserID()
+      const key = projectKey(input.projectID, userID)
+      const result = await Storage.update<Info>(key, (draft) => {
         if (input.name !== undefined) draft.name = input.name
         if (input.icon !== undefined) {
           draft.icon = {
@@ -328,7 +418,9 @@ export namespace Project {
   )
 
   export async function sandboxes(projectID: string) {
-    const project = await Storage.read<Info>(["project", projectID]).catch(() => undefined)
+    const userID = currentUserID()
+    const key = projectKey(projectID, userID)
+    const project = await Storage.read<Info>(key).catch(() => undefined)
     if (!project?.sandboxes) return []
     const valid: string[] = []
     for (const dir of project.sandboxes) {
@@ -339,7 +431,9 @@ export namespace Project {
   }
 
   export async function addSandbox(projectID: string, directory: string) {
-    const result = await Storage.update<Info>(["project", projectID], (draft) => {
+    const userID = currentUserID()
+    const key = projectKey(projectID, userID)
+    const result = await Storage.update<Info>(key, (draft) => {
       const sandboxes = draft.sandboxes ?? []
       if (!sandboxes.includes(directory)) sandboxes.push(directory)
       draft.sandboxes = sandboxes
@@ -355,7 +449,9 @@ export namespace Project {
   }
 
   export async function removeSandbox(projectID: string, directory: string) {
-    const result = await Storage.update<Info>(["project", projectID], (draft) => {
+    const userID = currentUserID()
+    const key = projectKey(projectID, userID)
+    const result = await Storage.update<Info>(key, (draft) => {
       const sandboxes = draft.sandboxes ?? []
       draft.sandboxes = sandboxes.filter((sandbox) => sandbox !== directory)
       draft.time.updated = Date.now()

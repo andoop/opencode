@@ -30,6 +30,20 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
   name: "Server",
   init: (props: { defaultUrl: string }) => {
     const platform = usePlatform()
+    
+    // Helper to flush storage if available (for desktop app with debounced writes)
+    const flushStorage = () => {
+      if (platform.platform === "desktop" && platform.storage) {
+        try {
+          const storage = platform.storage("opencode.global.dat")
+          if (storage && typeof (storage as unknown as { flush?: () => Promise<void> }).flush === "function") {
+            void (storage as unknown as { flush: () => Promise<void> }).flush()
+          }
+        } catch {
+          // Ignore errors
+        }
+      }
+    }
 
     const [store, setStore, _, ready] = persisted(
       Persist.global("server", ["server.v3"]),
@@ -159,7 +173,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       add,
       remove,
       projects: {
-        list: projectsList,
+        list: () => projectsList(),
         open(directory: string) {
           const key = origin()
           if (!key) return
@@ -171,11 +185,85 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
+          const filtered = current.filter((x) => x.worktree !== directory)
+          // Also clear lastProject if it matches the closed directory
+          if (store.lastProject[key] === directory) {
+            setStore("lastProject", key, undefined as unknown as string)
+          }
+          // Force immediate write to localStorage for web platform BEFORE setStore
+          // This ensures makePersisted reads the updated value on next initialization
+          // Since web platform uses SyncStorage, we need to ensure the write happens synchronously
+          // by directly accessing the storage API used by makePersisted
+          // Also need to clear any legacy keys that might be restored on next load
+          if (platform.platform === "web" && !platform.storage) {
+            try {
+              // Web platform, use localStorage directly
+              // The storage key format is: `${GLOBAL_STORAGE}:${config.key}` = `opencode.global.dat:server`
+              const storageKey = `opencode.global.dat:server`
+              // Also clear legacy keys to prevent them from being restored
+              const legacyKeys = ["server.v3", "server.v2", "server.v1", "server"]
+              for (const legacyKey of legacyKeys) {
+                try {
+                  localStorage.removeItem(legacyKey)
+                } catch {
+                  // Ignore errors
+                }
+              }
+              // Read current value from localStorage to ensure we have the latest state
+              const currentRaw = localStorage.getItem(storageKey)
+              if (currentRaw) {
+                try {
+                  const currentParsed = JSON.parse(currentRaw)
+                  // Update the projects for the current key
+                  const updatedProjects = {
+                    ...currentParsed.projects,
+                    [key]: filtered,
+                  }
+                  // Also clear lastProject if it matches the closed directory
+                  const updatedLastProject = {
+                    ...currentParsed.lastProject,
+                    [key]: currentParsed.lastProject[key] === directory ? undefined : currentParsed.lastProject[key],
+                  }
+                  const updatedStore = {
+                    ...currentParsed,
+                    projects: updatedProjects,
+                    lastProject: updatedLastProject,
+                  }
+                  const updatedValue = JSON.stringify(updatedStore)
+                  // Write to localStorage
+                  localStorage.setItem(storageKey, updatedValue)
+                } catch {
+                  // Ignore parse errors
+                }
+              } else {
+                // If no current value, create a new store with the filtered projects
+                // Also clear lastProject if it matches the closed directory
+                const currentLastProject = store.lastProject[key]
+                const newStore = {
+                  list: [] as string[],
+                  projects: {
+                    [key]: filtered,
+                  } as Record<string, StoredProject[]>,
+                  lastProject: {
+                    ...store.lastProject,
+                    [key]: currentLastProject === directory ? undefined : currentLastProject,
+                  } as Record<string, string>,
+                }
+                const newValue = JSON.stringify(newStore)
+                localStorage.setItem(storageKey, newValue)
+              }
+            } catch {
+              // Ignore errors
+            }
+          }
+          // Now call setStore after localStorage has been updated
           setStore(
             "projects",
             key,
-            current.filter((x) => x.worktree !== directory),
+            filtered,
           )
+          // Force flush storage if available (for desktop app with debounced writes)
+          flushStorage()
         },
         expand(directory: string) {
           const key = origin()

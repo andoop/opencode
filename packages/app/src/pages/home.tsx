@@ -24,9 +24,13 @@ export default function Home() {
   const language = useLanguage()
   const homedir = createMemo(() => sync.data.path.home)
   const recent = createMemo(() => {
-    return sync.data.project
-      .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-      .slice(0, 5)
+    // Only show projects that are currently open (in layout.projects.list())
+    const openProjectsList = layout.projects.list()
+    const openProjects = new Set(openProjectsList.map((p) => p.worktree))
+    const allProjects = sync.data.project
+    const filtered = allProjects.filter((p) => openProjects.has(p.worktree))
+    const sorted = filtered.toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
+    return sorted.slice(0, 5)
   })
 
   function openProject(directory: string) {

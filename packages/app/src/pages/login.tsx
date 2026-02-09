@@ -20,7 +20,7 @@ export default function LoginPage() {
     document.body.style.overflow = ""
   })
 
-  const handleSubmit = async (e: SubmitEvent) => {
+  const handleSubmit = async (e: Event) => {
     e.preventDefault()
     const success = await auth.login(username(), password())
     if (success) {
