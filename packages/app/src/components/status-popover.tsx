@@ -13,7 +13,6 @@ import { useSDK } from "@/context/sdk"
 import { normalizeServerUrl, serverDisplayName, useServer } from "@/context/server"
 import { usePlatform } from "@/context/platform"
 import { useLanguage } from "@/context/language"
-import { useAuth } from "@/context/auth"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { DialogSelectServer } from "./dialog-select-server"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -40,7 +39,6 @@ export function StatusPopover() {
   const platform = usePlatform()
   const dialog = useDialog()
   const language = useLanguage()
-  const auth = useAuth()
   const navigate = useNavigate()
 
   const [store, setStore] = createStore({
@@ -204,11 +202,6 @@ export function StatusPopover() {
               {pluginCount() > 0 ? `${pluginCount()} ` : ""}
               {language.t("status.popover.tab.plugins")}
             </Tabs.Trigger>
-            <Show when={auth.isMultiUserEnabled}>
-              <Tabs.Trigger value="user" data-slot="tab" class="text-12-regular">
-                {auth.user?.username || "User"}
-              </Tabs.Trigger>
-            </Show>
           </Tabs.List>
 
           <Tabs.Content value="servers">
@@ -421,46 +414,6 @@ export function StatusPopover() {
             </div>
           </Tabs.Content>
 
-          <Show when={auth.isMultiUserEnabled}>
-            <Tabs.Content value="user">
-              <div class="flex flex-col px-2 pb-2">
-                <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14 gap-3">
-                  <div class="flex items-center gap-2">
-                    <Icon name="brain" size="small" class="text-icon-weak" />
-                    <span class="text-14-regular text-text-base">{auth.user?.username}</span>
-                    <Show when={auth.isAdmin}>
-                      <span class="text-11-regular text-text-invert-base bg-icon-success-base px-1.5 py-0.5 rounded-md">
-                        Admin
-                      </span>
-                    </Show>
-                  </div>
-                  <div class="flex flex-col gap-2">
-                    <Show when={auth.isAdmin}>
-                      <Button
-                        variant="secondary"
-                        class="h-8 px-3 py-1.5 w-full"
-                        onClick={() => navigate("/admin")}
-                      >
-                        <Icon name="settings-gear" size="small" class="mr-2" />
-                        用户管理
-                      </Button>
-                    </Show>
-                    <Button
-                      variant="ghost"
-                      class="h-8 px-3 py-1.5 w-full text-icon-critical-base hover:bg-surface-critical-base-hover"
-                      onClick={() => {
-                        auth.logout()
-                        navigate("/login")
-                      }}
-                    >
-                      <Icon name="arrow-right" size="small" class="mr-2" />
-                      退出登录
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Tabs.Content>
-          </Show>
         </Tabs>
       </div>
     </Popover>

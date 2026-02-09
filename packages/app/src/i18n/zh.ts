@@ -516,6 +516,8 @@ export const dict = {
   "sidebar.gettingStarted.line2": "连接任意提供商即可使用更多模型，如 Claude、GPT、Gemini 等。",
   "sidebar.project.recentSessions": "最近会话",
   "sidebar.project.viewAllSessions": "查看全部会话",
+  "sidebar.userManagement": "用户管理",
+  "sidebar.logout": "退出登录",
 
   "app.name.desktop": "OpenCode Desktop",
   "settings.section.desktop": "桌面",

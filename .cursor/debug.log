@@ -5,3 +5,5 @@
 {"location":"server.ts:ct-middleware","message":"mutation request","data":{"method":"POST","path":"/session/ses_3bfb8c56affe94UQCHUN3moXl1/message","contentType":"application/json","hasBody":true,"hasAuth":true},"timestamp":1770605158252}
 {"location":"server.ts:ct-middleware","message":"mutation request","data":{"method":"POST","path":"/session/ses_3bfb8c56affe94UQCHUN3moXl1/message","contentType":"application/json","hasBody":true,"hasAuth":true},"timestamp":1770605229597}
 {"location":"server.ts:ct-middleware","message":"mutation request","data":{"method":"POST","path":"/session/ses_3bfb8c56affe94UQCHUN3moXl1/message","contentType":"application/json","hasBody":true,"hasAuth":true},"timestamp":1770605279907}
+{"location":"server.ts:ct-middleware","message":"mutation request","data":{"method":"POST","path":"/user-auth/refresh","hasBody":false,"hasAuth":true},"timestamp":1770605435642}
+{"location":"server.ts:ct-middleware","message":"mutation request","data":{"method":"POST","path":"/user-auth/login","contentType":"application/json","hasBody":true,"hasAuth":false},"timestamp":1770605988093}

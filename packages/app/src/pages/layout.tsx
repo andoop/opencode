@@ -74,6 +74,8 @@ import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
+import { useAuth } from "@/context/auth"
+import { Popover } from "@opencode-ai/ui/popover"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -109,6 +111,7 @@ export default function Layout(props: ParentProps) {
   const command = useCommand()
   const theme = useTheme()
   const language = useLanguage()
+  const auth = useAuth()
   const initialDirectory = decode64(params.dir)
   const availableThemeEntries = createMemo(() => Object.entries(theme.themes()))
   const colorSchemeOrder: ColorScheme[] = ["system", "light", "dark"]
@@ -2977,6 +2980,58 @@ export default function Layout(props: ParentProps) {
             </DragDropProvider>
           </div>
           <div class="shrink-0 w-full pt-3 pb-3 flex flex-col items-center gap-2">
+            <Show when={auth.isMultiUserEnabled && auth.isAuthenticated}>
+              <Popover
+                placement={sidebarProps.mobile ? "bottom" : "right"}
+                trigger={
+                  <div
+                    class="flex items-center justify-center w-9 h-9 rounded-md hover:bg-surface-raised-base-hover transition-colors cursor-pointer"
+                    aria-label={auth.user?.username ?? "User"}
+                  >
+                    <div class="w-7 h-7 rounded-full bg-surface-raised-stronger-non-alpha flex items-center justify-center text-12-medium text-text-strong uppercase select-none">
+                      {auth.user?.username?.charAt(0) ?? "U"}
+                    </div>
+                  </div>
+                }
+                class="w-52"
+              >
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center gap-2 px-2 py-1.5">
+                    <div class="w-7 h-7 rounded-full bg-surface-raised-stronger-non-alpha flex items-center justify-center text-12-medium text-text-strong uppercase shrink-0 select-none">
+                      {auth.user?.username?.charAt(0) ?? "U"}
+                    </div>
+                    <span class="text-13-medium text-text-strong truncate">{auth.user?.username}</span>
+                    <Show when={auth.isAdmin}>
+                      <span class="text-11-regular text-text-invert-base bg-icon-success-base px-1.5 py-0.5 rounded-md shrink-0">
+                        Admin
+                      </span>
+                    </Show>
+                  </div>
+                  <div class="h-px bg-border-weak-base" />
+                  <Show when={auth.isAdmin}>
+                    <button
+                      type="button"
+                      class="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-13-regular text-text-base hover:bg-surface-raised-base-hover transition-colors text-left"
+                      onClick={() => navigate("/admin")}
+                    >
+                      <Icon name="settings-gear" size="small" class="text-icon-base" />
+                      {language.t("sidebar.userManagement" as any)}
+                    </button>
+                  </Show>
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-13-regular text-icon-critical-base hover:bg-surface-critical-base-hover transition-colors text-left"
+                    onClick={() => {
+                      auth.logout()
+                      navigate("/login")
+                    }}
+                  >
+                    <Icon name="arrow-right" size="small" />
+                    {language.t("sidebar.logout" as any)}
+                  </button>
+                </div>
+              </Popover>
+            </Show>
             <TooltipKeybind
               placement={sidebarProps.mobile ? "bottom" : "right"}
               title={language.t("sidebar.settings")}
