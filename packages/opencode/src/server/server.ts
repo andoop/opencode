@@ -114,12 +114,21 @@ export namespace Server {
         // patch both the header and an empty body so Hono's JSON validator can proceed.
         .use(async (c, next) => {
           const method = c.req.method
-          if ((method === "POST" || method === "PUT" || method === "PATCH") && !c.req.header("content-type")) {
-            const body = c.req.raw.body
-            const headers = new Headers([...c.req.raw.headers.entries(), ["content-type", "application/json"]])
-            c.req.raw = body
-              ? new Request(c.req.raw, { headers })
-              : new Request(c.req.raw.url, { method, headers, body: "{}" })
+          if (method === "POST" || method === "PUT" || method === "PATCH") {
+            const ct = c.req.header("content-type")
+            const hasBody = !!c.req.raw.body
+            if (!ct) {
+              const headers = new Headers([...c.req.raw.headers.entries(), ["content-type", "application/json"]])
+              c.req.raw = hasBody
+                ? new Request(c.req.raw, { headers })
+                : new Request(c.req.raw.url, { method, headers, body: "{}" })
+            } else if (ct.includes("application/json") && !hasBody) {
+              c.req.raw = new Request(c.req.raw.url, {
+                method,
+                headers: c.req.raw.headers,
+                body: "{}",
+              })
+            }
           }
           return next()
         })
