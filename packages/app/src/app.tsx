@@ -1,6 +1,6 @@
 import "@/index.css"
-import { ErrorBoundary, Show, lazy, type ParentProps, createEffect, createSignal } from "solid-js"
-import { Router, Route, Navigate, useNavigate } from "@solidjs/router"
+import { ErrorBoundary, Show, lazy, type ParentProps, createEffect, createSignal, createMemo } from "solid-js"
+import { Router, Route, Navigate, useNavigate, useLocation } from "@solidjs/router"
 import { MetaProvider } from "@solidjs/meta"
 import { Font } from "@opencode-ai/ui/font"
 import { MarkedProvider } from "@opencode-ai/ui/context/marked"
@@ -42,12 +42,21 @@ const Loading = () => <div class="size-full" />
 function AuthGuard(props: ParentProps) {
   const auth = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   createEffect(() => {
+    // Don't redirect if already on login page
+    if (location.pathname === "/login") return
+    
     if (auth.isMultiUserEnabled && !auth.loading && !auth.isAuthenticated) {
       navigate("/login")
     }
   })
+
+  // Don't render protected content if on login page
+  if (location.pathname === "/login") {
+    return null
+  }
 
   // Wait for auth to finish loading before rendering protected content
   // If still loading, show loading state
@@ -157,23 +166,34 @@ export function AppInterface(props: { defaultUrl?: string }) {
           <GlobalSDKProvider>
             <GlobalSyncProvider>
               <Router
-                root={(props) => (
-                  <SettingsProvider>
-                    <PermissionProvider>
-                      <LayoutProvider>
-                        <NotificationProvider>
-                          <ModelsProvider>
-                            <CommandProvider>
-                              <HighlightsProvider>
-                                <Layout>{props.children}</Layout>
-                              </HighlightsProvider>
-                            </CommandProvider>
-                          </ModelsProvider>
-                        </NotificationProvider>
-                      </LayoutProvider>
-                    </PermissionProvider>
-                  </SettingsProvider>
-                )}
+                root={(props) => {
+                  const location = useLocation()
+                  const isLoginPage = createMemo(() => location.pathname === "/login")
+                  
+                  // Login page should not use Layout
+                  return (
+                    <Show
+                      when={!isLoginPage()}
+                      fallback={<>{props.children}</>}
+                    >
+                      <SettingsProvider>
+                        <PermissionProvider>
+                          <LayoutProvider>
+                            <NotificationProvider>
+                              <ModelsProvider>
+                                <CommandProvider>
+                                  <HighlightsProvider>
+                                    <Layout>{props.children}</Layout>
+                                  </HighlightsProvider>
+                                </CommandProvider>
+                              </ModelsProvider>
+                            </NotificationProvider>
+                          </LayoutProvider>
+                        </PermissionProvider>
+                      </SettingsProvider>
+                    </Show>
+                  )
+                }}
               >
                 <Route
                   path="/login"

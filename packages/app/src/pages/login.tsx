@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js"
+import { createSignal, Show, onMount, onCleanup } from "solid-js"
 import { useNavigate } from "@solidjs/router"
 import { useAuth } from "@/context/auth"
 import { Button } from "@opencode-ai/ui/button"
@@ -11,6 +11,15 @@ export default function LoginPage() {
   const [username, setUsername] = createSignal("")
   const [password, setPassword] = createSignal("")
 
+  // Prevent interaction with underlying content
+  onMount(() => {
+    document.body.style.overflow = "hidden"
+  })
+
+  onCleanup(() => {
+    document.body.style.overflow = ""
+  })
+
   const handleSubmit = async (e: SubmitEvent) => {
     e.preventDefault()
     const success = await auth.login(username(), password())
@@ -20,7 +29,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div class="flex min-h-screen items-center justify-center bg-background-base">
+    <div 
+      class="fixed inset-0 z-[9999] flex items-center justify-center bg-background-base"
+      onClick={(e) => {
+        // Only stop propagation if clicking outside the form
+        if (e.target === e.currentTarget) {
+          e.stopPropagation()
+        }
+      }}
+    >
       <div class="w-full max-w-md space-y-8 rounded-lg border border-outline-dimmed bg-background-frame p-8">
         <div class="text-center">
           <h1 class="text-2xl font-semibold text-color-primary">OpenCode</h1>
