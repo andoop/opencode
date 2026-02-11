@@ -96,14 +96,32 @@ export namespace FileWatcher {
         .then((x) => path.resolve(Instance.worktree, x.trim()))
         .catch(() => undefined)
       if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
-        const gitDirContents = await readdir(vcsDir).catch(() => [])
-        const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")
-        const pending = w.subscribe(vcsDir, subscribe, {
-          ignore: ignoreList,
+        // Only process HEAD file changes for branch detection
+        // We still need to subscribe to the .git directory, but filter events in the callback
+        // to only process HEAD file changes. This reduces CPU usage from processing unnecessary events.
+        const headPath = path.join(vcsDir, "HEAD")
+        
+        // Create a filtered subscribe callback that only processes HEAD file changes
+        const subscribeHead: ParcelWatcher.SubscribeCallback = (err, evts) => {
+          if (err) return
+          // Only process events for the HEAD file, ignore all other .git directory changes
+          const headEvents = evts.filter((evt) => evt.path === headPath)
+          if (headEvents.length === 0) return
+          
+          for (const evt of headEvents) {
+            if (evt.type === "create") Bus.publish(Event.Updated, { file: evt.path, event: "add" })
+            if (evt.type === "update") Bus.publish(Event.Updated, { file: evt.path, event: "change" })
+            if (evt.type === "delete") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
+          }
+        }
+        
+        // Subscribe to the .git directory, but filter events to only process HEAD file
+        // This minimizes CPU usage from processing unnecessary file system events
+        const pending = w.subscribe(vcsDir, subscribeHead, {
           backend,
         })
         const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((err) => {
-          log.error("failed to subscribe to vcsDir", { error: err })
+          log.error("failed to subscribe to HEAD file", { error: err })
           pending.then((s) => s.unsubscribe()).catch(() => {})
           return undefined
         })
