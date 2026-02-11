@@ -40,6 +40,7 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
 import { Popover } from "@opencode-ai/ui/popover"
+import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
@@ -310,6 +311,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
   const currentBranch = createMemo(() => {
     return sessionSyncData().vcs?.branch
+  })
+  const submodules = createMemo(() => {
+    return sessionSyncData().vcs?.submodules
+  })
+  const branches = createMemo(() => {
+    return sessionSyncData().vcs?.branches
   })
   const currentDirectory = createMemo(() => sessionSyncData().path.directory)
   const project = createMemo(() => {
@@ -2122,20 +2129,76 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   }}
                   trigger={<Icon name="branch" class="size-4.5" />}
                 >
-                  <div class="flex flex-col gap-2 min-w-[200px]">
+                  <div class="flex flex-col gap-3 min-w-[500px] max-w-[800px] max-h-[500px] overflow-y-auto">
                     <Show when={currentBranch()}>
-                      <div class="flex items-center gap-2">
-                        <Icon name="branch" size="small" class="text-icon-weak" />
-                        <span class="text-12-medium text-text-weak">Branch:</span>
-                        <span class="text-12-medium text-text-strong">{currentBranch()}</span>
+                      <div class="flex items-start gap-2">
+                        <Icon name="branch" size="small" class="text-icon-weak mt-0.5 flex-shrink-0" />
+                        <div class="flex flex-col gap-1 flex-1 min-w-0">
+                          <span class="text-12-medium text-text-weak">Current Branch:</span>
+                          <span class="text-14-medium text-text-strong break-words">{currentBranch()}</span>
+                        </div>
                       </div>
                     </Show>
                     <Show when={isWorktree() && worktreeDisplay()}>
-                      <div class="flex items-center gap-2">
-                        <Icon name="folder" size="small" class="text-icon-weak" />
-                        <span class="text-12-medium text-text-weak">Worktree:</span>
-                        <span class="text-12-medium text-text-strong truncate">{worktreeDisplay()}</span>
+                      <div class="flex items-start gap-2">
+                        <Icon name="folder" size="small" class="text-icon-weak mt-0.5 flex-shrink-0" />
+                        <div class="flex flex-col gap-1 flex-1 min-w-0">
+                          <span class="text-12-medium text-text-weak">Worktree:</span>
+                          <span class="text-14-medium text-text-strong break-words">{worktreeDisplay()}</span>
+                        </div>
                       </div>
+                    </Show>
+                    <Show when={branches() && branches()!.length > 0}>
+                      <Collapsible variant="ghost" defaultOpen={false}>
+                        <Collapsible.Trigger class="flex items-center gap-2 w-full">
+                          <Icon name="branch" size="small" class="text-icon-weak flex-shrink-0" />
+                          <span class="text-12-medium text-text-weak">All Branches ({branches()!.length})</span>
+                          <Collapsible.Arrow class="ml-auto" />
+                        </Collapsible.Trigger>
+                        <Collapsible.Content>
+                          <div class="flex flex-col gap-1 pl-6 pt-1">
+                            <For each={branches()}>
+                              {(branch) => (
+                                <span
+                                  class="text-14-medium break-words"
+                                  classList={{
+                                    "text-text-strong": branch === currentBranch(),
+                                    "text-text-weak": branch !== currentBranch(),
+                                  }}
+                                >
+                                  {branch === currentBranch() ? "→ " : ""}
+                                  {branch}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </Collapsible.Content>
+                      </Collapsible>
+                    </Show>
+                    <Show when={submodules() && submodules()!.length > 0}>
+                      <Collapsible variant="ghost" defaultOpen={false}>
+                        <Collapsible.Trigger class="flex items-center gap-2 w-full">
+                          <Icon name="folder" size="small" class="text-icon-weak flex-shrink-0" />
+                          <span class="text-12-medium text-text-weak">Submodules ({submodules()!.length})</span>
+                          <Collapsible.Arrow class="ml-auto" />
+                        </Collapsible.Trigger>
+                        <Collapsible.Content>
+                          <div class="flex flex-col gap-2 pl-6 pt-1">
+                            <For each={submodules()}>
+                              {(submodule) => (
+                                <div class="flex flex-col gap-0.5">
+                                  <span class="text-14-medium text-text-strong break-words">{submodule.path}</span>
+                                  <Show when={submodule.branch}>
+                                    <span class="text-12-regular text-text-weak break-words ml-2">
+                                      Branch: {submodule.branch}
+                                    </span>
+                                  </Show>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Collapsible.Content>
+                      </Collapsible>
                     </Show>
                   </div>
                 </Popover>

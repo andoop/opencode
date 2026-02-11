@@ -427,8 +427,17 @@ export namespace Server {
           }),
           async (c) => {
             const branch = await Vcs.branch()
+            if (!branch) {
+              return c.json({ branch: "" })
+            }
+
+            const submodules = await Vcs.getSubmodules().catch(() => [])
+            const branches = await Vcs.getBranches().catch(() => [])
+
             return c.json({
               branch,
+              submodules: submodules.length > 0 ? submodules : undefined,
+              branches: branches.length > 0 ? branches : undefined,
             })
           },
         )

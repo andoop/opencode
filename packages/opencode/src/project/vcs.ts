@@ -22,6 +22,8 @@ export namespace Vcs {
   export const Info = z
     .object({
       branch: z.string(),
+      submodules: z.array(z.object({ path: z.string(), branch: z.string().optional() })).optional(),
+      branches: z.array(z.string()).optional(),
     })
     .meta({
       ref: "VcsInfo",
@@ -36,6 +38,67 @@ export namespace Vcs {
       .text()
       .then((x) => x.trim())
       .catch(() => undefined)
+  }
+
+  export async function getSubmodules() {
+    const result = await $`git submodule status`
+      .quiet()
+      .nothrow()
+      .cwd(Instance.worktree)
+      .text()
+      .catch(() => "")
+
+    if (!result.trim()) return []
+
+    const submodules: { path: string; branch?: string }[] = []
+    const lines = result.trim().split("\n")
+
+    for (const line of lines) {
+      // git submodule status format: " <flags><sha1> <path> (<description>)"
+      // Example: " 160000 abc123... path/to/submodule (v1.2.3)"
+      const parts = line.trim().split(/\s+/)
+      if (parts.length < 2) continue
+
+      const submodulePath = parts[1]
+      if (!submodulePath) continue
+
+      let branch: string | undefined
+      const fullPath = submodulePath.startsWith("/") ? submodulePath : path.join(Instance.worktree, submodulePath)
+
+      try {
+        const branchResult = await $`git -C ${fullPath} rev-parse --abbrev-ref HEAD`
+          .quiet()
+          .nothrow()
+          .cwd(Instance.worktree)
+          .text()
+          .then((x) => x.trim())
+          .catch(() => undefined)
+        if (branchResult && branchResult !== "HEAD") branch = branchResult
+      } catch {
+        // Ignore errors getting branch for submodule
+      }
+
+      submodules.push({ path: submodulePath, branch })
+    }
+
+    return submodules
+  }
+
+  export async function getBranches() {
+    const result = await $`git branch --list --format="%(refname:short)"`
+      .quiet()
+      .nothrow()
+      .cwd(Instance.worktree)
+      .text()
+      .catch(() => "")
+
+    if (!result.trim()) return []
+
+    return result
+      .trim()
+      .split("\n")
+      .filter((b) => b.trim())
+      .sort()
   }
 
   const state = Instance.state(

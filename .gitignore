@@ -22,6 +22,7 @@ a.out
 target
 .scripts
 .direnv/
+.cursor/debug.log
 
 # Local dev files
 opencode-dev
