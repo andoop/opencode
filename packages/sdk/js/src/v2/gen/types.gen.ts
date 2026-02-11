@@ -2125,6 +2125,11 @@ export type Path = {
 
 export type VcsInfo = {
   branch: string
+  submodules?: Array<{
+    path: string
+    branch?: string
+  }>
+  branches?: Array<string>
 }
 
 export type Command = {

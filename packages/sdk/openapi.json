@@ -10774,6 +10774,27 @@
         "properties": {
           "branch": {
             "type": "string"
+          },
+          "submodules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": "string"
+                }
+              },
+              "required": ["path"]
+            }
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": ["branch"]
