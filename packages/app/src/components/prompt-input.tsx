@@ -40,7 +40,6 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
 import { Popover } from "@opencode-ai/ui/popover"
-import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { getDirectory, getFilename, getFilenameTruncated } from "@opencode-ai/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
@@ -64,6 +63,108 @@ import { base64Encode } from "@opencode-ai/util/encode"
 
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 const ACCEPTED_FILE_TYPES = [...ACCEPTED_IMAGE_TYPES, "application/pdf"]
+
+const SUBMODULE_COLORS = [
+  "bg-icon-purple-base",
+  "bg-icon-pink-base",
+  "bg-icon-orange-base",
+  "bg-icon-cyan-base",
+  "bg-icon-yellow-base",
+  "bg-icon-green-base",
+] as const
+
+type SubmoduleData = {
+  path: string
+  commit?: string
+  branch?: string
+  submodules?: SubmoduleData[]
+  recentBranches?: string[]
+  localBranches?: string[]
+  remoteBranches?: string[]
+}
+
+function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
+  const [expanded, setExpanded] = createSignal(false)
+
+  const depth = () => props.depth ?? 0
+
+  const colorIndex = createMemo(() => {
+    const hash = props.submodule.path.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return hash % SUBMODULE_COLORS.length
+  })
+
+  const branches = createMemo(() => {
+    const seen = new Set<string>()
+    const result: { name: string; type: "local" | "remote" }[] = []
+    for (const b of props.submodule.localBranches ?? []) {
+      if (!seen.has(b)) {
+        seen.add(b)
+        result.push({ name: b, type: "local" })
+      }
+    }
+    for (const b of props.submodule.remoteBranches ?? []) {
+      if (!seen.has(b)) {
+        seen.add(b)
+        result.push({ name: b, type: "remote" })
+      }
+    }
+    return result
+  })
+
+  const expandable = createMemo(
+    () => branches().length > 0 || (props.submodule.submodules && props.submodule.submodules.length > 0),
+  )
+
+  return (
+    <div class="flex flex-col">
+      <button
+        type="button"
+        class="flex items-center gap-1.5 h-6 w-full text-left rounded"
+        classList={{ "cursor-pointer": expandable() }}
+        style={{ "padding-left": `${depth() * 16}px` }}
+        onClick={() => expandable() && setExpanded((v) => !v)}
+      >
+        <Show when={expandable()} fallback={<div class="w-4 shrink-0" />}>
+          <div class="w-4 h-4 flex items-center justify-center text-icon-weak shrink-0">
+            <Icon name={expanded() ? "chevron-down" : "chevron-right"} size="small" />
+          </div>
+        </Show>
+        <div class={`size-2 rounded-full shrink-0 ${SUBMODULE_COLORS[colorIndex()]}`} />
+        <span class="text-12-medium text-text-strong truncate flex-1 min-w-0">{getFilename(props.submodule.path)}</span>
+        <Show when={props.submodule.branch}>
+          <span class="text-12-regular text-text-weak shrink-0">{props.submodule.branch}</span>
+        </Show>
+        <Show when={props.submodule.commit}>
+          <span class="text-12-mono text-text-weak shrink-0">{props.submodule.commit}</span>
+        </Show>
+      </button>
+
+      <Show when={expanded()}>
+        <Show when={branches().length > 0}>
+          <div class="flex flex-col" style={{ "padding-left": `${depth() * 16 + 22}px` }}>
+            <For each={branches()}>
+              {(branch) => (
+                <div class="flex items-center gap-1.5 h-5">
+                  <Icon name="branch" size="small" class="text-icon-weak shrink-0" style={{ width: "12px", height: "12px" }} />
+                  <span class="text-12-regular text-text-weak truncate">{branch.name}</span>
+                  <Show when={branch.type === "remote"}>
+                    <span class="text-12-regular text-text-weakest shrink-0">remote</span>
+                  </Show>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+
+        <Show when={props.submodule.submodules && props.submodule.submodules.length > 0}>
+          <For each={props.submodule.submodules}>
+            {(sub) => <SubmoduleItem submodule={sub} depth={depth() + 1} />}
+          </For>
+        </Show>
+      </Show>
+    </div>
+  )
+}
 
 type PendingPrompt = {
   abort: AbortController
@@ -318,11 +419,20 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const branches = createMemo(() => {
     return sessionSyncData().vcs?.branches
   })
+  const worktree = createMemo(() => {
+    return sessionSyncData().vcs?.worktree
+  })
   const currentDirectory = createMemo(() => sessionSyncData().path.directory)
   const project = createMemo(() => {
     const dir = projectDirectory()
     if (!dir) return
     return layout.projects.list().find((p) => p.worktree === dir || p.sandboxes?.includes(dir))
+  })
+  const projectName = createMemo(() => {
+    const proj = project()
+    if (proj?.name) return proj.name
+    const dir = currentDirectory()
+    return getFilename(dir)
   })
   const isWorktree = createMemo(() => {
     const proj = project()
@@ -2121,6 +2231,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   title="Git Information"
                   placement="top"
                   gutter={8}
+                  style={{ "max-width": "560px", "min-width": "360px" }}
                   triggerAs={Button}
                   triggerProps={{
                     variant: "ghost",
@@ -2129,76 +2240,38 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   }}
                   trigger={<Icon name="branch" class="size-4.5" />}
                 >
-                  <div class="flex flex-col gap-3 min-w-[500px] max-w-[800px] max-h-[500px] overflow-y-auto">
-                    <Show when={currentBranch()}>
-                      <div class="flex items-start gap-2">
-                        <Icon name="branch" size="small" class="text-icon-weak mt-0.5 flex-shrink-0" />
-                        <div class="flex flex-col gap-1 flex-1 min-w-0">
-                          <span class="text-12-medium text-text-weak">Current Branch:</span>
-                          <span class="text-14-medium text-text-strong break-words">{currentBranch()}</span>
-                        </div>
-                      </div>
-                    </Show>
-                    <Show when={isWorktree() && worktreeDisplay()}>
-                      <div class="flex items-start gap-2">
-                        <Icon name="folder" size="small" class="text-icon-weak mt-0.5 flex-shrink-0" />
-                        <div class="flex flex-col gap-1 flex-1 min-w-0">
-                          <span class="text-12-medium text-text-weak">Worktree:</span>
-                          <span class="text-14-medium text-text-strong break-words">{worktreeDisplay()}</span>
-                        </div>
-                      </div>
-                    </Show>
-                    <Show when={branches() && branches()!.length > 0}>
-                      <Collapsible variant="ghost" defaultOpen={false}>
-                        <Collapsible.Trigger class="flex items-center gap-2 w-full">
-                          <Icon name="branch" size="small" class="text-icon-weak flex-shrink-0" />
-                          <span class="text-12-medium text-text-weak">All Branches ({branches()!.length})</span>
-                          <Collapsible.Arrow class="ml-auto" />
-                        </Collapsible.Trigger>
-                        <Collapsible.Content>
-                          <div class="flex flex-col gap-1 pl-6 pt-1">
-                            <For each={branches()}>
-                              {(branch) => (
-                                <span
-                                  class="text-14-medium break-words"
-                                  classList={{
-                                    "text-text-strong": branch === currentBranch(),
-                                    "text-text-weak": branch !== currentBranch(),
-                                  }}
-                                >
-                                  {branch === currentBranch() ? "→ " : ""}
-                                  {branch}
-                                </span>
-                              )}
-                            </For>
+                  <div class="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+                    {/* Main Project Info */}
+                    <div class="flex flex-col gap-0.5">
+                      <Show when={projectName()}>
+                        <span class="text-14-medium text-text-strong">{projectName()}</span>
+                      </Show>
+                      <div class="flex items-center gap-3 text-12-regular text-text-weak">
+                        <Show when={currentBranch()}>
+                          <div class="flex items-center gap-1">
+                            <Icon name="branch" size="small" class="text-icon-weak shrink-0" />
+                            <span>{currentBranch()}</span>
                           </div>
-                        </Collapsible.Content>
-                      </Collapsible>
-                    </Show>
+                        </Show>
+                        <Show when={worktree()}>
+                          <div class="flex items-center gap-1">
+                            <Icon name="folder" size="small" class="text-icon-weak shrink-0" />
+                            <span class="truncate">{getFilename(worktree()!)}</span>
+                          </div>
+                        </Show>
+                      </div>
+                    </div>
+
+                    {/* Submodules */}
                     <Show when={submodules() && submodules()!.length > 0}>
-                      <Collapsible variant="ghost" defaultOpen={false}>
-                        <Collapsible.Trigger class="flex items-center gap-2 w-full">
-                          <Icon name="folder" size="small" class="text-icon-weak flex-shrink-0" />
-                          <span class="text-12-medium text-text-weak">Submodules ({submodules()!.length})</span>
-                          <Collapsible.Arrow class="ml-auto" />
-                        </Collapsible.Trigger>
-                        <Collapsible.Content>
-                          <div class="flex flex-col gap-2 pl-6 pt-1">
-                            <For each={submodules()}>
-                              {(submodule) => (
-                                <div class="flex flex-col gap-0.5">
-                                  <span class="text-14-medium text-text-strong break-words">{submodule.path}</span>
-                                  <Show when={submodule.branch}>
-                                    <span class="text-12-regular text-text-weak break-words ml-2">
-                                      Branch: {submodule.branch}
-                                    </span>
-                                  </Show>
-                                </div>
-                              )}
-                            </For>
-                          </div>
-                        </Collapsible.Content>
-                      </Collapsible>
+                      <div class="flex flex-col gap-0.5">
+                        <span class="text-12-medium text-text-weak">Submodules</span>
+                        <div class="flex flex-col">
+                          <For each={submodules()}>
+                            {(submodule) => <SubmoduleItem submodule={submodule} />}
+                          </For>
+                        </div>
+                      </div>
                     </Show>
                   </div>
                 </Popover>

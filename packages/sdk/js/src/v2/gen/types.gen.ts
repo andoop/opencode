@@ -2123,12 +2123,20 @@ export type Path = {
   directory: string
 }
 
+export type SubmoduleInfo = {
+  path: string
+  commit?: string
+  branch?: string
+  submodules?: Array<SubmoduleInfo>
+  recentBranches?: Array<string>
+  localBranches?: Array<string>
+  remoteBranches?: Array<string>
+}
+
 export type VcsInfo = {
   branch: string
-  submodules?: Array<{
-    path: string
-    branch?: string
-  }>
+  worktree?: string
+  submodules?: Array<SubmoduleInfo>
   branches?: Array<string>
 }
 

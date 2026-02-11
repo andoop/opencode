@@ -433,9 +433,11 @@ export namespace Server {
 
             const submodules = await Vcs.getSubmodules().catch(() => [])
             const branches = await Vcs.getBranches().catch(() => [])
+            const worktree = Instance.worktree !== Instance.directory ? Instance.worktree : undefined
 
             return c.json({
               branch,
+              worktree,
               submodules: submodules.length > 0 ? submodules : undefined,
               branches: branches.length > 0 ? branches : undefined,
             })

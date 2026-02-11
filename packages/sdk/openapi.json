@@ -10769,25 +10769,58 @@
         },
         "required": ["home", "state", "config", "worktree", "directory"]
       },
-      "VcsInfo": {
+      "SubmoduleInfo": {
         "type": "object",
         "properties": {
+          "path": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
           "branch": {
             "type": "string"
           },
           "submodules": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "path": {
-                  "type": "string"
-                },
-                "branch": {
-                  "type": "string"
-                }
-              },
-              "required": ["path"]
+              "$ref": "#/components/schemas/SubmoduleInfo"
+            }
+          },
+          "recentBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "localBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remoteBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["path"]
+      },
+      "VcsInfo": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "submodules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmoduleInfo"
             }
           },
           "branches": {
