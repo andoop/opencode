@@ -48,6 +48,9 @@ export type QuestionRejectFn = (input: { requestID: string }) => void
 
 export type NavigateToSessionFn = (sessionID: string) => void
 
+export type OnTaskRetryFn = (taskId: string) => Promise<void>
+export type OnTaskCancelFn = (taskId: string) => Promise<void>
+
 export const { use: useData, provider: DataProvider } = createSimpleContext({
   name: "Data",
   init: (props: {
@@ -57,6 +60,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     onQuestionReply?: QuestionReplyFn
     onQuestionReject?: QuestionRejectFn
     onNavigateToSession?: NavigateToSessionFn
+    onTaskRetry?: OnTaskRetryFn
+    onTaskCancel?: OnTaskCancelFn
   }) => {
     return {
       get store() {
@@ -69,6 +74,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       replyToQuestion: props.onQuestionReply,
       rejectQuestion: props.onQuestionReject,
       navigateToSession: props.onNavigateToSession,
+      onTaskRetry: props.onTaskRetry,
+      onTaskCancel: props.onTaskCancel,
     }
   },
 })

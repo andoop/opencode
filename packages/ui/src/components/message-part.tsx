@@ -722,6 +722,85 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
 }
 
 ToolRegistry.register({
+  name: "background-task",
+  render(props) {
+    const data = useData()
+    const i18n = useI18n()
+    const taskId = () => props.metadata?.taskId as string | undefined
+    const taskStatus = () => (props.metadata?.taskStatus as string | undefined) ?? props.status
+    const progress = () => props.metadata?.progress as { current?: number; total?: number; message?: string } | undefined
+    const error = () => (props.metadata?.error as string | undefined) ?? (props.status === "error" ? props.output : undefined)
+    const canRetry = () => taskStatus() === "manual_retry_pending"
+    const canCancel = () => taskStatus() === "running"
+
+    return (
+      <BasicTool
+        {...props}
+        icon="task"
+        trigger={{
+          title: props.input?.title ?? "Background task",
+          subtitle: taskStatus(),
+          action:
+            (canRetry() || canCancel()) && taskId() ? (
+              <div data-slot="background-task-actions">
+                <Show when={canRetry()}>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => data.onTaskRetry?.(taskId()!)}
+                  >
+                    Retry
+                  </Button>
+                </Show>
+                <Show when={canCancel()}>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => data.onTaskCancel?.(taskId()!)}
+                  >
+                    {i18n.t("ui.common.cancel")}
+                  </Button>
+                </Show>
+              </div>
+            ) : undefined,
+        }}
+      >
+        <Show when={progress()}>
+          {(p) => (
+            <div data-component="task-progress">
+              <Show when={p().total}>
+                <div data-slot="task-progress-bar">
+                  <div
+                    data-slot="task-progress-fill"
+                    style={{ width: `${Math.min(100, (p().current ?? 0) / (p().total ?? 1)) * 100}%` }}
+                  />
+                </div>
+              </Show>
+              <Show when={p().message}>
+                <span data-slot="task-progress-message">{p().message}</span>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={error()}>
+          <Card variant="error">
+            <div data-component="tool-error">
+              <Icon name="circle-ban-sign" size="small" />
+              <span data-slot="message-part-tool-error-message">{error()}</span>
+            </div>
+          </Card>
+        </Show>
+        <Show when={props.status === "completed" && props.output}>
+          <div data-component="tool-output" data-scrollable>
+            <Markdown text={props.output!} />
+          </div>
+        </Show>
+      </BasicTool>
+    )
+  },
+})
+
+ToolRegistry.register({
   name: "read",
   render(props) {
     const data = useData()

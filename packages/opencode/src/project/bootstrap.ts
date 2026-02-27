@@ -13,6 +13,7 @@ import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
 import { Snapshot } from "../snapshot"
 import { Truncate } from "../tool/truncation"
+import { init as TaskRecoveryInit } from "../task/recovery"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -32,4 +33,6 @@ export async function InstanceBootstrap() {
       await Project.setInitialized(Instance.project.id)
     }
   })
+
+  await TaskRecoveryInit()
 }

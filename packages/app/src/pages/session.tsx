@@ -55,6 +55,9 @@ import { UserMessage } from "@opencode-ai/sdk/v2"
 import type { FileDiff } from "@opencode-ai/sdk/v2/client"
 import type { QuestionAnswer } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
+import { usePlatform } from "@/context/platform"
+import { useAuth, addAuthInterceptor } from "@/context/auth"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { usePrompt } from "@/context/prompt"
 import { useComments, type LineComment } from "@/context/comments"
 import { extractPromptFromParts } from "@/utils/prompt"
@@ -2188,17 +2191,66 @@ export default function Page() {
 
                         {iife(() => {
                           const sessionData = sessionSyncData()
-                          const sessionDir = sessionDirectory()
+                          const sessionDir = actualSessionDir()
+                          const platform = usePlatform()
+                          const auth = useAuth()
+                          const sessionClient = createMemo(() =>
+                            sessionDir === sdk.directory
+                              ? sdk.client
+                              : createOpencodeClient({
+                                  baseUrl: sdk.url,
+                                  fetch: platform.fetch,
+                                  directory: sessionDir,
+                                  throwOnError: true,
+                                  onClient: (c) => addAuthInterceptor(c, () => auth.token),
+                                }),
+                          )
                           const respond = (input: {
                             sessionID: string
                             permissionID: string
                             response: "once" | "always" | "reject"
-                          }) => sdk.client.permission.respond(input)
+                          }) => sessionClient().permission.respond(input)
                           const replyToQuestion = (input: { requestID: string; answers: QuestionAnswer[] }) =>
-                            sdk.client.question.reply(input)
-                          const rejectQuestion = (input: { requestID: string }) => sdk.client.question.reject(input)
+                            sessionClient().question.reply(input)
+                          const rejectQuestion = (input: { requestID: string }) =>
+                            sessionClient().question.reject(input)
                           const navigateToSession = (sessionID: string) => {
                             navigate(`/${params.dir}/session/${sessionID}`)
+                          }
+                          const fetchFn = platform.fetch ?? fetch
+                          const getHeaders = () => {
+                            const h: Record<string, string> = {}
+                            const token = auth.token
+                            if (token) h["Authorization"] = `Bearer ${token}`
+                            return h
+                          }
+                          const onTaskRetry = async (taskId: string) => {
+                            try {
+                              const url = `${sdk.url}/task/${taskId}/retry?directory=${encodeURIComponent(sessionDir)}`
+                              const res = await fetchFn(url, { method: "POST", headers: getHeaders() })
+                              if (!res.ok) throw new Error(await res.text())
+                            } catch (e) {
+                              showToast({
+                                variant: "error",
+                                title: language.t("common.requestFailed"),
+                                description: e instanceof Error ? e.message : String(e),
+                              })
+                              throw e
+                            }
+                          }
+                          const onTaskCancel = async (taskId: string) => {
+                            try {
+                              const url = `${sdk.url}/task/${taskId}/cancel?directory=${encodeURIComponent(sessionDir)}`
+                              const res = await fetchFn(url, { method: "POST", headers: getHeaders() })
+                              if (!res.ok) throw new Error(await res.text())
+                            } catch (e) {
+                              showToast({
+                                variant: "error",
+                                title: language.t("common.requestFailed"),
+                                description: e instanceof Error ? e.message : String(e),
+                              })
+                              throw e
+                            }
                           }
                           return (
                             <DataProvider
@@ -2208,6 +2260,8 @@ export default function Page() {
                               onQuestionReply={replyToQuestion}
                               onQuestionReject={rejectQuestion}
                               onNavigateToSession={navigateToSession}
+                              onTaskRetry={onTaskRetry}
+                              onTaskCancel={onTaskCancel}
                             >
                               <div
                                 ref={autoScroll.contentRef}

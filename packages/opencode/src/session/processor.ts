@@ -377,21 +377,29 @@ export namespace SessionProcessor {
             snapshot = undefined
           }
           const p = await MessageV2.parts(input.assistantMessage.id)
+          const err = input.assistantMessage.error as { name?: string; message?: string } | undefined
+          const errMsg =
+            err?.name === "MessageAbortedError"
+              ? "Session aborted (user stopped)"
+              : err?.message
+                ? `${err.name ?? "Error"}: ${err.message}`
+                : "Tool execution aborted"
           for (const part of p) {
-            if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
-              await Session.updatePart({
-                ...part,
-                state: {
-                  ...part.state,
-                  status: "error",
-                  error: "Tool execution aborted",
-                  time: {
-                    start: Date.now(),
-                    end: Date.now(),
-                  },
+            if (part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") continue
+            // background-task with taskId: task runs in background, TaskRunner.syncPart will update when done
+            if (part.tool === "background-task" && part.state.metadata?.taskId) continue
+            await Session.updatePart({
+              ...part,
+              state: {
+                ...part.state,
+                status: "error",
+                error: errMsg,
+                time: {
+                  start: Date.now(),
+                  end: Date.now(),
                 },
-              })
-            }
+              },
+            })
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)

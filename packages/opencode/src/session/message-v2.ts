@@ -573,15 +573,28 @@ export namespace MessageV2 {
               })
             // Handle pending/running tool calls to prevent dangling tool_use blocks
             // Anthropic/Claude APIs require every tool_use to have a corresponding tool_result
-            if (part.state.status === "pending" || part.state.status === "running")
-              assistantMessage.parts.push({
-                type: ("tool-" + part.tool) as `tool-${string}`,
-                state: "output-error",
-                toolCallId: part.callID,
-                input: part.state.input,
-                errorText: "[Tool execution was interrupted]",
-                ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
-              })
+            if (part.state.status === "pending" || part.state.status === "running") {
+              const taskId = part.state.metadata?.taskId ?? part.state.metadata?.task_id
+              if (part.tool === "background-task" && taskId) {
+                assistantMessage.parts.push({
+                  type: "tool-background-task" as `tool-${string}`,
+                  state: "output-available",
+                  toolCallId: part.callID,
+                  input: part.state.input,
+                  output: `Task started in background. task_id: ${taskId}`,
+                  ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
+                })
+              } else {
+                assistantMessage.parts.push({
+                  type: ("tool-" + part.tool) as `tool-${string}`,
+                  state: "output-error",
+                  toolCallId: part.callID,
+                  input: part.state.input,
+                  errorText: "[Tool execution was interrupted]",
+                  ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
+                })
+              }
+            }
           }
           if (part.type === "reasoning") {
             assistantMessage.parts.push({

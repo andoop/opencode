@@ -19,6 +19,7 @@ export namespace Tool {
     agent: string
     abort: AbortSignal
     callID?: string
+    partID?: string
     extra?: { [key: string]: any }
     messages: MessageV2.WithParts[]
     metadata(input: { title?: string; metadata?: M }): void

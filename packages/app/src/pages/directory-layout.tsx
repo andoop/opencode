@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "@solidjs/router"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { SyncProvider, useSync } from "@/context/sync"
 import { LocalProvider } from "@/context/local"
+import { usePlatform } from "@/context/platform"
+import { useAuth } from "@/context/auth"
 
 import { DataProvider } from "@opencode-ai/ui/context"
 import { iife } from "@opencode-ai/util/iife"
@@ -36,6 +38,8 @@ export default function Layout(props: ParentProps) {
           {iife(() => {
             const sync = useSync()
             const sdk = useSDK()
+            const platform = usePlatform()
+            const auth = useAuth()
             const respond = (input: {
               sessionID: string
               permissionID: string
@@ -51,6 +55,25 @@ export default function Layout(props: ParentProps) {
               navigate(`/${params.dir}/session/${sessionID}`)
             }
 
+            const fetchFn = platform.fetch ?? fetch
+            const dir = directory()
+            const getHeaders = () => {
+              const h: Record<string, string> = {}
+              const token = auth.token
+              if (token) h["Authorization"] = `Bearer ${token}`
+              return h
+            }
+            const onTaskRetry = async (taskId: string) => {
+              const url = `${sdk.url}/task/${taskId}/retry?directory=${encodeURIComponent(dir)}`
+              const res = await fetchFn(url, { method: "POST", headers: getHeaders() })
+              if (!res.ok) throw new Error(await res.text())
+            }
+            const onTaskCancel = async (taskId: string) => {
+              const url = `${sdk.url}/task/${taskId}/cancel?directory=${encodeURIComponent(dir)}`
+              const res = await fetchFn(url, { method: "POST", headers: getHeaders() })
+              if (!res.ok) throw new Error(await res.text())
+            }
+
             return (
               <DataProvider
                 data={sync.data}
@@ -59,6 +82,8 @@ export default function Layout(props: ParentProps) {
                 onQuestionReply={replyToQuestion}
                 onQuestionReject={rejectQuestion}
                 onNavigateToSession={navigateToSession}
+                onTaskRetry={onTaskRetry}
+                onTaskCancel={onTaskCancel}
               >
                 <LocalProvider>{props.children}</LocalProvider>
               </DataProvider>
