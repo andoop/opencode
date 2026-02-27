@@ -515,6 +515,91 @@
     background: var(--background-base);
     border: 1px solid var(--border-weak-base);
   }
+
+  &[data-background-task="true"] {
+    position: sticky;
+    top: calc(2px + var(--sticky-header-height, 40px));
+    z-index: 19;
+    border-radius: 8px;
+    overflow: hidden;
+    overflow-anchor: none;
+    background: var(--surface-raised-stronger-non-alpha);
+    border: 1px solid var(--border-weak-base);
+    box-shadow: var(--shadow-xs-border-base);
+
+    [data-component="collapsible"] {
+      border: none;
+    }
+
+    [data-component="tool-trigger"] {
+      padding: 10px 12px;
+      background: var(--surface-raised-stronger-non-alpha);
+      border-radius: 8px;
+    }
+
+    [data-slot="background-task-actions"] {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    [data-component="task-progress"] {
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--surface-weak);
+      border-radius: 6px;
+      margin-top: 8px;
+
+      [data-slot="task-progress-bar"] {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--surface-weak);
+        overflow: hidden;
+
+        [data-slot="task-progress-fill"] {
+          height: 100%;
+          background: linear-gradient(
+            90deg,
+            var(--surface-success-weak, var(--surface-raised-base)) 0%,
+            var(--surface-success-base, var(--border-success-base)) 100%
+          );
+          border-radius: 3px;
+          transition: width 0.2s ease;
+        }
+      }
+
+      [data-slot="task-progress-message"] {
+        font-size: var(--font-size-small);
+        color: var(--text-weak);
+        line-height: var(--line-height-large);
+      }
+    }
+
+    [data-component="tool-output"] {
+      padding: 8px 12px;
+      font-size: var(--font-size-small);
+      color: var(--text-base);
+      background: var(--surface-weak);
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+
+    &[data-task-status="running"] [data-slot="basic-tool-tool-subtitle"] {
+      color: var(--text-success-base, var(--text-weak));
+    }
+
+    &[data-task-status="completed"] [data-slot="basic-tool-tool-subtitle"] {
+      color: var(--text-success-base, var(--text-weak));
+    }
+
+    &[data-task-status="failed"],
+    &[data-task-status="manual_retry_pending"],
+    &[data-task-status="cancelled"] {
+      border-color: var(--border-critical-weak, var(--border-weak-base));
+    }
+  }
 }
 
 @property --border-angle {

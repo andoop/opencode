@@ -331,6 +331,22 @@ export function SessionTurn(
     return result
   })
 
+  const backgroundTaskParts = createMemo(() => {
+    if (props.stepsExpanded) return emptyPermissionParts
+
+    const result: { part: ToolPart; message: AssistantMessage }[] = []
+    for (const msg of assistantMessages()) {
+      const parts = data.store.part[msg.id] ?? emptyParts
+      for (const part of parts) {
+        if (part?.type !== "tool") continue
+        const tool = part as ToolPart
+        if (tool.tool !== "background-task") continue
+        result.push({ part: tool, message: msg })
+      }
+    }
+    return result
+  })
+
   const shellModePart = createMemo(() => {
     const p = parts()
     if (p.length === 0) return
@@ -720,6 +736,15 @@ export function SessionTurn(
                       <div data-slot="session-turn-answered-question-parts">
                         <For each={answeredQuestionParts()}>
                           {({ part, message }) => <Part part={part} message={message} />}
+                        </For>
+                      </div>
+                    </Show>
+                    <Show when={!props.stepsExpanded && backgroundTaskParts().length > 0}>
+                      <div data-slot="session-turn-background-task-parts">
+                        <For each={backgroundTaskParts()}>
+                          {({ part, message }) => (
+                            <Part part={part} message={message} defaultOpen />
+                          )}
                         </For>
                       </div>
                     </Show>

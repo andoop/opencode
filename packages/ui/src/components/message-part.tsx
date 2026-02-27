@@ -602,8 +602,20 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
 
   const render = ToolRegistry.render(part.tool) ?? GenericTool
 
+  const isBackgroundTask = () => part.tool === "background-task"
+  const taskStatus = () =>
+    isBackgroundTask() && part.state && "metadata" in part.state
+      ? (part.state.metadata?.taskStatus as string | undefined) ?? part.state.status
+      : undefined
+
   return (
-    <div data-component="tool-part-wrapper" data-permission={showPermission()} data-question={showQuestion()}>
+    <div
+      data-component="tool-part-wrapper"
+      data-permission={showPermission()}
+      data-question={showQuestion()}
+      data-background-task={isBackgroundTask()}
+      data-task-status={taskStatus()}
+    >
       <Switch>
         <Match when={part.state.status === "error" && part.state.error}>
           {(error) => {
