@@ -574,7 +574,8 @@ export namespace MessageV2 {
             // Handle pending/running tool calls to prevent dangling tool_use blocks
             // Anthropic/Claude APIs require every tool_use to have a corresponding tool_result
             if (part.state.status === "pending" || part.state.status === "running") {
-              const taskId = part.state.metadata?.taskId ?? part.state.metadata?.task_id
+              const meta = "metadata" in part.state ? part.state.metadata : undefined
+              const taskId = meta?.taskId ?? meta?.task_id
               if (part.tool === "background-task" && taskId) {
                 assistantMessage.parts.push({
                   type: "tool-background-task" as `tool-${string}`,

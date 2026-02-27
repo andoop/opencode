@@ -387,7 +387,7 @@ export namespace SessionProcessor {
           for (const part of p) {
             if (part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") continue
             // background-task with taskId: task runs in background, TaskRunner.syncPart will update when done
-            if (part.tool === "background-task" && part.state.metadata?.taskId) continue
+            if (part.tool === "background-task" && "metadata" in part.state && part.state.metadata?.taskId) continue
             await Session.updatePart({
               ...part,
               state: {
