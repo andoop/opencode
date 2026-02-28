@@ -2422,14 +2422,14 @@ export default function Layout(props: ParentProps) {
       const directory = props.project.worktree
       // Collect sessions from project directory and all sandboxes (including session worktrees)
       const projectDirs = [directory, ...(props.project.sandboxes ?? [])]
-      const [projectData] = globalSync.child(directory)
+      const [projectData] = globalSync.child(directory, { bootstrap: false })
       type Session = typeof projectData.session[number]
       const allSessions: Session[] = []
       const seenIds = new Set<string>()
       
-      // Load sessions from each directory
+      // Load sessions from each directory (use bootstrap: false to avoid repeated git operations)
       for (const dir of projectDirs) {
-        const [dirData] = globalSync.child(dir)
+        const [dirData] = globalSync.child(dir, { bootstrap: false })
         for (const session of dirData.session) {
           // Deduplicate by session ID
           if (seenIds.has(session.id)) continue
@@ -2656,15 +2656,26 @@ export default function Layout(props: ParentProps) {
   const LocalWorkspace = (props: { project: LocalProject; mobile?: boolean }): JSX.Element => {
     const [workspaceStore, setWorkspaceStore] = globalSync.child(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
+    
+    // Pre-initialize all directories to avoid repeated bootstrap calls in memo
+    const projectDirs = createMemo(() => [props.project.worktree, ...(props.project.sandboxes ?? [])])
+    createEffect(() => {
+      // Initialize all directories upfront, but don't bootstrap if already initialized
+      const dirs = projectDirs()
+      for (const dir of dirs) {
+        globalSync.child(dir, { bootstrap: false })
+      }
+    })
+    
     const sessions = createMemo(() => {
       // Collect sessions from project directory and all sandboxes (including session worktrees)
-      const projectDirs = [props.project.worktree, ...(props.project.sandboxes ?? [])]
+      const dirs = projectDirs()
       const allSessions: typeof workspaceStore.session[number][] = []
       const seenIds = new Set<string>()
       
-      // Load sessions from each directory
-      for (const dir of projectDirs) {
-        const [dirData] = globalSync.child(dir)
+      // Load sessions from each directory (already initialized, so no bootstrap overhead)
+      for (const dir of dirs) {
+        const [dirData] = globalSync.child(dir, { bootstrap: false })
         for (const session of dirData.session) {
           // Deduplicate by session ID
           if (seenIds.has(session.id)) continue
@@ -2679,7 +2690,7 @@ export default function Layout(props: ParentProps) {
           const sessionDir = session.directory
           const normalizedSessionDir = workspaceKey(sessionDir)
           // Match if session directory matches any project directory
-          return projectDirs.some((dir) => {
+          return dirs.some((dir) => {
             const normalizedDir = workspaceKey(dir)
             return normalizedSessionDir === normalizedDir
           })

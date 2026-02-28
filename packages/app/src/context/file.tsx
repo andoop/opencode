@@ -308,7 +308,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const directory = createMemo(() => {
       const dir = sessionDir()
       if (dir) {
-        const child = globalSync.child(dir)[0]
+        const child = globalSync.child(dir, { bootstrap: false })[0]
         if (child.path.directory) return child.path.directory
       }
       return sync.data.path.directory
@@ -657,6 +657,35 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       return out
     }
 
+    // Batch file watcher events to avoid excessive listDir calls for large projects
+    const pendingDirRefreshes = new Set<string>()
+    const pendingFileReloads = new Set<string>()
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined
+    const DEBOUNCE_MS = 300
+
+    const flushPending = () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer)
+        refreshTimer = undefined
+      }
+
+      // Reload changed files
+      for (const path of pendingFileReloads) {
+        if (store.file[path]) {
+          load(path, { force: true })
+        }
+      }
+      pendingFileReloads.clear()
+
+      // Refresh directories (batch multiple changes to same directory)
+      for (const dir of pendingDirRefreshes) {
+        if (tree.dir[dir]?.loaded) {
+          listDir(dir, { force: true })
+        }
+      }
+      pendingDirRefreshes.clear()
+    }
+
     const stop = sdk.event.listen((e) => {
       const event = e.details
       if (event.type !== "file.watcher.updated") return
@@ -664,11 +693,14 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       if (!path) return
       if (path.startsWith(".git/")) return
 
+      const kind = event.properties.event
+      
+      // Queue file reload
       if (store.file[path]) {
-        load(path, { force: true })
+        pendingFileReloads.add(path)
       }
 
-      const kind = event.properties.event
+      // Queue directory refresh
       if (kind === "change") {
         const dir = (() => {
           if (path === "") return ""
@@ -676,17 +708,19 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
           if (node?.type !== "directory") return
           return path
         })()
-        if (dir === undefined) return
-        if (!tree.dir[dir]?.loaded) return
-        listDir(dir, { force: true })
-        return
+        if (dir !== undefined && tree.dir[dir]?.loaded) {
+          pendingDirRefreshes.add(dir)
+        }
+      } else if (kind === "add" || kind === "unlink") {
+        const parent = path.split("/").slice(0, -1).join("/")
+        if (tree.dir[parent]?.loaded) {
+          pendingDirRefreshes.add(parent)
+        }
       }
-      if (kind !== "add" && kind !== "unlink") return
 
-      const parent = path.split("/").slice(0, -1).join("/")
-      if (!tree.dir[parent]?.loaded) return
-
-      listDir(parent, { force: true })
+      // Debounce: schedule flush after a short delay
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(flushPending, DEBOUNCE_MS)
     })
 
     const get = (input: string) => {
@@ -723,6 +757,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
 
     onCleanup(() => {
       stop()
+      if (refreshTimer) clearTimeout(refreshTimer)
       disposeViews()
     })
 

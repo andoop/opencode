@@ -553,6 +553,12 @@ function createGlobalSync() {
 
     const promise = (async () => {
       const [store, setStore] = ensureChild(directory)
+      
+      // Skip if already bootstrapped to avoid repeated git operations
+      if (store.status === "complete" || store.status === "partial") {
+        return
+      }
+      
       const cache = vcsCache.get(directory)
       if (!cache) return
       const meta = metaCache.get(directory)

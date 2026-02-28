@@ -708,8 +708,8 @@ export default function Page() {
     if (!params.id) return
     // Use actualSessionDir which resolves the correct worktree directory
     const dir = actualSessionDir()
-    // Ensure the session directory is bootstrapped
-    if (dir) globalSync.child(dir)
+    // Ensure the session directory is initialized (but don't bootstrap if already done)
+    if (dir) globalSync.child(dir, { bootstrap: false })
     // Sync using the session directory (handles both worktree and project root)
     sync.session.sync(params.id, dir !== sdk.directory ? dir : undefined).catch(() => {})
   })

@@ -445,11 +445,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
   const sessionDirectory = createMemo(() => sessionInfo()?.directory ?? sdk.directory)
   const projectDirectory = createMemo(() => sdk.directory)
-  // Ensure the session directory is bootstrapped to get correct Git info
+  // Ensure the session directory is initialized (but don't bootstrap if already done)
   createEffect(() => {
     const dir = sessionDirectory()
     if (dir) {
-      globalSync.child(dir)
+      globalSync.child(dir, { bootstrap: false })
     }
   })
   // Get Git info from session directory, not project directory
