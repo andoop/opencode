@@ -428,14 +428,25 @@ export namespace Server {
             },
           }),
           async (c) => {
+            const detail = c.req.query("detail") === "true"
             const branch = await Vcs.branch()
             if (!branch) {
               return c.json({ branch: "" })
             }
 
-            const submodules = await Vcs.getSubmodules().catch(() => [])
-            const branches = await Vcs.getBranches().catch(() => [])
             const worktree = Instance.worktree !== Instance.directory ? Instance.worktree : undefined
+
+            if (!detail) {
+              return c.json({ branch, worktree })
+            }
+
+            const timeout = <T>(p: Promise<T>, ms: number, fallback: T) =>
+              Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))])
+
+            const [submodules, branches] = await Promise.all([
+              timeout(Vcs.getSubmodules().catch(() => []), 5000, []),
+              timeout(Vcs.getBranches().catch(() => []), 5000, []),
+            ])
 
             return c.json({
               branch,

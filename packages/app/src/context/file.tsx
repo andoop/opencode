@@ -657,70 +657,85 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       return out
     }
 
-    // Batch file watcher events to avoid excessive listDir calls for large projects
-    const pendingDirRefreshes = new Set<string>()
-    const pendingFileReloads = new Set<string>()
-    let refreshTimer: ReturnType<typeof setTimeout> | undefined
-    const DEBOUNCE_MS = 300
-
-    const flushPending = () => {
-      if (refreshTimer) {
-        clearTimeout(refreshTimer)
-        refreshTimer = undefined
-      }
-
-      // Reload changed files
-      for (const path of pendingFileReloads) {
-        if (store.file[path]) {
-          load(path, { force: true })
-        }
-      }
-      pendingFileReloads.clear()
-
-      // Refresh directories (batch multiple changes to same directory)
-      for (const dir of pendingDirRefreshes) {
-        if (tree.dir[dir]?.loaded) {
-          listDir(dir, { force: true })
-        }
-      }
-      pendingDirRefreshes.clear()
-    }
-
-    const stop = sdk.event.listen((e) => {
-      const event = e.details
-      if (event.type !== "file.watcher.updated") return
-      const path = normalize(event.properties.file)
-      if (!path) return
-      if (path.startsWith(".git/")) return
-
-      const kind = event.properties.event
+    // Set up file watcher listener - must be inside createEffect to clean up on scope change
+    createEffect(() => {
+      const currentScope = scope()
       
-      // Queue file reload
-      if (store.file[path]) {
-        pendingFileReloads.add(path)
+      // Batch file watcher events to avoid excessive listDir calls for large projects
+      const pendingDirRefreshes = new Set<string>()
+      const pendingFileReloads = new Set<string>()
+      let refreshTimer: ReturnType<typeof setTimeout> | undefined
+      const DEBOUNCE_MS = 300
+
+      const flushPending = () => {
+        if (refreshTimer) {
+          clearTimeout(refreshTimer)
+          refreshTimer = undefined
+        }
+
+        // Reload changed files
+        for (const path of pendingFileReloads) {
+          if (store.file[path]) {
+            load(path, { force: true })
+          }
+        }
+        pendingFileReloads.clear()
+
+        // Refresh directories (batch multiple changes to same directory)
+        for (const dir of pendingDirRefreshes) {
+          if (tree.dir[dir]?.loaded) {
+            listDir(dir, { force: true })
+          }
+        }
+        pendingDirRefreshes.clear()
       }
 
-      // Queue directory refresh
-      if (kind === "change") {
-        const dir = (() => {
-          if (path === "") return ""
-          const node = tree.node[path]
-          if (node?.type !== "directory") return
-          return path
-        })()
-        if (dir !== undefined && tree.dir[dir]?.loaded) {
-          pendingDirRefreshes.add(dir)
-        }
-      } else if (kind === "add" || kind === "unlink") {
-        const parent = path.split("/").slice(0, -1).join("/")
-        if (tree.dir[parent]?.loaded) {
-          pendingDirRefreshes.add(parent)
-        }
-      }
+      const stop = sdk.event.listen((e) => {
+        // Only process events for current scope
+        if (scope() !== currentScope) return
+        
+        const event = e.details
+        if (event.type !== "file.watcher.updated") return
+        const path = normalize(event.properties.file)
+        if (!path) return
+        if (path.startsWith(".git/")) return
 
-      // Debounce: schedule flush after a short delay
-      if (refreshTimer) clearTimeout(refreshTimer)
-      refreshTimer = setTimeout(flushPending, DEBOUNCE_MS)
+        const kind = event.properties.event
+        
+        // Queue file reload
+        if (store.file[path]) {
+          pendingFileReloads.add(path)
+        }
+
+        // Queue directory refresh
+        if (kind === "change") {
+          const dir = (() => {
+            if (path === "") return ""
+            const node = tree.node[path]
+            if (node?.type !== "directory") return
+            return path
+          })()
+          if (dir !== undefined && tree.dir[dir]?.loaded) {
+            pendingDirRefreshes.add(dir)
+          }
+        } else if (kind === "add" || kind === "unlink") {
+          const parent = path.split("/").slice(0, -1).join("/")
+          if (tree.dir[parent]?.loaded) {
+            pendingDirRefreshes.add(parent)
+          }
+        }
+
+        // Debounce: schedule flush after a short delay
+        if (refreshTimer) clearTimeout(refreshTimer)
+        refreshTimer = setTimeout(flushPending, DEBOUNCE_MS)
+      })
+
+      onCleanup(() => {
+        stop()
+        if (refreshTimer) clearTimeout(refreshTimer)
+        pendingDirRefreshes.clear()
+        pendingFileReloads.clear()
+      })
     })
 
     const get = (input: string) => {
@@ -756,8 +771,6 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     }
 
     onCleanup(() => {
-      stop()
-      if (refreshTimer) clearTimeout(refreshTimer)
       disposeViews()
     })
 

@@ -53,6 +53,12 @@ export namespace Vcs {
       .catch(() => undefined)
   }
 
+  const GIT_TIMEOUT_MS = 3000
+
+  function withGitTimeout<T>(p: Promise<T>, fallback: T): Promise<T> {
+    return Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), GIT_TIMEOUT_MS))])
+  }
+
   async function getSubmoduleBranches(submodulePath: string) {
     const fullPath = path.join(Instance.worktree, submodulePath)
     const branches: {
@@ -66,13 +72,15 @@ export namespace Vcs {
     }
 
     try {
-      // Get recent branches (last 5 checked out)
-      const recentResult = await $`git -C ${fullPath} reflog show --format="%(refname:short)" --date=relative --no-walk HEAD 2>/dev/null || git -C ${fullPath} branch --sort=-committerdate --format="%(refname:short)" | head -5`
-        .quiet()
-        .nothrow()
-        .cwd(Instance.worktree)
-        .text()
-        .catch(() => "")
+      const recentResult = await withGitTimeout(
+        $`git -C ${fullPath} branch --sort=-committerdate --format="%(refname:short)"`
+          .quiet()
+          .nothrow()
+          .cwd(Instance.worktree)
+          .text()
+          .catch(() => ""),
+        "",
+      )
       if (recentResult.trim()) {
         branches.recent = recentResult
           .trim()
@@ -81,13 +89,15 @@ export namespace Vcs {
           .slice(0, 5)
       }
 
-      // Get local branches
-      const localResult = await $`git -C ${fullPath} branch --list --format="%(refname:short)"`
-        .quiet()
-        .nothrow()
-        .cwd(Instance.worktree)
-        .text()
-        .catch(() => "")
+      const localResult = await withGitTimeout(
+        $`git -C ${fullPath} branch --list --format="%(refname:short)"`
+          .quiet()
+          .nothrow()
+          .cwd(Instance.worktree)
+          .text()
+          .catch(() => ""),
+        "",
+      )
       if (localResult.trim()) {
         branches.local = localResult
           .trim()
@@ -96,13 +106,15 @@ export namespace Vcs {
           .sort()
       }
 
-      // Get remote branches
-      const remoteResult = await $`git -C ${fullPath} branch -r --list --format="%(refname:short)"`
-        .quiet()
-        .nothrow()
-        .cwd(Instance.worktree)
-        .text()
-        .catch(() => "")
+      const remoteResult = await withGitTimeout(
+        $`git -C ${fullPath} branch -r --list --format="%(refname:short)"`
+          .quiet()
+          .nothrow()
+          .cwd(Instance.worktree)
+          .text()
+          .catch(() => ""),
+        "",
+      )
       if (remoteResult.trim()) {
         branches.remote = remoteResult
           .trim()
@@ -121,69 +133,30 @@ export namespace Vcs {
   async function getSubmoduleInfo(submodulePath: string, basePath: string): Promise<SubmoduleInfo | null> {
     const fullPath = path.join(basePath, submodulePath)
 
-    // Get commit hash
-    let commit: string | undefined
-    try {
-      const commitResult = await $`git -C ${fullPath} rev-parse --short HEAD`
+    const commit = await withGitTimeout(
+      $`git -C ${fullPath} rev-parse --short HEAD`
         .quiet()
         .nothrow()
         .cwd(basePath)
         .text()
         .then((x) => x.trim())
-        .catch(() => undefined)
-      if (commitResult) commit = commitResult
-    } catch {
-      // Ignore errors
-    }
+        .catch(() => undefined),
+      undefined,
+    )
 
-    // Get current branch
-    let branch: string | undefined
-    try {
-      const branchResult = await $`git -C ${fullPath} rev-parse --abbrev-ref HEAD`
+    const raw = await withGitTimeout(
+      $`git -C ${fullPath} rev-parse --abbrev-ref HEAD`
         .quiet()
         .nothrow()
         .cwd(basePath)
         .text()
         .then((x) => x.trim())
-        .catch(() => undefined)
-      if (branchResult && branchResult !== "HEAD") branch = branchResult
-    } catch {
-      // Ignore errors
-    }
+        .catch(() => undefined),
+      undefined,
+    )
+    const branch = raw && raw !== "HEAD" ? raw : undefined
 
-    // Get branches
     const branches = await getSubmoduleBranches(submodulePath)
-
-    // Recursively get nested submodules
-    let nestedSubmodules: SubmoduleInfo[] | undefined
-    try {
-      const nestedResult = await $`git -C ${fullPath} submodule status`
-        .quiet()
-        .nothrow()
-        .cwd(basePath)
-        .text()
-        .catch(() => "")
-
-      if (nestedResult.trim()) {
-        const nested: SubmoduleInfo[] = []
-        const lines = nestedResult.trim().split("\n")
-
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/)
-          if (parts.length < 2) continue
-
-          const nestedPath = parts[1]
-          if (!nestedPath) continue
-
-          const nestedInfo = await getSubmoduleInfo(nestedPath, fullPath)
-          if (nestedInfo) nested.push(nestedInfo)
-        }
-
-        if (nested.length > 0) nestedSubmodules = nested
-      }
-    } catch {
-      // Ignore errors
-    }
 
     return {
       path: submodulePath,
@@ -192,46 +165,43 @@ export namespace Vcs {
       recentBranches: branches.recent.length > 0 ? branches.recent : undefined,
       localBranches: branches.local.length > 0 ? branches.local : undefined,
       remoteBranches: branches.remote.length > 0 ? branches.remote : undefined,
-      submodules: nestedSubmodules,
     }
   }
 
   export async function getSubmodules(): Promise<SubmoduleInfo[]> {
-    const result = await $`git submodule status`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
-      .text()
-      .catch(() => "")
+    const result = await withGitTimeout(
+      $`git submodule status`
+        .quiet()
+        .nothrow()
+        .cwd(Instance.worktree)
+        .text()
+        .catch(() => ""),
+      "",
+    )
 
     if (!result.trim()) return []
 
-    const submodules: SubmoduleInfo[] = []
     const lines = result.trim().split("\n")
+    const paths = lines
+      .map((line) => line.trim().split(/\s+/)[1])
+      .filter((p): p is string => !!p)
 
-    for (const line of lines) {
-      // git submodule status format: " <flags><sha1> <path> (<description>)"
-      // Example: " 160000 abc123... path/to/submodule (v1.2.3)"
-      const parts = line.trim().split(/\s+/)
-      if (parts.length < 2) continue
-
-      const submodulePath = parts[1]
-      if (!submodulePath) continue
-
-      const info = await getSubmoduleInfo(submodulePath, Instance.worktree)
-      if (info) submodules.push(info)
-    }
-
-    return submodules
+    const infos = await Promise.all(
+      paths.map((p) => withGitTimeout(getSubmoduleInfo(p, Instance.worktree), null)),
+    )
+    return infos.filter((x): x is SubmoduleInfo => x !== null)
   }
 
   export async function getBranches() {
-    const result = await $`git branch --list --format="%(refname:short)"`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
-      .text()
-      .catch(() => "")
+    const result = await withGitTimeout(
+      $`git branch --list --format="%(refname:short)"`
+        .quiet()
+        .nothrow()
+        .cwd(Instance.worktree)
+        .text()
+        .catch(() => ""),
+      "",
+    )
 
     if (!result.trim()) return []
 

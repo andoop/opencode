@@ -591,7 +591,9 @@ function createGlobalSync() {
         return
       }
 
-      if (store.status !== "complete") setStore("status", "partial")
+      // Set to partial before starting async operations
+      // Status will be set to "complete" when Promise.all finishes
+      setStore("status", "partial")
 
       Promise.all([
         sdk.path.get().then((x) => setStore("path", x.data!)),
