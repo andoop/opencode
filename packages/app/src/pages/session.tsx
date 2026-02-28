@@ -1519,11 +1519,15 @@ export default function Page() {
 
     const wants = isDesktop() ? layout.fileTree.opened() && fileTreeTab() === "changes" : store.mobileTab === "changes"
     if (!wants) return
-    if (sessionSyncData().session_diff[id] !== undefined) return
+
+    const cached = sessionSyncData().session_diff[id]
+    const expected = info()?.summary?.files ?? 0
+    const stale = cached !== undefined && cached.length === 0 && expected > 0
+    if (cached !== undefined && !stale) return
     if (sync.status === "loading") return
 
     const dir = actualSessionDir()
-    void sync.session.diff(id, dir !== sdk.directory ? dir : undefined)
+    void sync.session.diff(id, dir !== sdk.directory ? dir : undefined, stale)
   })
 
   createEffect(() => {

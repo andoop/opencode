@@ -103,6 +103,12 @@ export namespace SessionSummary {
         return files.has(x.file)
       }),
     )
+    // Prevent stale summarize (fire-and-forget at step 1) from overwriting
+    // correct diffs computed by the finish-step summarize
+    if (diffs.length === 0) {
+      const existing = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => undefined)
+      if (existing && existing.length > 0) return
+    }
     await Session.update(input.sessionID, (draft) => {
       draft.summary = {
         additions: diffs.reduce((sum, x) => sum + x.additions, 0),
