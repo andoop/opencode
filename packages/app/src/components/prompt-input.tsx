@@ -83,6 +83,54 @@ type SubmoduleData = {
   remoteBranches?: string[]
 }
 
+/** Group branches by directory prefix (e.g. feature/a, feature/b → feature/) */
+function groupBranchesByDir(branches: string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>()
+  for (const b of branches) {
+    const i = b.lastIndexOf("/")
+    const dir = i >= 0 ? b.slice(0, i + 1) : ""
+    const arr = groups.get(dir) ?? []
+    arr.push(b)
+    groups.set(dir, arr)
+  }
+  return groups
+}
+
+function BranchGroups(props: { branches: string[]; current?: string }) {
+  const groups = createMemo(() => {
+    const m = groupBranchesByDir(props.branches)
+    return [...m.entries()].sort(([a], [b]) => (a || "\0").localeCompare(b || "\0"))
+  })
+  return (
+    <div class="flex flex-col gap-1.5">
+      <For each={groups()}>
+        {([dir, list]) => (
+          <div class="flex flex-col gap-0.5">
+            <Show when={dir}>
+              <span class="text-12-regular text-text-weak">{dir}</span>
+            </Show>
+            <div class="flex flex-col gap-0.5" style={dir ? { "padding-left": "8px" } : undefined}>
+              <For each={list}>
+                {(b) => (
+                  <span
+                    classList={{
+                      "text-12-regular": true,
+                      "text-text-strong": b === props.current,
+                      "text-text-weak": b !== props.current,
+                    }}
+                  >
+                    {b}
+                  </span>
+                )}
+              </For>
+            </div>
+          </div>
+        )}
+      </For>
+    </div>
+  )
+}
+
 function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
   const [expanded, setExpanded] = createSignal(false)
 
@@ -446,7 +494,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!isWorktree()) return null
     return getFilename(dir)
   })
-  const showGitInfo = createMemo(() => currentBranch() || isWorktree())
+  const showGitInfo = createMemo(() => !!sessionDirectory())
 
   const [store, setStore] = createStore<{
     popover: "at" | "slash" | null
@@ -2243,9 +2291,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <div class="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
                     {/* Main Project Info */}
                     <div class="flex flex-col gap-0.5">
-                      <Show when={projectName()}>
-                        <span class="text-14-medium text-text-strong">{projectName()}</span>
-                      </Show>
+                      <span class="text-14-medium text-text-strong">
+                        {projectName() || worktreeDisplay() || getFilename(currentDirectory() || sdk.directory)}
+                      </span>
                       <div class="flex items-center gap-3 text-12-regular text-text-weak">
                         <Show when={currentBranch()}>
                           <div class="flex items-center gap-1">
@@ -2261,6 +2309,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         </Show>
                       </div>
                     </div>
+
+                    {/* Branches */}
+                    <Show when={branches() && branches()!.length > 0}>
+                      <div class="flex flex-col gap-1">
+                        <span class="text-12-medium text-text-weak">Branches</span>
+                        <BranchGroups branches={branches()!} current={currentBranch()} />
+                      </div>
+                    </Show>
 
                     {/* Submodules */}
                     <Show when={submodules() && submodules()!.length > 0}>

@@ -553,6 +553,9 @@ export const dict = {
   "settings.general.row.theme.description": "Customise how OpenCode is themed.",
   "settings.general.row.font.title": "Font",
   "settings.general.row.font.description": "Customise the mono font used in code blocks",
+  "settings.general.row.terminalFps.title": "Terminal FPS",
+  "settings.general.row.terminalFps.description":
+    "The maximum terminal framerate. 0 = unlimited (uses more CPU).",
 
   "settings.general.row.releaseNotes.title": "Release notes",
   "settings.general.row.releaseNotes.description": "Show What's New popups after updates",

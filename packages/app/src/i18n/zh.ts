@@ -538,6 +538,8 @@ export const dict = {
   "settings.general.row.theme.description": "自定义 OpenCode 的主题。",
   "settings.general.row.font.title": "字体",
   "settings.general.row.font.description": "自定义代码块使用的等宽字体",
+  "settings.general.row.terminalFps.title": "终端 FPS",
+  "settings.general.row.terminalFps.description": "终端最大帧率。0 = 不限制（占用更多 CPU）。",
   "settings.general.row.releaseNotes.title": "发行说明",
   "settings.general.row.releaseNotes.description": "更新后显示“新功能”弹窗",
 

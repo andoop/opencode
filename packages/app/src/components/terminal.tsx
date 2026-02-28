@@ -235,6 +235,53 @@ export const Terminal = (props: TerminalProps) => {
       fitAddon = fit
       serializeAddon = serializer
 
+      const termImpl = t as unknown as {
+        startRenderLoop?: () => void
+        isDisposed?: boolean
+        isOpen?: boolean
+        renderer?: { render: (wasmTerm: unknown, force: boolean, viewportY: number, term: unknown, scrollbarOpacity: number) => void }
+        wasmTerm?: { getCursor: () => { x: number; y: number } }
+        lastCursorY?: number
+        cursorMoveEmitter?: { fire: () => void }
+        viewportY?: number
+        scrollbarOpacity?: number
+      }
+      if (typeof termImpl.startRenderLoop === "function") {
+        let lastFrame = 0
+        let frameId: number | undefined
+        const interval = () => {
+          const fps = settings.appearance.terminalFps()
+          return fps === 0 ? 0 : 1000 / fps
+        }
+        termImpl.startRenderLoop = function () {
+          const throttledLoop = () => {
+            if (termImpl.isDisposed || !termImpl.isOpen) return
+            const now = performance.now()
+            const ms = interval()
+            if (ms === 0 || now - lastFrame >= ms) {
+              if (ms > 0) lastFrame = now
+              termImpl.renderer?.render(
+                termImpl.wasmTerm,
+                false,
+                termImpl.viewportY ?? 0,
+                termImpl,
+                termImpl.scrollbarOpacity ?? 0,
+              )
+              const cursor = termImpl.wasmTerm?.getCursor()
+              if (cursor && cursor.y !== termImpl.lastCursorY) {
+                termImpl.lastCursorY = cursor.y
+                termImpl.cursorMoveEmitter?.fire()
+              }
+            }
+            frameId = requestAnimationFrame(throttledLoop)
+          }
+          throttledLoop()
+        }
+        cleanups.push(() => {
+          if (frameId !== undefined) cancelAnimationFrame(frameId)
+        })
+      }
+
       t.open(container)
       container.addEventListener("pointerdown", handlePointerDown)
       cleanups.push(() => container.removeEventListener("pointerdown", handlePointerDown))
