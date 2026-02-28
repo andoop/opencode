@@ -461,12 +461,37 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const currentBranch = createMemo(() => {
     return sessionSyncData().vcs?.branch
   })
-  const submodules = createMemo(() => {
-    return sessionSyncData().vcs?.submodules
-  })
-  const branches = createMemo(() => {
-    return sessionSyncData().vcs?.branches
-  })
+  const [detailedVcs, setDetailedVcs] = createSignal<{
+    loading: boolean
+    submodules?: SubmoduleData[]
+    branches?: string[]
+  }>({ loading: false })
+
+  const fetchDetailedVcs = async () => {
+    const dir = sessionDirectory()
+    if (!dir) return
+    setDetailedVcs({ loading: true })
+    try {
+      const url = new URL("/vcs", sdk.url)
+      url.searchParams.set("directory", dir)
+      url.searchParams.set("detail", "true")
+      const headers: Record<string, string> = {}
+      if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`
+      const res = await fetch(url.toString(), { headers })
+      if (!res.ok) throw new Error(res.statusText)
+      const data = await res.json()
+      setDetailedVcs({
+        loading: false,
+        submodules: data.submodules,
+        branches: data.branches,
+      })
+    } catch {
+      setDetailedVcs({ loading: false })
+    }
+  }
+
+  const submodules = createMemo(() => detailedVcs().submodules)
+  const branches = createMemo(() => detailedVcs().branches)
   const worktree = createMemo(() => {
     return sessionSyncData().vcs?.worktree
   })
@@ -2287,6 +2312,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     "aria-label": "Git branch and worktree information",
                   }}
                   trigger={<Icon name="branch" class="size-4.5" />}
+                  onOpenChange={(open) => {
+                    if (open) fetchDetailedVcs()
+                  }}
                 >
                   <div class="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
                     {/* Main Project Info */}
@@ -2310,24 +2338,34 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       </div>
                     </div>
 
-                    {/* Branches */}
-                    <Show when={branches() && branches()!.length > 0}>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-12-medium text-text-weak">Branches</span>
-                        <BranchGroups branches={branches()!} current={currentBranch()} />
-                      </div>
-                    </Show>
-
-                    {/* Submodules */}
-                    <Show when={submodules() && submodules()!.length > 0}>
-                      <div class="flex flex-col gap-0.5">
-                        <span class="text-12-medium text-text-weak">Submodules</span>
-                        <div class="flex flex-col">
-                          <For each={submodules()}>
-                            {(submodule) => <SubmoduleItem submodule={submodule} />}
-                          </For>
+                    <Show
+                      when={!detailedVcs().loading}
+                      fallback={
+                        <div class="flex items-center justify-center py-2">
+                          <div class="size-4 border-2 border-icon-base border-t-transparent rounded-full animate-spin" />
+                          <span class="ml-2 text-12-regular text-text-weak">Loading...</span>
                         </div>
-                      </div>
+                      }
+                    >
+                      {/* Branches */}
+                      <Show when={branches() && branches()!.length > 0}>
+                        <div class="flex flex-col gap-1">
+                          <span class="text-12-medium text-text-weak">Branches</span>
+                          <BranchGroups branches={branches()!} current={currentBranch()} />
+                        </div>
+                      </Show>
+
+                      {/* Submodules */}
+                      <Show when={submodules() && submodules()!.length > 0}>
+                        <div class="flex flex-col gap-0.5">
+                          <span class="text-12-medium text-text-weak">Submodules</span>
+                          <div class="flex flex-col">
+                            <For each={submodules()}>
+                              {(submodule) => <SubmoduleItem submodule={submodule} />}
+                            </For>
+                          </div>
+                        </div>
+                      </Show>
                     </Show>
                   </div>
                 </Popover>
