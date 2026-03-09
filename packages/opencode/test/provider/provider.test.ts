@@ -54,6 +54,31 @@ test("provider loaded from env variable", async () => {
   })
 })
 
+test("cursor cli provider loads when local agent is available", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      process.env.OPENCODE_CURSOR_CLI_PATH = "/usr/local/bin/agent"
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers["cursor-cli"]).toBeDefined()
+      expect(providers["cursor-cli"].models["auto"]).toBeDefined()
+    },
+  })
+  delete process.env.OPENCODE_CURSOR_CLI_PATH
+})
+
 test("provider loaded from config with apiKey option", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

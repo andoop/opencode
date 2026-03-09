@@ -22,6 +22,7 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
+import { CursorCLI } from "@/cursor/cli"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -41,9 +42,12 @@ export namespace LLM {
     retries?: number
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type StreamOutput = {
+    text: Promise<string>
+    fullStream: AsyncIterable<any>
+  }
 
-  export async function stream(input: StreamInput) {
+  export async function stream(input: StreamInput): Promise<StreamOutput> {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -56,8 +60,7 @@ export namespace LLM {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
-    const [language, cfg, provider, auth] = await Promise.all([
-      Provider.getLanguage(input.model),
+    const [cfg, provider, auth] = await Promise.all([
       Config.get(),
       Provider.getProvider(input.model.providerID),
       Auth.get(input.model.providerID),
@@ -148,6 +151,23 @@ export namespace LLM {
       },
     )
 
+    const tools = await resolveTools(input)
+
+    if (provider.id === "cursor-cli") {
+      return CursorCLI.stream({
+        sessionID: input.sessionID,
+        modelID: input.model.id,
+        agent: input.agent.name,
+        cwd: Instance.directory,
+        system,
+        messages: input.messages,
+        abort: input.abort,
+        allowedTools: Object.keys(tools),
+      })
+    }
+
+    const language = await Provider.getLanguage(input.model)
+
     const maxOutputTokens =
       isCodex || provider.id.includes("github-copilot")
         ? undefined
@@ -157,8 +177,6 @@ export namespace LLM {
             input.model.limit.output,
             OUTPUT_TOKEN_MAX,
           )
-
-    const tools = await resolveTools(input)
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -262,7 +280,7 @@ export namespace LLM {
           sessionId: input.sessionID,
         },
       },
-    })
+    }) as StreamOutput
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {

@@ -79,6 +79,9 @@ export const DialogSelectProvider: Component = () => {
             <Show when={i.id.startsWith("github-copilot")}>
               <div class="text-14-regular text-text-weak">{language.t("dialog.provider.copilot.note")}</div>
             </Show>
+            <Show when={i.id === "cursor-cli"}>
+              <div class="text-14-regular text-text-weak">Use your local Cursor CLI installation and login.</div>
+            </Show>
           </div>
         )}
       </List>

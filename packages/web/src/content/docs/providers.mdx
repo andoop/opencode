@@ -290,6 +290,35 @@ Or if you already have an API key, you can select **Manually enter API Key** and
 
 ---
 
+### Cursor CLI
+
+OpenCode can use your local Cursor CLI installation as an agent backend.
+
+1. Install Cursor CLI and make sure the `agent` command is available in your shell.
+
+2. Sign in locally:
+
+   ```bash
+   agent login
+   ```
+
+3. Select **Cursor CLI** inside OpenCode.
+
+4. Choose the `auto` model and start your session.
+
+OpenCode forwards its session context and prompts to Cursor CLI, and exposes additional OpenCode tools to Cursor through a local MCP bridge.
+
+The first release focuses on high-value bridged tools:
+
+- file read and search tools
+- shell execution
+- edit and write tools
+- MCP tools that are already configured in OpenCode
+
+If Cursor CLI is not installed, this provider will not appear in the provider list.
+
+---
+
 ### Azure OpenAI
 
 :::note

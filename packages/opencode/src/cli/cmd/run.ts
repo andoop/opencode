@@ -1,4 +1,5 @@
 import type { Argv } from "yargs"
+import { fstatSync } from "fs"
 import path from "path"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
@@ -211,6 +212,12 @@ function normalizePath(input?: string) {
   return input
 }
 
+function piped() {
+  if (process.stdin.isTTY) return false
+  const stat = fstatSync(0)
+  return stat.isFIFO() || stat.isFile()
+}
+
 export const RunCommand = cmd({
   command: "run [message..]",
   describe: "run opencode with a message",
@@ -317,7 +324,7 @@ export const RunCommand = cmd({
       }
     }
 
-    if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+    if (piped()) message += "\n" + (await Bun.stdin.text())
 
     if (message.trim().length === 0 && !args.command) {
       UI.error("You must provide a message or a command")

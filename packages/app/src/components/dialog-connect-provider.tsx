@@ -234,6 +234,24 @@ export function DialogConnectProvider(props: { provider: string }) {
             </Match>
             <Match when={method()?.type === "api"}>
               {iife(() => {
+                if (provider().id === "cursor-cli") {
+                  return (
+                    <div class="flex flex-col gap-6">
+                      <div class="text-14-regular text-text-base">
+                        Cursor CLI uses your local `agent` installation and existing Cursor login.
+                      </div>
+                      <div class="text-14-regular text-text-base">
+                        Run `agent login` in your terminal if you have not already signed in.
+                      </div>
+                      <div class="flex items-center gap-3">
+                        <Button class="w-auto" type="button" size="large" variant="primary" onClick={() => void complete()}>
+                          Continue
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                }
+
                 const [formStore, setFormStore] = createStore({
                   value: "",
                   error: undefined as string | undefined,

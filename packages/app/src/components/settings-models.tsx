@@ -5,6 +5,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { TextField } from "@opencode-ai/ui/text-field"
 import type { IconName } from "@opencode-ai/ui/icons/provider"
+import { iconNames } from "@opencode-ai/ui/icons/provider"
 import { type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useModels } from "@/context/models"
@@ -15,6 +16,7 @@ type ModelItem = ReturnType<ReturnType<typeof useModels>["list"]>[number]
 export const SettingsModels: Component = () => {
   const language = useLanguage()
   const models = useModels()
+  const icon = (id: string): IconName => (iconNames.includes(id as IconName) ? (id as IconName) : "synthetic")
 
   const list = useFilteredList<ModelItem>({
     items: (_filter) => models.list(),
@@ -91,7 +93,7 @@ export const SettingsModels: Component = () => {
               {(group) => (
                 <div class="flex flex-col gap-1">
                   <div class="flex items-center gap-2 pb-2">
-                    <ProviderIcon id={group.category as IconName} class="size-5 shrink-0 icon-strong-base" />
+                    <ProviderIcon id={icon(group.category)} class="size-5 shrink-0 icon-strong-base" />
                     <span class="text-14-medium text-text-strong">{group.items[0].provider.name}</span>
                   </div>
                   <div class="bg-surface-raised-base px-4 rounded-lg">

@@ -45,7 +45,7 @@ export namespace Ide {
   }
 
   export function alreadyInstalled() {
-    return process.env["OPENCODE_CALLER"] === "vscode" || process.env["OPENCODE_CALLER"] === "vscode-insiders"
+    return ["vscode", "vscode-insiders", "cursor"].includes(process.env["OPENCODE_CALLER"] ?? "")
   }
 
   export async function install(ide: (typeof SUPPORTED_IDES)[number]["name"]) {

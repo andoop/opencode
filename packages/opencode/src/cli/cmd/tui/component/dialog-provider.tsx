@@ -18,8 +18,9 @@ const PROVIDER_PRIORITY: Record<string, number> = {
   opencode: 0,
   anthropic: 1,
   "github-copilot": 2,
-  openai: 3,
-  google: 4,
+  "cursor-cli": 3,
+  openai: 4,
+  google: 5,
 }
 
 export function createDialogProviderOptions() {
@@ -40,6 +41,7 @@ export function createDialogProviderOptions() {
             opencode: "(Recommended)",
             anthropic: "(Claude Max or API key)",
             openai: "(ChatGPT Plus/Pro or API key)",
+            "cursor-cli": "(Uses local Cursor CLI login)",
           }[provider.id],
           category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
           footer: isConnected ? "Connected" : undefined,
@@ -70,6 +72,9 @@ export function createDialogProviderOptions() {
             }
             if (index == null) return
             const method = methods[index]
+            if (provider.id === "cursor-cli") {
+              return dialog.replace(() => <CursorCliMethod />)
+            }
             if (method.type === "oauth") {
               const result = await sdk.client.provider.oauth.authorize({
                 providerID: provider.id,
@@ -105,6 +110,37 @@ export function createDialogProviderOptions() {
     )
   })
   return options
+}
+
+function CursorCliMethod() {
+  const { theme } = useTheme()
+  const sdk = useSDK()
+  const sync = useSync()
+  const dialog = useDialog()
+
+  return (
+    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+      <box flexDirection="row" justifyContent="space-between">
+        <text attributes={TextAttributes.BOLD} fg={theme.text}>
+          Cursor CLI
+        </text>
+        <text fg={theme.textMuted}>esc</text>
+      </box>
+      <text fg={theme.textMuted}>Uses your local `agent` installation and existing Cursor login.</text>
+      <text fg={theme.text}>Run `agent login` if you have not signed in yet.</text>
+      <text fg={theme.text}>Press enter to continue.</text>
+      <DialogPrompt
+        title="Cursor CLI"
+        placeholder="Press enter"
+        description={<text fg={theme.textMuted}>No API key is needed here.</text>}
+        onConfirm={async () => {
+          await sdk.client.instance.dispose()
+          await sync.bootstrap()
+          dialog.clear()
+        }}
+      />
+    </box>
+  )
 }
 
 export function DialogProvider() {

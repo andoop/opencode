@@ -11,6 +11,7 @@ import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import type { Hooks } from "@opencode-ai/plugin"
+import { CursorCLI } from "../../cursor/cli"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -265,6 +266,16 @@ export const AuthLoginCommand = cmd({
               filtered[key] = value
             }
           }
+          if (CursorCLI.available() && (enabled ? enabled.has("cursor-cli") : true) && !disabled.has("cursor-cli")) {
+            filtered["cursor-cli"] = {
+              id: "cursor-cli",
+              name: "Cursor CLI",
+              env: [],
+              api: "local://cursor-cli",
+              npm: "opencode-cursor-cli",
+              models: {},
+            }
+          }
           return filtered
         })
 
@@ -276,6 +287,7 @@ export const AuthLoginCommand = cmd({
           google: 4,
           openrouter: 5,
           vercel: 6,
+          "cursor-cli": 7,
         }
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -295,6 +307,7 @@ export const AuthLoginCommand = cmd({
                   opencode: "recommended",
                   anthropic: "Claude Max or API key",
                   openai: "ChatGPT Plus/Pro or API key",
+                  "cursor-cli": "uses local Cursor CLI login",
                 }[x.id],
               })),
             ),
@@ -350,6 +363,13 @@ export const AuthLoginCommand = cmd({
 
         if (provider === "vercel") {
           prompts.log.info("You can create an api key at https://vercel.link/ai-gateway-token")
+        }
+
+        if (provider === "cursor-cli") {
+          prompts.log.info("Cursor CLI uses your local `agent` installation and existing Cursor login.")
+          prompts.log.info("Run `agent login` if you have not signed in yet.")
+          prompts.outro("Done")
+          return
         }
 
         if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {

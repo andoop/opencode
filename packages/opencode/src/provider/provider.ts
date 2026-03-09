@@ -39,6 +39,7 @@ import { createVercel } from "@ai-sdk/vercel"
 import { createGitLab, VERSION as GITLAB_PROVIDER_VERSION } from "@gitlab/gitlab-ai-provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
+import { CursorCLI } from "@/cursor/cli"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -505,6 +506,12 @@ export namespace Provider {
         },
       }
     },
+    "cursor-cli": async () => {
+      return {
+        autoload: CursorCLI.available(),
+        options: {},
+      }
+    },
   }
 
   export const Model = z
@@ -671,11 +678,75 @@ export namespace Provider {
     }
   }
 
+  function cursorProvider(): Info {
+    return {
+      id: "cursor-cli",
+      source: "custom",
+      name: "Cursor CLI",
+      env: [],
+      options: {},
+      models: {
+        auto: {
+          id: "auto",
+          providerID: "cursor-cli",
+          api: {
+            id: "auto",
+            url: "local://cursor-cli",
+            npm: "opencode-cursor-cli",
+          },
+          name: "Auto",
+          family: "cursor",
+          capabilities: {
+            temperature: false,
+            reasoning: true,
+            attachment: true,
+            toolcall: true,
+            input: {
+              text: true,
+              audio: false,
+              image: true,
+              video: false,
+              pdf: true,
+            },
+            output: {
+              text: true,
+              audio: false,
+              image: false,
+              video: false,
+              pdf: false,
+            },
+            interleaved: false,
+          },
+          cost: {
+            input: 0,
+            output: 0,
+            cache: {
+              read: 0,
+              write: 0,
+            },
+          },
+          limit: {
+            context: 200_000,
+            output: 32_000,
+          },
+          status: "beta",
+          options: {},
+          headers: {},
+          release_date: "",
+          variants: {},
+        },
+      },
+    }
+  }
+
   const state = Instance.state(async () => {
     using _ = log.time("state")
     const config = await Config.get()
     const modelsDev = await ModelsDev.get()
     const database = mapValues(modelsDev, fromModelsDevProvider)
+    if (CursorCLI.available()) {
+      database["cursor-cli"] = cursorProvider()
+    }
 
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
