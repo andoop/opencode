@@ -420,8 +420,41 @@ export namespace File {
 
     return changedFiles.map((x) => ({
       ...x,
-      path: path.relative(Instance.directory, x.path),
+      path: x.path,
     }))
+  }
+
+  async function readTextForDiff(file: string) {
+    if (isImageByExtension(file)) return ""
+    if (isBinaryByExtension(file)) return ""
+    const full = path.join(Instance.directory, file)
+    const bunFile = Bun.file(full)
+    if (!(await bunFile.exists())) return ""
+    if (await shouldEncode(bunFile)) return ""
+    return bunFile.text().catch(() => "")
+  }
+
+  async function readHeadForDiff(file: string) {
+    if (isImageByExtension(file)) return ""
+    if (isBinaryByExtension(file)) return ""
+    return $`git show HEAD:${file}`.cwd(Instance.directory).quiet().nothrow().text()
+  }
+
+  export async function diff() {
+    const project = Instance.project
+    if (project.vcs !== "git") return []
+
+    const files = await status()
+    return Promise.all(
+      files.map(async (item) => ({
+        file: item.path,
+        before: item.status === "added" ? "" : await readHeadForDiff(item.path),
+        after: item.status === "deleted" ? "" : await readTextForDiff(item.path),
+        additions: item.added,
+        deletions: item.removed,
+        status: item.status,
+      })),
+    )
   }
 
   export async function read(file: string): Promise<Content> {

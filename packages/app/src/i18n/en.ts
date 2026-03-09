@@ -451,7 +451,9 @@ export const dict = {
   "session.review.noChanges": "No changes",
 
   "session.files.selectToOpen": "Select a file to open",
+  "session.files.git": "Git",
   "session.files.all": "All files",
+  "session.git.noChanges": "Working tree clean",
   "session.files.binaryContent": "Binary file (content cannot be displayed)",
 
   "session.messages.renderEarlier": "Render earlier messages",

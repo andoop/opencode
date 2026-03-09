@@ -247,6 +247,8 @@ export default function Page() {
   const params = useParams()
   const navigate = useNavigate()
   const sdk = useSDK()
+  const platform = usePlatform()
+  const auth = useAuth()
   const prompt = usePrompt()
   const comments = useComments()
   const permission = usePermission()
@@ -1331,7 +1333,7 @@ export default function Page() {
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
 
   const fileTreeTab = () => layout.fileTree.tab()
-  const setFileTreeTab = (value: "changes" | "all") => layout.fileTree.setTab(value)
+  const setFileTreeTab = (value: "changes" | "all" | "git") => layout.fileTree.setTab(value)
 
   const [tree, setTree] = createStore({
     reviewScroll: undefined as HTMLDivElement | undefined,
@@ -1355,13 +1357,13 @@ export default function Page() {
     <div class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
         <Switch>
-          <Match when={hasReview()}>
+          <Match when={reviewHasChanges()}>
             <Show
-              when={diffsReady()}
+              when={reviewReady()}
               fallback={<div class="px-6 py-4 text-text-weak">{language.t("session.review.loadingChanges")}</div>}
             >
               <SessionReviewTab
-                diffs={diffs}
+                diffs={reviewDiffs}
                 view={view}
                 diffStyle={layout.review.diffStyle()}
                 onDiffStyleChange={layout.review.setDiffStyle}
@@ -1372,19 +1374,16 @@ export default function Page() {
                 comments={comments.all()}
                 focusedComment={comments.focus()}
                 onFocusedCommentChange={comments.setFocus}
-                onViewFile={(path) => {
-                  showAllFiles()
-                  const value = file.tab(path)
-                  tabs().open(value)
-                  file.load(path)
-                }}
+                onViewFile={viewReviewFile}
               />
             </Show>
           </Match>
           <Match when={true}>
             <div class="h-full px-6 pb-30 flex flex-col items-center justify-center text-center gap-6">
               <Mark class="w-14 opacity-10" />
-              <div class="text-14-regular text-text-weak max-w-56">{language.t("session.review.empty")}</div>
+              <div class="text-14-regular text-text-weak max-w-56">
+                {fileTreeTab() === "git" ? language.t("session.git.noChanges") : language.t("session.review.empty")}
+              </div>
             </div>
           </Match>
         </Switch>
@@ -1406,7 +1405,7 @@ export default function Page() {
   )
 
   const setFileTreeTabValue = (value: string) => {
-    if (value !== "changes" && value !== "all") return
+    if (value !== "changes" && value !== "all" && value !== "git") return
     setFileTreeTab(value)
   }
 
@@ -1455,7 +1454,8 @@ export default function Page() {
     const pending = pendingDiff()
     if (!pending) return
     if (!reviewScroll()) return
-    if (!diffsReady()) return
+    const ready = fileTreeTab() === "git" ? gitDiffsReady() : diffsReady()
+    if (!ready) return
 
     const attempt = (count: number) => {
       if (pendingDiff() !== pending) return
@@ -1538,6 +1538,109 @@ export default function Page() {
     fileTreeTab()
     void file.tree.list("")
   })
+
+  const [gitStatus, setGitStatus] = createSignal<Array<{ path: string; added: number; removed: number; status: string }>>([])
+  const [gitDiffs, setGitDiffs] = createSignal<FileDiff[]>([])
+  const [gitDiffsReady, setGitDiffsReady] = createSignal(false)
+  const [gitRefresh, setGitRefresh] = createSignal(0)
+  let gitStatusRequest = 0
+  const gitStatusFiles = createMemo(() => gitStatus().map((f) => f.path))
+  const gitStatusKinds = createMemo(() => {
+    const merge = (a: "add" | "del" | "mix" | undefined, b: "add" | "del" | "mix") => {
+      if (!a) return b
+      if (a === b) return a
+      return "mix" as const
+    }
+    const out = new Map<string, "add" | "del" | "mix">()
+    for (const f of gitStatus()) {
+      const kind = f.status === "added" ? "add" : f.status === "deleted" ? "del" : "mix"
+      out.set(f.path, kind)
+      const parts = f.path.split("/")
+      for (const [idx] of parts.slice(0, -1).entries()) {
+        const dir = parts.slice(0, idx + 1).join("/")
+        if (!dir) continue
+        out.set(dir, merge(out.get(dir), kind))
+      }
+    }
+    return out
+  })
+
+  createEffect(
+    on(
+      () => [layout.fileTree.opened(), fileTreeTab(), actualSessionDir(), sdk.directory, sdk.url, auth.token, gitRefresh()],
+      ([opened, tab, actualDir, sdkDir, url, token, refresh]) => {
+        if (!opened) return
+        if (tab !== "git") return
+
+        const dir = typeof actualDir === "string" && actualDir ? actualDir : typeof sdkDir === "string" ? sdkDir : ""
+        if (!dir) return
+        const request = ++gitStatusRequest
+        const headers: Record<string, string> = {}
+        if (typeof token === "string" && token) headers["Authorization"] = `Bearer ${token}`
+        setGitDiffsReady(false)
+        Promise.all([
+          sdk.client.file.status({ directory: dir }),
+          (platform.fetch ?? fetch)(`${String(url)}/file/diff?directory=${encodeURIComponent(dir)}`, { headers }).then((res) => {
+            if (!res.ok) throw new Error(res.statusText)
+            return res.json() as Promise<FileDiff[]>
+          }),
+        ])
+          .then(([status, diffs]) => {
+            if (request !== gitStatusRequest) return
+            setGitStatus(status.data ?? [])
+            setGitDiffs(diffs)
+          })
+          .catch(() => {
+            if (request !== gitStatusRequest) return
+            setGitStatus([])
+            setGitDiffs([])
+          })
+          .finally(() => {
+            if (request !== gitStatusRequest) return
+            setGitDiffsReady(true)
+          })
+      },
+      { defer: true },
+    ),
+  )
+
+  createEffect(() => {
+    const stop = globalSDK.event.listen((e) => {
+      const event = e.details
+      if (
+        event.type !== "file.watcher.updated" &&
+        event.type !== "file.edited" &&
+        event.type !== "session.updated" &&
+        event.type !== "message.updated" &&
+        event.type !== "message.part.updated"
+      )
+        return
+      const dir = actualSessionDir() || sdk.directory
+      if (e.name !== dir) return
+      if (
+        event.type !== "file.watcher.updated" &&
+        event.type !== "file.edited" &&
+        event.type !== "message.updated" &&
+        event.type !== "session.updated"
+      )
+        return
+      if (!layout.fileTree.opened()) return
+      if (fileTreeTab() !== "git") return
+      setGitRefresh((x) => x + 1)
+    })
+    onCleanup(stop)
+  })
+
+  const reviewDiffs = createMemo(() => (fileTreeTab() === "git" ? gitDiffs() : diffs()))
+  const reviewReady = createMemo(() => (fileTreeTab() === "git" ? gitDiffsReady() : diffsReady()))
+  const reviewHasChanges = createMemo(() => (fileTreeTab() === "git" ? gitDiffs().length > 0 : hasReview()))
+  const viewReviewFile = (path: string) => {
+    if (fileTreeTab() === "changes") showAllFiles()
+    if (fileTreeTab() === "git") setFileTreeTab("all")
+    const value = file.tab(path)
+    tabs().open(value)
+    file.load(path)
+  }
 
   const autoScroll = createAutoScroll({
     working: () => true,
@@ -2463,7 +2566,7 @@ export default function Page() {
           >
             <div class="flex-1 min-w-0 h-full">
               <Show
-                when={fileTreeTab() === "changes"}
+                when={fileTreeTab() === "changes" || fileTreeTab() === "git"}
                 fallback={
                   <DragDropProvider
                     onDragStart={handleDragStart}
@@ -3151,6 +3254,10 @@ export default function Page() {
                         {reviewCount()}{" "}
                         {language.t(reviewCount() === 1 ? "session.review.change.one" : "session.review.change.other")}
                       </Tabs.Trigger>
+                      <Tabs.Trigger value="git" class="flex-1" classes={{ button: "w-full" }}>
+                        {gitStatus().length ? `${gitStatus().length} ` : ""}
+                        {language.t("session.files.git")}
+                      </Tabs.Trigger>
                       <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
                         {language.t("session.files.all")}
                       </Tabs.Trigger>
@@ -3183,6 +3290,25 @@ export default function Page() {
                           </div>
                         </Match>
                       </Switch>
+                    </Tabs.Content>
+                    <Tabs.Content value="git" class="bg-background-base px-3 py-0">
+                      <Show
+                        when={gitStatus().length > 0}
+                        fallback={
+                          <div class="mt-8 text-center text-12-regular text-text-weak">
+                            {language.t("session.git.noChanges")}
+                          </div>
+                        }
+                      >
+                        <FileTree
+                          path=""
+                          allowed={gitStatusFiles()}
+                          kinds={gitStatusKinds()}
+                          draggable={false}
+                          active={activeDiff()}
+                          onFileClick={(node) => focusReviewDiff(node.path)}
+                        />
+                      </Show>
                     </Tabs.Content>
                     <Tabs.Content value="all" class="bg-background-base px-3 py-0">
                       <FileTree

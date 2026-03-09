@@ -5,6 +5,7 @@ import { File } from "../../file"
 import { Ripgrep } from "../../file/ripgrep"
 import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
+import { Snapshot } from "../../snapshot"
 import { lazy } from "../../util/lazy"
 
 export const FileRoutes = lazy(() =>
@@ -191,6 +192,28 @@ export const FileRoutes = lazy(() =>
       }),
       async (c) => {
         const content = await File.status()
+        return c.json(content)
+      },
+    )
+    .get(
+      "/file/diff",
+      describeRoute({
+        summary: "Get file diff",
+        description: "Get the git diff of all files in the project working tree.",
+        operationId: "file.diff",
+        responses: {
+          200: {
+            description: "File diff",
+            content: {
+              "application/json": {
+                schema: resolver(Snapshot.FileDiff.array()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const content = await File.diff()
         return c.json(content)
       },
     ),
