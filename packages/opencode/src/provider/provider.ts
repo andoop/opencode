@@ -678,64 +678,91 @@ export namespace Provider {
     }
   }
 
+  function cursorModel(id: string, name: string, reasoning = false): Model {
+    return {
+      id,
+      providerID: "cursor-cli",
+      api: { id, url: "local://cursor-cli", npm: "opencode-cursor-cli" },
+      name,
+      family: "cursor",
+      capabilities: {
+        temperature: false,
+        reasoning,
+        attachment: true,
+        toolcall: true,
+        input: { text: true, audio: false, image: true, video: false, pdf: true },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      limit: { context: 200_000, output: 32_000 },
+      status: "active",
+      options: {},
+      headers: {},
+      release_date: "",
+      variants: {},
+    }
+  }
+
   function cursorProvider(): Info {
+    const defs: Array<[id: string, name: string, reasoning?: boolean]> = [
+      ["auto", "Auto"],
+      ["composer-1.5", "Composer 1.5"],
+      ["composer-1", "Composer 1"],
+      ["opus-4.6-thinking", "Claude 4.6 Opus (Thinking)", true],
+      ["opus-4.6", "Claude 4.6 Opus"],
+      ["opus-4.5-thinking", "Claude 4.5 Opus (Thinking)", true],
+      ["opus-4.5", "Claude 4.5 Opus"],
+      ["sonnet-4.6-thinking", "Claude 4.6 Sonnet (Thinking)", true],
+      ["sonnet-4.6", "Claude 4.6 Sonnet"],
+      ["sonnet-4.5-thinking", "Claude 4.5 Sonnet (Thinking)", true],
+      ["sonnet-4.5", "Claude 4.5 Sonnet"],
+      ["gpt-5.4-xhigh", "GPT-5.4 Extra High"],
+      ["gpt-5.4-xhigh-fast", "GPT-5.4 Extra High Fast"],
+      ["gpt-5.4-high", "GPT-5.4 High"],
+      ["gpt-5.4-high-fast", "GPT-5.4 High Fast"],
+      ["gpt-5.4-medium", "GPT-5.4"],
+      ["gpt-5.4-medium-fast", "GPT-5.4 Fast"],
+      ["gpt-5.3-codex-xhigh", "GPT-5.3 Codex Extra High"],
+      ["gpt-5.3-codex-xhigh-fast", "GPT-5.3 Codex Extra High Fast"],
+      ["gpt-5.3-codex-high", "GPT-5.3 Codex High"],
+      ["gpt-5.3-codex-high-fast", "GPT-5.3 Codex High Fast"],
+      ["gpt-5.3-codex", "GPT-5.3 Codex"],
+      ["gpt-5.3-codex-fast", "GPT-5.3 Codex Fast"],
+      ["gpt-5.3-codex-low", "GPT-5.3 Codex Low"],
+      ["gpt-5.3-codex-low-fast", "GPT-5.3 Codex Low Fast"],
+      ["gpt-5.3-codex-spark-preview", "GPT-5.3 Codex Spark"],
+      ["gpt-5.2-codex-xhigh", "GPT-5.2 Codex Extra High"],
+      ["gpt-5.2-codex-xhigh-fast", "GPT-5.2 Codex Extra High Fast"],
+      ["gpt-5.2-codex-high", "GPT-5.2 Codex High"],
+      ["gpt-5.2-codex-high-fast", "GPT-5.2 Codex High Fast"],
+      ["gpt-5.2-codex", "GPT-5.2 Codex"],
+      ["gpt-5.2-codex-fast", "GPT-5.2 Codex Fast"],
+      ["gpt-5.2-codex-low", "GPT-5.2 Codex Low"],
+      ["gpt-5.2-codex-low-fast", "GPT-5.2 Codex Low Fast"],
+      ["gpt-5.2-high", "GPT-5.2 High"],
+      ["gpt-5.2", "GPT-5.2"],
+      ["gpt-5.1-codex-max-high", "GPT-5.1 Codex Max High"],
+      ["gpt-5.1-codex-max", "GPT-5.1 Codex Max"],
+      ["gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"],
+      ["gpt-5.1-high", "GPT-5.1 High"],
+      ["gemini-3.1-pro", "Gemini 3.1 Pro"],
+      ["gemini-3-pro", "Gemini 3 Pro"],
+      ["gemini-3-flash", "Gemini 3 Flash"],
+      ["grok", "Grok"],
+      ["kimi-k2.5", "Kimi K2.5"],
+    ]
+    const models: Record<string, Model> = {}
+    for (const [id, name, reasoning] of defs) {
+      models[id] = cursorModel(id, name, reasoning)
+    }
     return {
       id: "cursor-cli",
       source: "custom",
       name: "Cursor CLI",
       env: [],
       options: {},
-      models: {
-        auto: {
-          id: "auto",
-          providerID: "cursor-cli",
-          api: {
-            id: "auto",
-            url: "local://cursor-cli",
-            npm: "opencode-cursor-cli",
-          },
-          name: "Auto",
-          family: "cursor",
-          capabilities: {
-            temperature: false,
-            reasoning: true,
-            attachment: true,
-            toolcall: true,
-            input: {
-              text: true,
-              audio: false,
-              image: true,
-              video: false,
-              pdf: true,
-            },
-            output: {
-              text: true,
-              audio: false,
-              image: false,
-              video: false,
-              pdf: false,
-            },
-            interleaved: false,
-          },
-          cost: {
-            input: 0,
-            output: 0,
-            cache: {
-              read: 0,
-              write: 0,
-            },
-          },
-          limit: {
-            context: 200_000,
-            output: 32_000,
-          },
-          status: "beta",
-          options: {},
-          headers: {},
-          release_date: "",
-          variants: {},
-        },
-      },
+      models,
     }
   }
 
