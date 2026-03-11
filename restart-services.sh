@@ -61,7 +61,7 @@ export OPENCODE_MULTI_USER=true
 # Start backend server
 echo -e "${GREEN}Starting backend server on port 4096...${NC}"
 cd "$PROJECT_ROOT"
-bun dev serve --port 4096 > "$SERVER_LOG" 2>&1 &
+bun dev serve --port 4096 --hostname 0.0.0.0 > "$SERVER_LOG" 2>&1 &
 BACKEND_PID=$!
 
 # Wait a moment for backend to start
