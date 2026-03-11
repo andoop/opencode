@@ -15,6 +15,7 @@ import { useLayout } from "@/context/layout"
 import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { decode64 } from "@/utils/base64"
+import { useAuth } from "@/context/auth"
 
 type EntryType = "command" | "file" | "session"
 
@@ -35,6 +36,7 @@ type Entry = {
 type DialogSelectFileMode = "all" | "files"
 
 export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFile?: (path: string) => void }) {
+  const auth = useAuth()
   const command = useCommand()
   const language = useLanguage()
   const layout = useLayout()
@@ -49,6 +51,7 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const state = { cleanup: undefined as (() => void) | void, committed: false }
   const [grouped, setGrouped] = createSignal(false)
+  if (!auth.canFeature("files")) return null
   const common = [
     "session.new",
     "workspace.new",

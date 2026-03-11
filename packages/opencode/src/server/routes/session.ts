@@ -16,6 +16,7 @@ import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { User } from "@/user"
 
 const log = Log.create({ service: "server" })
 
@@ -517,6 +518,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
+        User.requireFeature("models")
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
         const session = await Session.get(sessionID)

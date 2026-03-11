@@ -8,6 +8,12 @@ import { ProviderAuth } from "../../provider/auth"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { User } from "@/user"
+
+function requireModelsOrProviders() {
+  if (User.featureEnabled("models") || User.featureEnabled("providers")) return
+  User.requireFeature("models")
+}
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
@@ -35,6 +41,7 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
+        requireModelsOrProviders()
         const config = await Config.get()
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
@@ -77,6 +84,7 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
+        User.requireFeature("providers")
         return c.json(await ProviderAuth.methods())
       },
     )
@@ -111,6 +119,7 @@ export const ProviderRoutes = lazy(() =>
         }),
       ),
       async (c) => {
+        User.requireFeature("providers")
         const providerID = c.req.valid("param").providerID
         const { method } = c.req.valid("json")
         const result = await ProviderAuth.authorize({
@@ -152,6 +161,7 @@ export const ProviderRoutes = lazy(() =>
         }),
       ),
       async (c) => {
+        User.requireFeature("providers")
         const providerID = c.req.valid("param").providerID
         const { method, code } = c.req.valid("json")
         await ProviderAuth.callback({

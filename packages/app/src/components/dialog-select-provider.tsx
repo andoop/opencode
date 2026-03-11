@@ -9,6 +9,7 @@ import { iconNames, type IconName } from "@opencode-ai/ui/icons/provider"
 import { DialogConnectProvider } from "./dialog-connect-provider"
 import { useLanguage } from "@/context/language"
 import { DialogCustomProvider } from "./dialog-custom-provider"
+import { useAuth } from "@/context/auth"
 
 const CUSTOM_ID = "_custom"
 
@@ -18,9 +19,11 @@ function icon(id: string): IconName {
 }
 
 export const DialogSelectProvider: Component = () => {
+  const auth = useAuth()
   const dialog = useDialog()
   const providers = useProviders()
   const language = useLanguage()
+  if (!auth.canFeature("providers")) return null
 
   const popularGroup = () => language.t("dialog.provider.group.popular")
   const otherGroup = () => language.t("dialog.provider.group.other")

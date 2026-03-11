@@ -16,6 +16,7 @@ import { useLanguage } from "@/context/language"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { DialogSelectServer } from "./dialog-select-server"
 import { showToast } from "@opencode-ai/ui/toast"
+import { useAuth } from "@/context/auth"
 
 type ServerStatus = { healthy: boolean; version?: string }
 
@@ -33,6 +34,7 @@ async function checkHealth(url: string, platform: ReturnType<typeof usePlatform>
 }
 
 export function StatusPopover() {
+  const auth = useAuth()
   const sync = useSync()
   const sdk = useSDK()
   const server = useServer()
@@ -131,6 +133,11 @@ export function StatusPopover() {
   })
 
   const serverCount = createMemo(() => sortedServers().length)
+  const defaultTab = createMemo(() => {
+    if (auth.canFeature("servers")) return "servers"
+    if (auth.canFeature("mcp")) return "mcp"
+    return "lsp"
+  })
 
   const refreshDefaultServerUrl = () => {
     const result = platform.getDefaultServerUrl?.()
@@ -181,19 +188,23 @@ export function StatusPopover() {
           aria-label={language.t("status.popover.ariaLabel")}
           class="tabs bg-background-strong rounded-xl overflow-hidden"
           data-component="tabs"
-          data-active="servers"
-          defaultValue="servers"
+          data-active={defaultTab()}
+          defaultValue={defaultTab()}
           variant="alt"
         >
           <Tabs.List data-slot="tablist" class="bg-transparent border-b-0 px-4 pt-2 pb-0 gap-4 h-10">
-            <Tabs.Trigger value="servers" data-slot="tab" class="text-12-regular">
-              {serverCount() > 0 ? `${serverCount()} ` : ""}
-              {language.t("status.popover.tab.servers")}
-            </Tabs.Trigger>
-            <Tabs.Trigger value="mcp" data-slot="tab" class="text-12-regular">
-              {mcpConnected() > 0 ? `${mcpConnected()} ` : ""}
-              {language.t("status.popover.tab.mcp")}
-            </Tabs.Trigger>
+            <Show when={auth.canFeature("servers")}>
+              <Tabs.Trigger value="servers" data-slot="tab" class="text-12-regular">
+                {serverCount() > 0 ? `${serverCount()} ` : ""}
+                {language.t("status.popover.tab.servers")}
+              </Tabs.Trigger>
+            </Show>
+            <Show when={auth.canFeature("mcp")}>
+              <Tabs.Trigger value="mcp" data-slot="tab" class="text-12-regular">
+                {mcpConnected() > 0 ? `${mcpConnected()} ` : ""}
+                {language.t("status.popover.tab.mcp")}
+              </Tabs.Trigger>
+            </Show>
             <Tabs.Trigger value="lsp" data-slot="tab" class="text-12-regular">
               {lspCount() > 0 ? `${lspCount()} ` : ""}
               {language.t("status.popover.tab.lsp")}
@@ -204,10 +215,11 @@ export function StatusPopover() {
             </Tabs.Trigger>
           </Tabs.List>
 
-          <Tabs.Content value="servers">
-            <div class="flex flex-col px-2 pb-2">
-              <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
-                <For each={sortedServers()}>
+          <Show when={auth.canFeature("servers")}>
+            <Tabs.Content value="servers">
+              <div class="flex flex-col px-2 pb-2">
+                <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+                  <For each={sortedServers()}>
                   {(url) => {
                     const isActive = () => url === server.url
                     const isDefault = () => url === store.defaultServerUrl
@@ -289,29 +301,31 @@ export function StatusPopover() {
                   }}
                 </For>
 
-                <Button
-                  variant="secondary"
-                  class="mt-3 self-start h-8 px-3 py-1.5"
-                  onClick={() => dialog.show(() => <DialogSelectServer />, refreshDefaultServerUrl)}
-                >
-                  {language.t("status.popover.action.manageServers")}
-                </Button>
+                  <Button
+                    variant="secondary"
+                    class="mt-3 self-start h-8 px-3 py-1.5"
+                    onClick={() => dialog.show(() => <DialogSelectServer />, refreshDefaultServerUrl)}
+                  >
+                    {language.t("status.popover.action.manageServers")}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </Tabs.Content>
+            </Tabs.Content>
+          </Show>
 
-          <Tabs.Content value="mcp">
-            <div class="flex flex-col px-2 pb-2">
-              <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
-                <Show
-                  when={mcpItems().length > 0}
-                  fallback={
-                    <div class="text-14-regular text-text-base text-center my-auto">
-                      {language.t("dialog.mcp.empty")}
-                    </div>
-                  }
-                >
-                  <For each={mcpItems()}>
+          <Show when={auth.canFeature("mcp")}>
+            <Tabs.Content value="mcp">
+              <div class="flex flex-col px-2 pb-2">
+                <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+                  <Show
+                    when={mcpItems().length > 0}
+                    fallback={
+                      <div class="text-14-regular text-text-base text-center my-auto">
+                        {language.t("dialog.mcp.empty")}
+                      </div>
+                    }
+                  >
+                    <For each={mcpItems()}>
                     {(item) => {
                       const enabled = () => item.status === "connected"
                       return (
@@ -342,11 +356,12 @@ export function StatusPopover() {
                         </button>
                       )
                     }}
-                  </For>
-                </Show>
+                    </For>
+                  </Show>
+                </div>
               </div>
-            </div>
-          </Tabs.Content>
+            </Tabs.Content>
+          </Show>
 
           <Tabs.Content value="lsp">
             <div class="flex flex-col px-2 pb-2">

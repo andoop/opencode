@@ -5,9 +5,14 @@ import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { User } from "@/user"
 
 export const McpRoutes = lazy(() =>
   new Hono()
+    .use(async (_, next) => {
+      User.requireFeature("mcp")
+      return next()
+    })
     .get(
       "/",
       describeRoute({

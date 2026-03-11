@@ -6,6 +6,87 @@ import { usePlatform } from "./platform"
 const AUTH_TOKEN_KEY = "opencode_auth_token"
 const AUTH_USER_KEY = "opencode_auth_user"
 
+export const FEATURE_DEFAULTS = {
+  modes: {
+    ask: true,
+    build: true,
+    plan: true,
+  },
+  files: true,
+  models: true,
+  providers: true,
+  servers: true,
+  mcp: true,
+} as const
+
+export type AuthFeatures = {
+  modes?: {
+    ask?: boolean
+    build?: boolean
+    plan?: boolean
+  }
+  files?: boolean
+  models?: boolean
+  providers?: boolean
+  servers?: boolean
+  mcp?: boolean
+}
+
+export type ResolvedAuthFeatures = {
+  modes: {
+    ask: boolean
+    build: boolean
+    plan: boolean
+  }
+  files: boolean
+  models: boolean
+  providers: boolean
+  servers: boolean
+  mcp: boolean
+}
+
+export type AuthFeatureKey = Exclude<keyof ResolvedAuthFeatures, "modes">
+
+export function resolveAuthFeatures(user?: Pick<AuthUser, "role" | "permission"> | null): ResolvedAuthFeatures {
+  if (user?.role === "admin") {
+    return {
+      modes: { ...FEATURE_DEFAULTS.modes },
+      files: true,
+      models: true,
+      providers: true,
+      servers: true,
+      mcp: true,
+    }
+  }
+
+  const feature = user?.permission.features
+  return {
+    modes: {
+      ask: feature?.modes?.ask ?? FEATURE_DEFAULTS.modes.ask,
+      build: feature?.modes?.build ?? FEATURE_DEFAULTS.modes.build,
+      plan: feature?.modes?.plan ?? FEATURE_DEFAULTS.modes.plan,
+    },
+    files: feature?.files ?? FEATURE_DEFAULTS.files,
+    models: feature?.models ?? FEATURE_DEFAULTS.models,
+    providers: feature?.providers ?? FEATURE_DEFAULTS.providers,
+    servers: feature?.servers ?? FEATURE_DEFAULTS.servers,
+    mcp: feature?.mcp ?? FEATURE_DEFAULTS.mcp,
+  }
+}
+
+export function canUseMode(user: Pick<AuthUser, "role" | "permission"> | null | undefined, mode: string) {
+  if (user?.role === "admin") return true
+  if (mode !== "ask" && mode !== "build" && mode !== "plan") return true
+  const features = resolveAuthFeatures(user)
+  if (!features.modes[mode]) return false
+  if (!user?.permission.allowed_agents) return true
+  return user.permission.allowed_agents.includes(mode)
+}
+
+export function canUseFeature(user: Pick<AuthUser, "role" | "permission"> | null | undefined, feature: AuthFeatureKey) {
+  return resolveAuthFeatures(user)[feature]
+}
+
 export interface AuthUser {
   id: string
   username: string
@@ -20,6 +101,7 @@ export interface AuthUser {
       read?: "allow" | "ask" | "deny"
     }
     allowed_agents?: ("build" | "ask" | "plan")[]
+    features?: AuthFeatures
   }
 }
 
@@ -200,8 +282,17 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
       get permission() {
         return user()?.permission ?? { level: "full" as const }
       },
+      get features() {
+        return resolveAuthFeatures(user())
+      },
       get isMultiUserEnabled() {
         return multiUserEnabled()
+      },
+      canFeature(feature: AuthFeatureKey) {
+        return canUseFeature(user(), feature)
+      },
+      canMode(mode: string) {
+        return canUseMode(user(), mode)
       },
       login,
       logout,

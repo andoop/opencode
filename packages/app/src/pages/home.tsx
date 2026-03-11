@@ -1,4 +1,4 @@
-import { createMemo, For, Match, Switch } from "solid-js"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Logo } from "@opencode-ai/ui/logo"
 import { useLayout } from "@/context/layout"
@@ -79,22 +79,24 @@ export default function Home() {
   return (
     <div class="mx-auto mt-55 w-full md:w-auto px-4">
       <Logo class="md:w-xl opacity-12" />
-      <Button
-        size="large"
-        variant="ghost"
-        class="mt-4 mx-auto text-14-regular text-text-weak"
-        onClick={() => dialog.show(() => <DialogSelectServer />)}
-      >
-        <div
-          classList={{
-            "size-2 rounded-full": true,
-            "bg-icon-success-base": server.healthy() === true,
-            "bg-icon-critical-base": server.healthy() === false,
-            "bg-border-weak-base": server.healthy() === undefined,
-          }}
-        />
-        {server.name}
-      </Button>
+      <Show when={auth.canFeature("servers")}>
+        <Button
+          size="large"
+          variant="ghost"
+          class="mt-4 mx-auto text-14-regular text-text-weak"
+          onClick={() => dialog.show(() => <DialogSelectServer />)}
+        >
+          <div
+            classList={{
+              "size-2 rounded-full": true,
+              "bg-icon-success-base": server.healthy() === true,
+              "bg-icon-critical-base": server.healthy() === false,
+              "bg-border-weak-base": server.healthy() === undefined,
+            }}
+          />
+          {server.name}
+        </Button>
+      </Show>
       <Switch>
         <Match when={sync.data.project.length > 0}>
           <div class="mt-20 w-full flex flex-col gap-4">

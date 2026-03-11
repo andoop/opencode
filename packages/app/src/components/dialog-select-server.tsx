@@ -15,6 +15,7 @@ import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { showToast } from "@opencode-ai/ui/toast"
+import { useAuth } from "@/context/auth"
 
 type ServerStatus = { healthy: boolean; version?: string }
 
@@ -124,6 +125,7 @@ function EditRow(props: EditRowProps) {
 }
 
 export function DialogSelectServer() {
+  const auth = useAuth()
   const navigate = useNavigate()
   const dialog = useDialog()
   const server = useServer()
@@ -147,6 +149,7 @@ export function DialogSelectServer() {
       status: undefined as boolean | undefined,
     },
   })
+  if (!auth.canFeature("servers")) return null
   const [defaultUrl, defaultUrlActions] = createResource(
     async () => {
       try {

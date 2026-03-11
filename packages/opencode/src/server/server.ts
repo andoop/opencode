@@ -74,6 +74,7 @@ export namespace Server {
             if (err instanceof Storage.NotFoundError) status = 404
             else if (err instanceof Provider.ModelNotFoundError) status = 400
             else if (err instanceof Project.DirectoryAccessError) status = 403
+            else if (err.name.startsWith("UserFeature")) status = 403
             else if (err.name.startsWith("ProjectRegistry")) status = 400
             else if (err.name.startsWith("Worktree")) status = 400
             else status = 500
@@ -270,6 +271,7 @@ export namespace Server {
           ),
           validator("json", Auth.Info),
           async (c) => {
+            User.requireFeature("providers")
             const providerID = c.req.valid("param").providerID
             const info = c.req.valid("json")
             await Auth.set(providerID, info)
@@ -301,6 +303,7 @@ export namespace Server {
             }),
           ),
           async (c) => {
+            User.requireFeature("providers")
             const providerID = c.req.valid("param").providerID
             await Auth.remove(providerID)
             return c.json(true)
@@ -555,7 +558,12 @@ export namespace Server {
           }),
           async (c) => {
             const modes = await Agent.list()
-            return c.json(modes)
+            const user = User.current()
+            return c.json(
+              modes.filter((agent) =>
+                User.modeEnabled(agent.name, { role: user?.role, permission: user?.permission }),
+              ),
+            )
           },
         )
         .get(

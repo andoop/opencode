@@ -6,6 +6,7 @@ import { useSync } from "./sync"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { useProviders } from "@/hooks/use-providers"
 import { useModels } from "@/context/models"
+import { useAuth } from "./auth"
 
 export type ModelKey = { providerID: string; modelID: string }
 
@@ -15,6 +16,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const sdk = useSDK()
     const sync = useSync()
     const providers = useProviders()
+    const auth = useAuth()
 
     function isModelValid(model: ModelKey) {
       const provider = providers.all().find((x) => x.id === model.providerID)
@@ -36,7 +38,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     const agent = (() => {
-      const list = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent" && !x.hidden))
+      const list = createMemo(() =>
+        sync.data.agent.filter((x) => x.mode !== "subagent" && !x.hidden && auth.canMode(x.name)),
+      )
       const [store, setStore] = createStore<{
         current?: string
       }>({

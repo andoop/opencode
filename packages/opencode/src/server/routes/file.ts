@@ -7,9 +7,14 @@ import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
 import { Snapshot } from "../../snapshot"
 import { lazy } from "../../util/lazy"
+import { User } from "@/user"
 
 export const FileRoutes = lazy(() =>
   new Hono()
+    .use(async (_, next) => {
+      User.requireFeature("files")
+      return next()
+    })
     .get(
       "/find",
       describeRoute({

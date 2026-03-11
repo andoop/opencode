@@ -807,6 +807,7 @@ export default function Page() {
   }
 
   const addSelectionToContext = (path: string, selection: FileSelection) => {
+    if (!auth.canFeature("files")) return
     const preview = selectionPreview(path, selection)
     prompt.context.add({ type: "file", path, selection, preview })
   }
@@ -818,6 +819,7 @@ export default function Page() {
     preview?: string
     origin?: "review" | "file"
   }) => {
+    if (!auth.canFeature("files")) return
     const selection = selectionFromLines(input.selection)
     const preview = input.preview ?? selectionPreview(input.file, selection)
     const saved = comments.add({
@@ -901,6 +903,7 @@ export default function Page() {
       category: language.t("command.category.file"),
       keybind: "mod+p",
       slash: "open",
+      disabled: !auth.canFeature("files"),
       onSelect: () => dialog.show(() => <DialogSelectFile onOpenFile={() => showAllFiles()} />),
     },
     {
@@ -921,7 +924,7 @@ export default function Page() {
       description: language.t("command.context.addSelection.description"),
       category: language.t("command.category.context"),
       keybind: "mod+shift+l",
-      disabled: (() => {
+      disabled: !auth.canFeature("files") || (() => {
         const active = tabs().active()
         if (!active) return true
         const path = file.pathFromTab(active)
@@ -961,6 +964,7 @@ export default function Page() {
       description: "",
       category: language.t("command.category.view"),
       keybind: "mod+shift+r",
+      disabled: !auth.canFeature("files"),
       onSelect: () => layout.fileTree.toggle(),
     },
     {
@@ -1013,6 +1017,7 @@ export default function Page() {
       category: language.t("command.category.model"),
       keybind: "mod+'",
       slash: "model",
+      disabled: !auth.canFeature("models"),
       onSelect: () => dialog.show(() => <DialogSelectModel />),
     },
     {
@@ -1022,6 +1027,7 @@ export default function Page() {
       category: language.t("command.category.mcp"),
       keybind: "mod+;",
       slash: "mcp",
+      disabled: !auth.canFeature("mcp"),
       onSelect: () => dialog.show(() => <DialogSelectMcp />),
     },
     {
@@ -1323,7 +1329,9 @@ export default function Page() {
     }, 0)
   }
 
-  const contextOpen = createMemo(() => tabs().active() === "context" || tabs().all().includes("context"))
+  const contextOpen = createMemo(
+    () => auth.canFeature("files") && (tabs().active() === "context" || tabs().all().includes("context")),
+  )
   const openedTabs = createMemo(() =>
     tabs()
       .all()
@@ -1349,6 +1357,7 @@ export default function Page() {
   const setActiveDiff = (value: string | undefined) => setTree("activeDiff", value)
 
   const showAllFiles = () => {
+    if (!auth.canFeature("files")) return
     if (fileTreeTab() !== "changes") return
     setFileTreeTab("all")
   }
@@ -2662,23 +2671,25 @@ export default function Page() {
                               {(tab) => <SortableTab tab={tab} onTabClose={tabs().close} />}
                             </For>
                           </SortableProvider>
-                          <StickyAddButton>
-                            <TooltipKeybind
-                              title={language.t("command.file.open")}
-                              keybind={command.keybind("file.open")}
-                              class="flex items-center"
-                            >
-                              <IconButton
-                                icon="plus-small"
-                                variant="ghost"
-                                iconSize="large"
-                                onClick={() =>
-                                  dialog.show(() => <DialogSelectFile mode="files" onOpenFile={() => showAllFiles()} />)
-                                }
-                                aria-label={language.t("command.file.open")}
-                              />
-                            </TooltipKeybind>
-                          </StickyAddButton>
+                          <Show when={auth.canFeature("files")}>
+                            <StickyAddButton>
+                              <TooltipKeybind
+                                title={language.t("command.file.open")}
+                                keybind={command.keybind("file.open")}
+                                class="flex items-center"
+                              >
+                                <IconButton
+                                  icon="plus-small"
+                                  variant="ghost"
+                                  iconSize="large"
+                                  onClick={() =>
+                                    dialog.show(() => <DialogSelectFile mode="files" onOpenFile={() => showAllFiles()} />)
+                                  }
+                                  aria-label={language.t("command.file.open")}
+                                />
+                              </TooltipKeybind>
+                            </StickyAddButton>
+                          </Show>
                         </Tabs.List>
                       </div>
 
@@ -3235,7 +3246,7 @@ export default function Page() {
               </Show>
             </div>
 
-            <Show when={layout.fileTree.opened()}>
+            <Show when={auth.canFeature("files") && layout.fileTree.opened()}>
               <div
                 id="file-tree-panel"
                 class="relative shrink-0 h-full"

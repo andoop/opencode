@@ -570,15 +570,26 @@ function createGlobalSync() {
       // projectMeta is synced from persisted storage in ensureChild.
       // vcs is seeded from persisted storage in ensureChild.
 
+      if (!auth.canFeature("mcp")) {
+        setStore("mcp", {})
+      }
+      if (!auth.canFeature("models") && !auth.canFeature("providers")) {
+        setStore("provider", { all: [], default: {}, connected: [] })
+      }
+
       const blockingRequests = {
         project: () =>
           sdk.project.current().then((x) => setStore("project", x.data!.id)),
-        provider: () =>
-          sdk.provider.list().then((x) => {
-            setStore("provider", normalizeProviderList(x.data!))
-          }),
         agent: () => sdk.app.agents().then((x) => setStore("agent", x.data ?? [])),
         config: () => sdk.config.get().then((x) => setStore("config", x.data!)),
+        ...(auth.canFeature("models") || auth.canFeature("providers")
+          ? {
+              provider: () =>
+                sdk.provider.list().then((x) => {
+                  setStore("provider", normalizeProviderList(x.data!))
+                }),
+            }
+          : {}),
       }
 
       try {
@@ -601,7 +612,7 @@ function createGlobalSync() {
         sdk.command.list().then((x) => setStore("command", x.data ?? [])),
         sdk.session.status().then((x) => setStore("session_status", x.data!)),
         loadSessions(directory),
-        sdk.mcp.status().then((x) => setStore("mcp", x.data!)),
+        ...(auth.canFeature("mcp") ? [sdk.mcp.status().then((x) => setStore("mcp", x.data!))] : []),
         sdk.lsp.status().then((x) => setStore("lsp", x.data!)),
         sdk.vcs.get().then((x) => {
           const next = x.data ?? store.vcs
@@ -1083,6 +1094,10 @@ function createGlobalSync() {
     ])
     const scopedDirectory = auth.isMultiUserEnabled && !auth.isAdmin ? projects[0]?.worktree : undefined
     const shouldLoadScoped = !auth.isMultiUserEnabled || auth.isAdmin || !!scopedDirectory
+    if (!auth.canFeature("models") && !auth.canFeature("providers")) {
+      setGlobalStore("provider", { all: [], default: {}, connected: [] })
+      setGlobalStore("provider_auth", {})
+    }
     if (shouldLoadScoped) {
       const sdk = scopedDirectory ? sdkFor(scopedDirectory) : globalSDK.client
       results.push(
@@ -1092,16 +1107,24 @@ function createGlobalSync() {
               setGlobalStore("path", x.data!)
             }),
           ),
-          task("provider.list", () =>
-            sdk.provider.list().then((x) => {
-              setGlobalStore("provider", normalizeProviderList(x.data!))
-            }),
-          ),
-          task("provider.auth", () =>
-            sdk.provider.auth().then((x) => {
-              setGlobalStore("provider_auth", x.data ?? {})
-            }),
-          ),
+          ...(auth.canFeature("models") || auth.canFeature("providers")
+            ? [
+                task("provider.list", () =>
+                  sdk.provider.list().then((x) => {
+                    setGlobalStore("provider", normalizeProviderList(x.data!))
+                  }),
+                ),
+              ]
+            : []),
+          ...(auth.canFeature("providers")
+            ? [
+                task("provider.auth", () =>
+                  sdk.provider.auth().then((x) => {
+                    setGlobalStore("provider_auth", x.data ?? {})
+                  }),
+                ),
+              ]
+            : []),
         ])),
       )
     }

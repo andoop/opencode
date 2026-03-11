@@ -1005,7 +1005,10 @@ export namespace ACP {
       const model = await defaultModel(this.config, directory)
       const sessionId = params.sessionId
 
-      const providers = await this.sdk.config.providers({ directory }).then((x) => x.data!.providers)
+      const providers = await this.sdk.config
+        .providers({ directory })
+        .then((x) => x.data!.providers)
+        .catch(() => [])
       const entries = sortProvidersByName(providers)
       const availableVariants = modelVariantsFromProviders(entries, model)
       const currentVariant = this.sessionManager.getVariant(sessionId)
@@ -1112,6 +1115,10 @@ export namespace ACP {
       const providers = await this.sdk.config
         .providers({ directory: session.cwd }, { throwOnError: true })
         .then((x) => x.data!.providers)
+        .catch(() => [])
+      if (providers.length === 0) {
+        throw new Error("Model selection is disabled")
+      }
 
       const selection = parseModelSelection(params.modelId, providers)
       this.sessionManager.setModel(session.id, selection.model)

@@ -1996,7 +1996,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </div>
           </div>
         </Show>
-        <Show when={prompt.context.items().length > 0}>
+        <Show when={auth.canFeature("files") && prompt.context.items().length > 0}>
           <div class="flex flex-nowrap items-start gap-2 p-2 overflow-x-auto no-scrollbar">
             <For each={prompt.context.items()}>
               {(item) => {
@@ -2176,20 +2176,42 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     variant="ghost"
                   />
                 </TooltipKeybind>
-                <Show
-                  when={providers.paid().length > 0}
-                  fallback={
+                <Show when={auth.canFeature("models")}>
+                  <Show
+                    when={providers.paid().length > 0}
+                    fallback={
+                      <TooltipKeybind
+                        placement="top"
+                        gutter={8}
+                        title={language.t("command.model.choose")}
+                        keybind={command.keybind("model.choose")}
+                      >
+                        <Button
+                          as="div"
+                          variant="ghost"
+                          class="px-2 min-w-0 max-w-[240px]"
+                          onClick={() => dialog.show(() => <DialogSelectModelUnpaid />)}
+                        >
+                          <Show when={local.model.current()?.provider?.id}>
+                            <ProviderIcon id={local.model.current()!.provider.id as IconName} class="size-4 shrink-0" />
+                          </Show>
+                          <span class="truncate">
+                            {local.model.current()?.name ?? language.t("dialog.model.select.title")}
+                          </span>
+                          <Icon name="chevron-down" size="small" class="shrink-0" />
+                        </Button>
+                      </TooltipKeybind>
+                    }
+                  >
                     <TooltipKeybind
                       placement="top"
                       gutter={8}
                       title={language.t("command.model.choose")}
                       keybind={command.keybind("model.choose")}
                     >
-                      <Button
-                        as="div"
-                        variant="ghost"
-                        class="px-2 min-w-0 max-w-[240px]"
-                        onClick={() => dialog.show(() => <DialogSelectModelUnpaid />)}
+                      <ModelSelectorPopover
+                        triggerAs={Button}
+                        triggerProps={{ variant: "ghost", class: "min-w-0 max-w-[240px]" }}
                       >
                         <Show when={local.model.current()?.provider?.id}>
                           <ProviderIcon id={local.model.current()!.provider.id as IconName} class="size-4 shrink-0" />
@@ -2198,31 +2220,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                           {local.model.current()?.name ?? language.t("dialog.model.select.title")}
                         </span>
                         <Icon name="chevron-down" size="small" class="shrink-0" />
-                      </Button>
+                      </ModelSelectorPopover>
                     </TooltipKeybind>
-                  }
-                >
-                  <TooltipKeybind
-                    placement="top"
-                    gutter={8}
-                    title={language.t("command.model.choose")}
-                    keybind={command.keybind("model.choose")}
-                  >
-                    <ModelSelectorPopover
-                      triggerAs={Button}
-                      triggerProps={{ variant: "ghost", class: "min-w-0 max-w-[240px]" }}
-                    >
-                      <Show when={local.model.current()?.provider?.id}>
-                        <ProviderIcon id={local.model.current()!.provider.id as IconName} class="size-4 shrink-0" />
-                      </Show>
-                      <span class="truncate">
-                        {local.model.current()?.name ?? language.t("dialog.model.select.title")}
-                      </span>
-                      <Icon name="chevron-down" size="small" class="shrink-0" />
-                    </ModelSelectorPopover>
-                  </TooltipKeybind>
+                  </Show>
                 </Show>
-                <Show when={local.model.variant.list().length > 0}>
+                <Show when={auth.canFeature("models") && local.model.variant.list().length > 0}>
                   <TooltipKeybind
                     placement="top"
                     gutter={8}
@@ -2285,8 +2287,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               }}
             />
             <div class="flex items-center gap-1 mr-1">
-              <SessionContextUsage />
-              <Show when={store.mode === "normal"}>
+              <Show when={auth.canFeature("files")}>
+                <SessionContextUsage />
+              </Show>
+              <Show when={auth.canFeature("files") && store.mode === "normal"}>
                 <Tooltip placement="top" value={language.t("prompt.action.attachFile")}>
                   <Button
                     type="button"

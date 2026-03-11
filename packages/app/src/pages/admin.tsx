@@ -1,6 +1,7 @@
 import { createSignal, createResource, For, Show } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
-import { useAuth, type AuthUser } from "@/context/auth"
+import { FEATURE_DEFAULTS, useAuth } from "@/context/auth"
 import { useServer } from "@/context/server"
 import { usePlatform } from "@/context/platform"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -19,6 +20,18 @@ interface UserInfo {
     level: "full" | "readonly" | "custom"
     custom?: Record<string, string>
     allowed_agents?: string[]
+    features?: {
+      modes?: {
+        ask?: boolean
+        build?: boolean
+        plan?: boolean
+      }
+      files?: boolean
+      models?: boolean
+      providers?: boolean
+      servers?: boolean
+      mcp?: boolean
+    }
   }
   time: {
     created: number
@@ -38,6 +51,96 @@ interface RegistryProject {
     created: number
     updated: number
   }
+}
+
+type FeatureState = {
+  modes: {
+    ask: boolean
+    build: boolean
+    plan: boolean
+  }
+  files: boolean
+  models: boolean
+  providers: boolean
+  servers: boolean
+  mcp: boolean
+}
+
+const FEATURE_ROWS = [
+  { id: "modes.ask", label: "Ask 模式", description: "允许使用 ask 只读模式" },
+  { id: "modes.build", label: "Build 模式", description: "允许使用 build 模式" },
+  { id: "modes.plan", label: "Plan 模式", description: "允许使用 plan 模式" },
+  { id: "files", label: "文件功能", description: "文件树、文件选择、上下文文件、Git/文件相关视图" },
+  { id: "models", label: "模型入口", description: "模型选择和模型管理入口" },
+  { id: "providers", label: "供应商入口", description: "供应商连接、断开和自定义供应商配置" },
+  { id: "servers", label: "服务器入口", description: "服务器切换与服务器管理入口" },
+  { id: "mcp", label: "MCP 管理", description: "MCP 列表、开关与管理入口" },
+] as const
+
+function createFeatures(permission?: UserInfo["permission"]): FeatureState {
+  return {
+    modes: {
+      ask: permission?.features?.modes?.ask ?? FEATURE_DEFAULTS.modes.ask,
+      build: permission?.features?.modes?.build ?? FEATURE_DEFAULTS.modes.build,
+      plan: permission?.features?.modes?.plan ?? FEATURE_DEFAULTS.modes.plan,
+    },
+    files: permission?.features?.files ?? FEATURE_DEFAULTS.files,
+    models: permission?.features?.models ?? FEATURE_DEFAULTS.models,
+    providers: permission?.features?.providers ?? FEATURE_DEFAULTS.providers,
+    servers: permission?.features?.servers ?? FEATURE_DEFAULTS.servers,
+    mcp: permission?.features?.mcp ?? FEATURE_DEFAULTS.mcp,
+  }
+}
+
+function FeatureMatrix(props: {
+  value: FeatureState
+  disabled?: boolean
+  onToggle: (id: (typeof FEATURE_ROWS)[number]["id"], checked: boolean) => void
+}) {
+  return (
+    <div class="rounded border border-outline-dimmed p-4 space-y-3">
+      <div>
+        <p class="text-sm text-color-primary">功能权限矩阵</p>
+        <p class="text-xs text-color-secondary">未勾选的功能会在前端隐藏，后端也会拒绝对应请求。</p>
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-outline-dimmed">
+            <th class="pb-2 text-left font-medium">功能</th>
+            <th class="pb-2 text-left font-medium">说明</th>
+            <th class="pb-2 text-right font-medium">启用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <For each={FEATURE_ROWS}>
+            {(row) => {
+              const checked = () => {
+                if (row.id === "modes.ask") return props.value.modes.ask
+                if (row.id === "modes.build") return props.value.modes.build
+                if (row.id === "modes.plan") return props.value.modes.plan
+                return props.value[row.id]
+              }
+
+              return (
+                <tr class="border-b border-outline-dimmed last:border-0">
+                  <td class="py-3 pr-3 align-top">{row.label}</td>
+                  <td class="py-3 pr-3 align-top text-color-secondary">{row.description}</td>
+                  <td class="py-3 text-right align-top">
+                    <input
+                      type="checkbox"
+                      checked={checked()}
+                      disabled={props.disabled}
+                      onChange={(e) => props.onToggle(row.id, e.currentTarget.checked)}
+                    />
+                  </td>
+                </tr>
+              )
+            }}
+          </For>
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 export default function AdminPage() {
@@ -107,10 +210,32 @@ export default function AdminPage() {
   const [newCustomWrite, setNewCustomWrite] = createSignal<"allow" | "ask" | "deny">("allow")
   const [newCustomBash, setNewCustomBash] = createSignal<"allow" | "ask" | "deny">("ask")
   const [newCustomRead, setNewCustomRead] = createSignal<"allow" | "ask" | "deny">("allow")
+  const [newFeatures, setNewFeatures] = createStore<FeatureState>(createFeatures())
+  const [editFeatures, setEditFeatures] = createStore<FeatureState>(createFeatures())
 
   // Reset password form state
   const [newPasswordReset, setNewPasswordReset] = createSignal("")
   const [projectName, setProjectName] = createSignal("")
+
+  const toggleFeatures = (
+    setFeatures: typeof setNewFeatures,
+    id: (typeof FEATURE_ROWS)[number]["id"],
+    checked: boolean,
+  ) => {
+    if (id === "modes.ask") {
+      setFeatures("modes", "ask", checked)
+      return
+    }
+    if (id === "modes.build") {
+      setFeatures("modes", "build", checked)
+      return
+    }
+    if (id === "modes.plan") {
+      setFeatures("modes", "plan", checked)
+      return
+    }
+    setFeatures(id, checked)
+  }
 
   const createUser = async () => {
     setError(null)
@@ -122,6 +247,16 @@ export default function AdminPage() {
           write: newCustomWrite(),
           bash: newCustomBash(),
           read: newCustomRead(),
+        }
+      }
+      if (newRole() !== "admin") {
+        permission.features = {
+          modes: { ...newFeatures.modes },
+          files: newFeatures.files,
+          models: newFeatures.models,
+          providers: newFeatures.providers,
+          servers: newFeatures.servers,
+          mcp: newFeatures.mcp,
         }
       }
 
@@ -155,6 +290,7 @@ export default function AdminPage() {
       setNewCustomWrite("allow")
       setNewCustomBash("ask")
       setNewCustomRead("allow")
+      setNewFeatures(createFeatures())
       void refetch()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create user")
@@ -174,6 +310,16 @@ export default function AdminPage() {
           write: editCustomWrite(),
           bash: editCustomBash(),
           read: editCustomRead(),
+        }
+      }
+      if (editRole() !== "admin") {
+        permission.features = {
+          modes: { ...editFeatures.modes },
+          files: editFeatures.files,
+          models: editFeatures.models,
+          providers: editFeatures.providers,
+          servers: editFeatures.servers,
+          mcp: editFeatures.mcp,
         }
       }
 
@@ -364,6 +510,7 @@ export default function AdminPage() {
       setEditCustomBash("ask")
       setEditCustomRead("allow")
     }
+    setEditFeatures(createFeatures(user.permission))
     setShowEditDialog(true)
   }
 
@@ -653,6 +800,19 @@ export default function AdminPage() {
                   </div>
                 </div>
               </Show>
+              <Show
+                when={newRole() !== "admin"}
+                fallback={
+                  <div class="rounded border border-outline-dimmed p-4 text-sm text-color-secondary">
+                    Admin users always have all feature permissions enabled.
+                  </div>
+                }
+              >
+                <FeatureMatrix
+                  value={newFeatures}
+                  onToggle={(id, checked) => toggleFeatures(setNewFeatures, id, checked)}
+                />
+              </Show>
             </div>
 
             <div class="mt-6 flex justify-end gap-3">
@@ -770,6 +930,19 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
+              </Show>
+              <Show
+                when={editRole() !== "admin"}
+                fallback={
+                  <div class="rounded border border-outline-dimmed p-4 text-sm text-color-secondary">
+                    Admin users always have all feature permissions enabled.
+                  </div>
+                }
+              >
+                <FeatureMatrix
+                  value={editFeatures}
+                  onToggle={(id, checked) => toggleFeatures(setEditFeatures, id, checked)}
+                />
               </Show>
             </div>
 

@@ -1087,12 +1087,14 @@ export default function Layout(props: ParentProps) {
         id: "provider.connect",
         title: language.t("command.provider.connect"),
         category: language.t("command.category.provider"),
+        disabled: !auth.canFeature("providers"),
         onSelect: () => connectProvider(),
       },
       {
         id: "server.switch",
         title: language.t("command.server.switch"),
         category: language.t("command.category.server"),
+        disabled: !auth.canFeature("servers"),
         onSelect: () => openServer(),
       },
       {
@@ -1227,10 +1229,12 @@ export default function Layout(props: ParentProps) {
   })
 
   function connectProvider() {
+    if (!auth.canFeature("providers")) return
     dialog.show(() => <DialogSelectProvider />)
   }
 
   function openServer() {
+    if (!auth.canFeature("servers")) return
     dialog.show(() => <DialogSelectServer />)
   }
 
@@ -3061,14 +3065,16 @@ export default function Layout(props: ParentProps) {
               <div class="text-text-base">{language.t("sidebar.gettingStarted.line1")}</div>
               <div class="text-text-base">{language.t("sidebar.gettingStarted.line2")}</div>
             </div>
-            <Button
-              class="flex w-full text-left justify-start text-12-medium text-text-strong stroke-[1.5px] rounded-md rounded-t-none shadow-none border-t border-border-weak-base px-3"
-              size="large"
-              icon="plus"
-              onClick={connectProvider}
-            >
-              {language.t("command.provider.connect")}
-            </Button>
+            <Show when={auth.canFeature("providers")}>
+              <Button
+                class="flex w-full text-left justify-start text-12-medium text-text-strong stroke-[1.5px] rounded-md rounded-t-none shadow-none border-t border-border-weak-base px-3"
+                size="large"
+                icon="plus"
+                onClick={connectProvider}
+              >
+                {language.t("command.provider.connect")}
+              </Button>
+            </Show>
           </div>
         </div>
       </div>

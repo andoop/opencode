@@ -10,8 +10,28 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
+import { User } from "@/user"
 
 const log = Log.create({ service: "server" })
+
+function assertConfigFeatureAccess(config: z.infer<typeof Config.Info>) {
+  if ((config.model !== undefined || config.small_model !== undefined) && !User.featureEnabled("models")) {
+    User.requireFeature("models")
+  }
+
+  if (
+    (config.provider !== undefined ||
+      config.disabled_providers !== undefined ||
+      config.enabled_providers !== undefined) &&
+    !User.featureEnabled("providers")
+  ) {
+    User.requireFeature("providers")
+  }
+
+  if (config.mcp !== undefined && !User.featureEnabled("mcp")) {
+    User.requireFeature("mcp")
+  }
+}
 
 export const GlobalDisposedEvent = BusEvent.define("global.disposed", z.object({}))
 
@@ -147,6 +167,7 @@ export const GlobalRoutes = lazy(() =>
       validator("json", Config.Info),
       async (c) => {
         const config = c.req.valid("json")
+        assertConfigFeatureAccess(config)
         const next = await Config.updateGlobal(config)
         return c.json(next)
       },

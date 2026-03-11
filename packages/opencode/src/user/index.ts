@@ -10,6 +10,18 @@ import z from "zod"
 
 export namespace User {
   const log = Log.create({ service: "user" })
+  const FEATURE_DEFAULTS = {
+    modes: {
+      ask: true,
+      build: true,
+      plan: true,
+    },
+    files: true,
+    models: true,
+    providers: true,
+    servers: true,
+    mcp: true,
+  } as const
 
   // Permission schemas
   export const PermissionLevel = z.enum(["full", "readonly", "custom"])
@@ -26,10 +38,44 @@ export namespace User {
   })
   export type CustomPermission = z.infer<typeof CustomPermission>
 
+  export const FeatureModes = z.object({
+    ask: z.boolean().optional(),
+    build: z.boolean().optional(),
+    plan: z.boolean().optional(),
+  })
+  export type FeatureModes = z.infer<typeof FeatureModes>
+
+  export const Features = z.object({
+    modes: FeatureModes.optional(),
+    files: z.boolean().optional(),
+    models: z.boolean().optional(),
+    providers: z.boolean().optional(),
+    servers: z.boolean().optional(),
+    mcp: z.boolean().optional(),
+  })
+  export type Features = z.infer<typeof Features>
+
+  export type ResolvedFeatures = {
+    modes: {
+      ask: boolean
+      build: boolean
+      plan: boolean
+    }
+    files: boolean
+    models: boolean
+    providers: boolean
+    servers: boolean
+    mcp: boolean
+  }
+
+  export type FeatureKey = Exclude<keyof ResolvedFeatures, "modes">
+  export type FeatureModeKey = keyof ResolvedFeatures["modes"]
+
   export const Permission = z.object({
     level: PermissionLevel,
     custom: CustomPermission.optional(),
     allowed_agents: z.array(z.enum(["build", "ask", "plan"])).optional(),
+    features: Features.optional(),
   })
   export type Permission = z.infer<typeof Permission>
 
@@ -85,6 +131,11 @@ export namespace User {
     z.object({ message: z.string() }),
   )
 
+  export const FeatureDisabledError = NamedError.create(
+    "UserFeatureDisabledError",
+    z.object({ feature: z.string() }),
+  )
+
   // User context for request scoping
   export interface UserContext {
     id: string
@@ -112,6 +163,61 @@ export namespace User {
 
   export function isAuthenticated(): boolean {
     return current() !== null
+  }
+
+  export function features(input?: { role?: Role; permission?: Permission }): ResolvedFeatures {
+    const role = input?.role ?? current()?.role
+    if (role === "admin") {
+      return {
+        modes: { ...FEATURE_DEFAULTS.modes },
+        files: true,
+        models: true,
+        providers: true,
+        servers: true,
+        mcp: true,
+      }
+    }
+
+    const feature = input?.permission?.features
+    return {
+      modes: {
+        ask: feature?.modes?.ask ?? FEATURE_DEFAULTS.modes.ask,
+        build: feature?.modes?.build ?? FEATURE_DEFAULTS.modes.build,
+        plan: feature?.modes?.plan ?? FEATURE_DEFAULTS.modes.plan,
+      },
+      files: feature?.files ?? FEATURE_DEFAULTS.files,
+      models: feature?.models ?? FEATURE_DEFAULTS.models,
+      providers: feature?.providers ?? FEATURE_DEFAULTS.providers,
+      servers: feature?.servers ?? FEATURE_DEFAULTS.servers,
+      mcp: feature?.mcp ?? FEATURE_DEFAULTS.mcp,
+    }
+  }
+
+  export function modeEnabled(name: string, input?: { role?: Role; permission?: Permission }) {
+    const role = input?.role ?? current()?.role
+    if (role === "admin") return true
+
+    if (name !== "ask" && name !== "build" && name !== "plan") return true
+
+    const permission = input?.permission ?? current()?.permission
+    const enabled = features({ role, permission }).modes[name]
+    if (!enabled) return false
+    if (!permission?.allowed_agents) return true
+    return permission.allowed_agents.includes(name)
+  }
+
+  export function featureEnabled(key: FeatureKey, input?: { role?: Role; permission?: Permission }) {
+    return features(input)[key]
+  }
+
+  export function requireMode(name: string, input?: { role?: Role; permission?: Permission }) {
+    if (modeEnabled(name, input)) return
+    throw new FeatureDisabledError({ feature: `modes.${name}` })
+  }
+
+  export function requireFeature(key: FeatureKey, input?: { role?: Role; permission?: Permission }) {
+    if (featureEnabled(key, input)) return
+    throw new FeatureDisabledError({ feature: key })
   }
 
   // Helper to omit password

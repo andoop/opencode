@@ -38,6 +38,7 @@ import { ConfigMarkdown } from "../config/markdown"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@opencode-ai/util/error"
 import { fn } from "@/util/fn"
+import { User } from "@/user"
 import { SessionProcessor } from "./processor"
 import { TaskTool } from "@/tool/task"
 import { Tool } from "@/tool/tool"
@@ -651,6 +652,23 @@ export namespace SessionPrompt {
     return Provider.defaultModel()
   }
 
+  function sameModel(a: ReturnType<typeof Provider.parseModel>, b: ReturnType<typeof Provider.parseModel>) {
+    return a.providerID === b.providerID && a.modelID === b.modelID
+  }
+
+  async function assertPromptFeatureAccess(input: {
+    agent: string
+    model?: ReturnType<typeof Provider.parseModel>
+    sessionID: string
+    files: number
+  }) {
+    User.requireMode(input.agent)
+    if (input.files > 0) User.requireFeature("files")
+    if (!input.model || User.featureEnabled("models")) return
+    if (sameModel(input.model, await lastModel(input.sessionID))) return
+    User.requireFeature("models")
+  }
+
   async function resolveTools(input: {
     agent: Agent.Info
     model: Provider.Model
@@ -833,9 +851,16 @@ export namespace SessionPrompt {
   }
 
   async function createUserMessage(input: PromptInput) {
-    const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
+    const agentName = input.agent ?? (await Agent.defaultAgent())
+    const agent = await Agent.get(agentName)
 
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    await assertPromptFeatureAccess({
+      agent: agent.name,
+      model: input.model,
+      sessionID: input.sessionID,
+      files: input.parts.filter((part) => part.type === "file").length,
+    })
     const variant =
       input.variant ??
       (agent.variant &&
@@ -1638,6 +1663,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     log.info("command", input)
     const command = await Command.get(input.command)
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
+    await assertPromptFeatureAccess({
+      agent: agentName,
+      model: input.model ? Provider.parseModel(input.model) : undefined,
+      sessionID: input.sessionID,
+      files: input.parts?.length ?? 0,
+    })
 
     const raw = input.arguments.match(argsRegex) ?? []
     const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))

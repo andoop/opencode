@@ -5,12 +5,15 @@ import { Dialog } from "@opencode-ai/ui/dialog"
 import { List } from "@opencode-ai/ui/list"
 import { Switch } from "@opencode-ai/ui/switch"
 import { useLanguage } from "@/context/language"
+import { useAuth } from "@/context/auth"
 
 export const DialogSelectMcp: Component = () => {
+  const auth = useAuth()
   const sync = useSync()
   const sdk = useSDK()
   const language = useLanguage()
   const [loading, setLoading] = createSignal<string | null>(null)
+  if (!auth.canFeature("mcp")) return null
 
   const items = createMemo(() =>
     Object.entries(sync.data.mcp ?? {})

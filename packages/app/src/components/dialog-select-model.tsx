@@ -14,6 +14,7 @@ import { DialogSelectProvider } from "./dialog-select-provider"
 import { DialogManageModels } from "./dialog-manage-models"
 import { ModelTooltip } from "./model-tooltip"
 import { useLanguage } from "@/context/language"
+import { useAuth } from "@/context/auth"
 
 const ModelList: Component<{
   provider?: string
@@ -105,6 +106,7 @@ export function ModelSelectorPopover<T extends ValidComponent = "div">(props: {
     content: undefined,
   })
   const dialog = useDialog()
+  const auth = useAuth()
 
   const handleManage = () => {
     setStore("open", false)
@@ -213,16 +215,18 @@ export function ModelSelectorPopover<T extends ValidComponent = "div">(props: {
             class="p-1"
             action={
               <div class="flex items-center gap-1">
-                <Tooltip placement="top" value={language.t("command.provider.connect")}>
-                  <IconButton
-                    icon="plus-small"
-                    variant="ghost"
-                    iconSize="normal"
-                    class="size-6"
-                    aria-label={language.t("command.provider.connect")}
-                    onClick={handleConnectProvider}
-                  />
-                </Tooltip>
+                <Show when={auth.canFeature("providers")}>
+                  <Tooltip placement="top" value={language.t("command.provider.connect")}>
+                    <IconButton
+                      icon="plus-small"
+                      variant="ghost"
+                      iconSize="normal"
+                      class="size-6"
+                      aria-label={language.t("command.provider.connect")}
+                      onClick={handleConnectProvider}
+                    />
+                  </Tooltip>
+                </Show>
                 <Tooltip placement="top" value={language.t("dialog.model.manage")}>
                   <IconButton
                     icon="sliders"
@@ -243,21 +247,25 @@ export function ModelSelectorPopover<T extends ValidComponent = "div">(props: {
 }
 
 export const DialogSelectModel: Component<{ provider?: string }> = (props) => {
+  const auth = useAuth()
   const dialog = useDialog()
   const language = useLanguage()
+  if (!auth.canFeature("models")) return null
 
   return (
     <Dialog
       title={language.t("dialog.model.select.title")}
       action={
-        <Button
-          class="h-7 -my-1 text-14-medium"
-          icon="plus-small"
-          tabIndex={-1}
-          onClick={() => dialog.show(() => <DialogSelectProvider />)}
-        >
-          {language.t("command.provider.connect")}
-        </Button>
+        <Show when={auth.canFeature("providers")}>
+          <Button
+            class="h-7 -my-1 text-14-medium"
+            icon="plus-small"
+            tabIndex={-1}
+            onClick={() => dialog.show(() => <DialogSelectProvider />)}
+          >
+            {language.t("command.provider.connect")}
+          </Button>
+        </Show>
       }
     >
       <ModelList provider={props.provider} onSelect={() => dialog.close()} />
