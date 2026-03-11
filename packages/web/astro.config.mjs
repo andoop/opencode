@@ -31,14 +31,14 @@ export default defineConfig({
     configSchema(),
     solidJs(),
     starlight({
-      title: "OpenCode",
-      favicon: "/favicon-v3.svg",
+      title: "RealseeCode",
+      favicon: "/favicon-v4.svg",
       head: [
         {
           tag: "link",
           attrs: {
             rel: "icon",
-            href: "/favicon-v3.ico",
+            href: "/favicon-32x32-v4.png",
             sizes: "32x32",
           },
         },
@@ -47,7 +47,7 @@ export default defineConfig({
           attrs: {
             rel: "icon",
             type: "image/png",
-            href: "/favicon-96x96-v3.png",
+            href: "/favicon-96x96-v4.png",
             sizes: "96x96",
           },
         },
@@ -55,7 +55,7 @@ export default defineConfig({
           tag: "link",
           attrs: {
             rel: "apple-touch-icon",
-            href: "/apple-touch-icon-v3.png",
+            href: "/apple-touch-icon-v4.png",
             sizes: "180x180",
           },
         },

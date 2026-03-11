@@ -14,7 +14,7 @@ export default function App() {
       root={(props) => (
         <MetaProvider>
           <Title>opencode</Title>
-          <Meta name="description" content="OpenCode - The open source coding agent." />
+          <Meta name="description" content="RealseeCode - The open source coding agent." />
           <Favicon />
           <Font />
           <Suspense>{props.children}</Suspense>

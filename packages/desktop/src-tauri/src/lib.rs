@@ -551,7 +551,7 @@ async fn spawn_local_server(
         if timestamp.elapsed() > Duration::from_secs(30) {
             let _ = child.kill();
             break Err(format!(
-                "Failed to spawn OpenCode Server. Logs:\n{}",
+                "Failed to spawn RealseeCode Server. Logs:\n{}",
                 get_logs(app.clone()).await.unwrap()
             ));
         }

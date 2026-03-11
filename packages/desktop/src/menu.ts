@@ -15,7 +15,7 @@ export async function createMenu() {
   const menu = await Menu.new({
     items: [
       await Submenu.new({
-        text: "OpenCode",
+        text: "RealseeCode",
         items: [
           await PredefinedMenuItem.new({
             item: { About: null },

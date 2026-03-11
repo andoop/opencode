@@ -41,7 +41,7 @@ export default function LoginPage() {
     >
       <div class="w-full max-w-md space-y-8 rounded-lg border border-outline-dimmed bg-background-frame p-8">
         <div class="text-center">
-          <h1 class="text-2xl font-semibold text-color-primary">OpenCode</h1>
+          <h1 class="text-2xl font-semibold text-color-primary">RealseeCode</h1>
           <p class="mt-2 text-sm text-color-secondary">Sign in to your account</p>
         </div>
 

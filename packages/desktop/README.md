@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# RealseeCode Desktop
 
-Native OpenCode desktop app, built with Tauri v2.
+Native RealseeCode desktop app, built with Tauri v2.
 
 ## Development
 

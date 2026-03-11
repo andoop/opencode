@@ -1,17 +1,17 @@
 ---
 title: Providers
-description: Using any LLM provider in OpenCode.
+description: Using any LLM provider in RealseeCode.
 ---
 
 import config from "../../../config.mjs"
 export const console = config.console
 
-OpenCode uses the [AI SDK](https://ai-sdk.dev/) and [Models.dev](https://models.dev) to support **75+ LLM providers** and it supports running local models.
+RealseeCode uses the [AI SDK](https://ai-sdk.dev/) and [Models.dev](https://models.dev) to support **75+ LLM providers** and it supports running local models.
 
 To add a provider you need to:
 
 1. Add the API keys for the provider using the `/connect` command.
-2. Configure the provider in your OpenCode config.
+2. Configure the provider in your RealseeCode config.
 
 ---
 
@@ -24,7 +24,7 @@ in `~/.local/share/opencode/auth.json`.
 
 ### Config
 
-You can customize the providers through the `provider` section in your OpenCode
+You can customize the providers through the `provider` section in your RealseeCode
 config.
 
 ---
@@ -48,13 +48,13 @@ You can customize the base URL for any provider by setting the `baseURL` option.
 
 ---
 
-## OpenCode Zen
+## RealseeCode Zen
 
-OpenCode Zen is a list of models provided by the OpenCode team that have been
-tested and verified to work well with OpenCode. [Learn more](/docs/zen).
+RealseeCode Zen is a list of models provided by the RealseeCode team that have been
+tested and verified to work well with RealseeCode. [Learn more](/docs/zen).
 
 :::tip
-If you are new, we recommend starting with OpenCode Zen.
+If you are new, we recommend starting with RealseeCode Zen.
 :::
 
 1. Run the `/connect` command in the TUI, select opencode, and head to [opencode.ai/auth](https://opencode.ai/auth).
@@ -80,7 +80,7 @@ If you are new, we recommend starting with OpenCode Zen.
    /models
    ```
 
-It works like any other provider in OpenCode and is completely optional to use.
+It works like any other provider in RealseeCode and is completely optional to use.
 
 ---
 
@@ -124,7 +124,7 @@ Don't see a provider here? Submit a PR.
 
 ### Amazon Bedrock
 
-To use Amazon Bedrock with OpenCode:
+To use Amazon Bedrock with RealseeCode:
 
 1. Head over to the **Model catalog** in the Amazon Bedrock console and request
    access to the models you want.
@@ -279,7 +279,7 @@ For custom inference profiles, use the model and provider name in the key and se
    ```
 
 :::info
-Using your Claude Pro/Max subscription in OpenCode is not officially supported by [Anthropic](https://anthropic.com).
+Using your Claude Pro/Max subscription in RealseeCode is not officially supported by [Anthropic](https://anthropic.com).
 :::
 
 ##### Using API keys
@@ -292,7 +292,7 @@ Or if you already have an API key, you can select **Manually enter API Key** and
 
 ### Cursor CLI
 
-OpenCode can use your local Cursor CLI installation as an agent backend.
+RealseeCode can use your local Cursor CLI installation as an agent backend.
 
 1. Install Cursor CLI and make sure the `agent` command is available in your shell.
 
@@ -302,18 +302,18 @@ OpenCode can use your local Cursor CLI installation as an agent backend.
    agent login
    ```
 
-3. Select **Cursor CLI** inside OpenCode.
+3. Select **Cursor CLI** inside RealseeCode.
 
 4. Choose the `auto` model and start your session.
 
-OpenCode forwards its session context and prompts to Cursor CLI, and exposes additional OpenCode tools to Cursor through a local MCP bridge.
+RealseeCode forwards its session context and prompts to Cursor CLI, and exposes additional RealseeCode tools to Cursor through a local MCP bridge.
 
 The first release focuses on high-value bridged tools:
 
 - file read and search tools
 - shell execution
 - edit and write tools
-- MCP tools that are already configured in OpenCode
+- MCP tools that are already configured in RealseeCode
 
 If Cursor CLI is not installed, this provider will not appear in the provider list.
 
@@ -691,7 +691,7 @@ GitLab Duo provides AI-powered agentic chat with native tool calling capabilitie
    #### Using Personal Access Token
    1. Go to [GitLab User Settings > Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens)
    2. Click **Add new token**
-   3. Name: `OpenCode`, Scopes: `api`
+   3. Name: `RealseeCode`, Scopes: `api`
    4. Copy the token (starts with `glpat-`)
    5. Enter it in the terminal
 
@@ -714,8 +714,8 @@ to store token in opencode auth storage.
 ##### Self-Hosted GitLab
 
 :::note[compliance note]
-OpenCode uses a small model for some AI tasks like generating the session title.
-It is configured to use gpt-5-nano by default, hosted by Zen. To lock OpenCode
+RealseeCode uses a small model for some AI tasks like generating the session title.
+It is configured to use gpt-5-nano by default, hosted by Zen. To lock RealseeCode
 to only use your own GitLab-hosted instance, add the following to your
 `opencode.json` file. It is also recommended to disable session sharing.
 
@@ -852,7 +852,7 @@ Some models need to be manually enabled in your [GitHub Copilot settings](https:
 
 ### Google Vertex AI
 
-To use Google Vertex AI with OpenCode:
+To use Google Vertex AI with RealseeCode:
 
 1. Head over to the **Model Garden** in the Google Cloud Console and check the
    models available in your region.
@@ -1048,7 +1048,7 @@ Add it to your config.
 }
 ```
 
-The plugin injects `Helicone-Session-Id` and `Helicone-Session-Name` headers into your requests. In Helicone's Sessions page, you'll see each OpenCode conversation listed as a separate session.
+The plugin injects `Helicone-Session-Id` and `Helicone-Session-Name` headers into your requests. In Helicone's Sessions page, you'll see each RealseeCode conversation listed as a separate session.
 
 ##### Common Helicone headers
 
@@ -1291,13 +1291,13 @@ If tool calls aren't working, try increasing `num_ctx` in Ollama. Start around 1
 
 ### Ollama Cloud
 
-To use Ollama Cloud with OpenCode:
+To use Ollama Cloud with RealseeCode:
 
 1. Head over to [https://ollama.com/](https://ollama.com/) and sign in or create an account.
 
 2. Navigate to **Settings** > **Keys** and click **Add API Key** to generate a new API key.
 
-3. Copy the API key for use in OpenCode.
+3. Copy the API key for use in RealseeCode.
 
 4. Run the `/connect` command and search for **Ollama Cloud**.
 
@@ -1314,7 +1314,7 @@ To use Ollama Cloud with OpenCode:
    └ enter
    ```
 
-6. **Important**: Before using cloud models in OpenCode, you must pull the model information locally:
+6. **Important**: Before using cloud models in RealseeCode, you must pull the model information locally:
 
    ```bash
    ollama pull gpt-oss:20b-cloud
@@ -1361,19 +1361,19 @@ If you already have an API key, you can select **Manually enter API Key** and pa
 
 ---
 
-### OpenCode Zen
+### RealseeCode Zen
 
-OpenCode Zen is a list of tested and verified models provided by the OpenCode team. [Learn more](/docs/zen).
+RealseeCode Zen is a list of tested and verified models provided by the RealseeCode team. [Learn more](/docs/zen).
 
-1. Sign in to **<a href={console}>OpenCode Zen</a>** and click **Create API Key**.
+1. Sign in to **<a href={console}>RealseeCode Zen</a>** and click **Create API Key**.
 
-2. Run the `/connect` command and search for **OpenCode Zen**.
+2. Run the `/connect` command and search for **RealseeCode Zen**.
 
    ```txt
    /connect
    ```
 
-3. Enter your OpenCode API key.
+3. Enter your RealseeCode API key.
 
    ```txt
    ┌ API key
@@ -1899,7 +1899,7 @@ Configuration details:
 - **limit.context**: Maximum input tokens the model accepts.
 - **limit.output**: Maximum tokens the model can generate.
 
-The `limit` fields allow OpenCode to understand how much context you have left. Standard providers pull these from models.dev automatically.
+The `limit` fields allow RealseeCode to understand how much context you have left. Standard providers pull these from models.dev automatically.
 
 ---
 
