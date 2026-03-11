@@ -345,7 +345,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     })
 
     const enriched = createMemo(() => {
-      const list = server.projects.list()
+      const list = auth.isAdmin
+        ? server.projects.list()
+        : server.projects.list().filter((project) => globalSync.data.project.some((item) => item.worktree === project.worktree))
       return list.map(enrich)
     })
     const list = createMemo(() => {
@@ -412,12 +414,23 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       }
     })
 
-    onMount(() => {
-      Promise.all(
-        server.projects.list().map((project) => {
-          return globalSync.project.loadSessions(project.worktree)
-        }),
-      )
+    let restored = false
+    createEffect(() => {
+      if (restored) return
+      if (auth.isMultiUserEnabled && auth.loading) return
+      if (!globalSync.ready) return
+
+      const projects = server.projects.list()
+      const allowed = auth.isAdmin
+        ? projects
+        : projects.filter((project) => globalSync.data.project.some((item) => item.worktree === project.worktree))
+      const stale = auth.isAdmin
+        ? []
+        : projects.filter((project) => !globalSync.data.project.some((item) => item.worktree === project.worktree))
+
+      stale.forEach((project) => server.projects.close(project.worktree))
+      restored = true
+      void Promise.all(allowed.map((project) => globalSync.project.loadSessions(project.worktree)))
     })
 
     return {

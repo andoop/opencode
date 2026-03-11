@@ -17,6 +17,7 @@ export default function Layout(props: ParentProps) {
   const params = useParams()
   const navigate = useNavigate()
   const language = useLanguage()
+  const auth = useAuth()
   const directory = createMemo(() => {
     return decode64(params.dir) ?? ""
   })
@@ -31,15 +32,21 @@ export default function Layout(props: ParentProps) {
     })
     navigate("/")
   })
+
+  createEffect(() => {
+    if (!auth.isMultiUserEnabled) return
+    if (auth.loading) return
+    if (auth.isAuthenticated) return
+    navigate("/login")
+  })
   return (
-    <Show when={directory()}>
+    <Show when={directory() && (!auth.isMultiUserEnabled || (!auth.loading && auth.isAuthenticated))}>
       <SDKProvider directory={directory()}>
         <SyncProvider>
           {iife(() => {
             const sync = useSync()
             const sdk = useSDK()
             const platform = usePlatform()
-            const auth = useAuth()
             const respond = (input: {
               sessionID: string
               permissionID: string

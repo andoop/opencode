@@ -428,8 +428,10 @@ export const dict = {
   "notification.session.error.fallbackDescription": "发生错误",
 
   "home.recentProjects": "最近项目",
+  "home.availableProjects": "可用项目",
   "home.empty.title": "没有最近项目",
   "home.empty.description": "通过打开本地项目开始使用",
+  "home.empty.descriptionRestricted": "请联系管理员预先添加项目，然后从允许的项目列表中打开",
 
   "session.tab.session": "会话",
   "session.tab.review": "审查",

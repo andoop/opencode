@@ -3,9 +3,21 @@ import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
+import { ProjectRegistry } from "../../project/registry"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { User } from "../../user"
+
+function requireAdmin() {
+  return async (c: any, next: any) => {
+    const user = User.current()
+    if (!user || user.role !== "admin") {
+      return c.json({ error: "Admin access required" }, 403)
+    }
+    return next()
+  }
+}
 
 export const ProjectRoutes = lazy(() =>
   new Hono()
@@ -29,6 +41,125 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const projects = await Project.list()
         return c.json(projects)
+      },
+    )
+    .get(
+      "/registry",
+      describeRoute({
+        summary: "List registered projects",
+        description: "Get the admin-managed project registry.",
+        operationId: "project.registry.list",
+        responses: {
+          200: {
+            description: "Registered projects",
+            content: {
+              "application/json": {
+                schema: resolver(ProjectRegistry.Info.array()),
+              },
+            },
+          },
+          ...errors(403),
+        },
+      }),
+      requireAdmin(),
+      async (c) => {
+        return c.json(await ProjectRegistry.list())
+      },
+    )
+    .post(
+      "/registry",
+      describeRoute({
+        summary: "Register project",
+        description: "Add a local project directory to the admin registry.",
+        operationId: "project.registry.create",
+        responses: {
+          200: {
+            description: "Registered project",
+            content: {
+              "application/json": {
+                schema: resolver(ProjectRegistry.Info),
+              },
+            },
+          },
+          ...errors(400, 403),
+        },
+      }),
+      requireAdmin(),
+      validator(
+        "json",
+        z.object({
+          directory: z.string(),
+          name: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const user = User.current()
+        const project = await ProjectRegistry.add({
+          ...body,
+          created_by: user?.id,
+        })
+        return c.json(project)
+      },
+    )
+    .patch(
+      "/registry/:id",
+      describeRoute({
+        summary: "Update registered project",
+        description: "Update an admin-managed project registry entry.",
+        operationId: "project.registry.update",
+        responses: {
+          200: {
+            description: "Updated registered project",
+            content: {
+              "application/json": {
+                schema: resolver(ProjectRegistry.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      requireAdmin(),
+      validator("param", z.object({ id: z.string() })),
+      validator(
+        "json",
+        z.object({
+          name: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const { id } = c.req.valid("param")
+        const body = c.req.valid("json")
+        const project = await ProjectRegistry.update(id, (draft) => {
+          if (body.name !== undefined) draft.name = body.name
+        })
+        return c.json(project)
+      },
+    )
+    .delete(
+      "/registry/:id",
+      describeRoute({
+        summary: "Delete registered project",
+        description: "Remove a project from the admin registry.",
+        operationId: "project.registry.delete",
+        responses: {
+          200: {
+            description: "Deleted registered project",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ success: z.boolean() })),
+              },
+            },
+          },
+          ...errors(403, 404),
+        },
+      }),
+      requireAdmin(),
+      validator("param", z.object({ id: z.string() })),
+      async (c) => {
+        await ProjectRegistry.remove(c.req.valid("param").id)
+        return c.json({ success: true })
       },
     )
     .get(

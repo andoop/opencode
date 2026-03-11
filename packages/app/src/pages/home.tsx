@@ -9,10 +9,12 @@ import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectDirectory } from "@/components/dialog-select-directory"
+import { DialogSelectProject } from "@/components/dialog-select-project"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useServer } from "@/context/server"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
+import { useAuth } from "@/context/auth"
 
 export default function Home() {
   const sync = useGlobalSync()
@@ -22,12 +24,17 @@ export default function Home() {
   const navigate = useNavigate()
   const server = useServer()
   const language = useLanguage()
+  const auth = useAuth()
   const homedir = createMemo(() => sync.data.path.home)
   const recent = createMemo(() => {
-    // Only show projects that are currently open (in layout.projects.list())
-    const openProjectsList = layout.projects.list()
-    const openProjects = new Set(openProjectsList.map((p) => p.worktree))
     const allProjects = sync.data.project
+    if (!auth.isAdmin) {
+      return allProjects
+        .slice()
+        .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
+        .slice(0, 5)
+    }
+    const openProjects = new Set(layout.projects.list().map((p) => p.worktree))
     const filtered = allProjects.filter((p) => openProjects.has(p.worktree))
     const sorted = filtered.toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     return sorted.slice(0, 5)
@@ -40,6 +47,11 @@ export default function Home() {
   }
 
   async function chooseProject() {
+    if (!auth.isAdmin) {
+      dialog.show(() => <DialogSelectProject onSelect={(result) => result && openProject(result)} />)
+      return
+    }
+
     function resolve(result: string | string[] | null) {
       if (Array.isArray(result)) {
         for (const directory of result) {
@@ -87,7 +99,9 @@ export default function Home() {
         <Match when={sync.data.project.length > 0}>
           <div class="mt-20 w-full flex flex-col gap-4">
             <div class="flex gap-2 items-center justify-between pl-3">
-              <div class="text-14-medium text-text-strong">{language.t("home.recentProjects")}</div>
+              <div class="text-14-medium text-text-strong">
+                {language.t(auth.isAdmin ? "home.recentProjects" : "home.availableProjects")}
+              </div>
               <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
                 {language.t("command.project.open")}
               </Button>
@@ -116,7 +130,9 @@ export default function Home() {
             <Icon name="folder-add-left" size="large" />
             <div class="flex flex-col gap-1 items-center justify-center">
               <div class="text-14-medium text-text-strong">{language.t("home.empty.title")}</div>
-              <div class="text-12-regular text-text-weak">{language.t("home.empty.description")}</div>
+              <div class="text-12-regular text-text-weak">
+                {language.t(auth.isAdmin ? "home.empty.description" : "home.empty.descriptionRestricted")}
+              </div>
             </div>
             <div />
             <Button class="px-3" onClick={chooseProject}>

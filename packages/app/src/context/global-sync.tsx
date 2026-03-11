@@ -571,7 +571,8 @@ function createGlobalSync() {
       // vcs is seeded from persisted storage in ensureChild.
 
       const blockingRequests = {
-        project: () => sdk.project.current().then((x) => setStore("project", x.data!.id)),
+        project: () =>
+          sdk.project.current().then((x) => setStore("project", x.data!.id)),
         provider: () =>
           sdk.provider.list().then((x) => {
             setStore("provider", normalizeProviderList(x.data!))
@@ -1048,53 +1049,63 @@ function createGlobalSync() {
       return
     }
 
-    const tasks = [
-      retry(() =>
-        globalSDK.client.path.get().then((x) => {
-          setGlobalStore("path", x.data!)
-        }),
-      ),
-      retry(() =>
+    const task = <T,>(name: string, fn: () => Promise<T>) =>
+      retry(fn).catch((err) => {
+        throw err
+      })
+
+    let projects = [] as NonNullable<Awaited<ReturnType<typeof globalSDK.client.project.list>>["data"]>
+    const results = await Promise.allSettled([
+      task("global.config.get", () =>
         globalSDK.client.global.config.get().then((x) => {
           setGlobalStore("config", x.data!)
         }),
       ),
-      retry(() =>
+      task("project.list", () =>
         globalSDK.client.project.list().then(async (x) => {
-          const projects = (x.data ?? [])
+          projects = (x.data ?? [])
             .filter((p) => !!p?.id)
             .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
             .slice()
             .sort((a, b) => cmp(a.id, b.id))
-          // In multi-user mode, if user is not authenticated, clear projects to prevent showing other users' data
           if (auth.isMultiUserEnabled && !auth.user) {
             setGlobalStore("project", [])
             return
           }
-          // In multi-user mode, verify that the returned projects belong to the current user
-          // This is a safety check in case the backend returns projects from a different user
           setGlobalStore("project", projects)
         }).catch((err) => {
-          // If API call fails (e.g., 401 unauthorized), clear projects
           if (auth.isMultiUserEnabled && !auth.user) {
             setGlobalStore("project", [])
           }
           throw err
         }),
       ),
-      retry(() =>
-        globalSDK.client.provider.list().then((x) => {
-          setGlobalStore("provider", normalizeProviderList(x.data!))
-        }),
-      ),
-      retry(() =>
-        globalSDK.client.provider.auth().then((x) => {
-          setGlobalStore("provider_auth", x.data ?? {})
-        }),
-      ),
-    ]
+    ])
+    const scopedDirectory = auth.isMultiUserEnabled && !auth.isAdmin ? projects[0]?.worktree : undefined
+    const shouldLoadScoped = !auth.isMultiUserEnabled || auth.isAdmin || !!scopedDirectory
+    if (shouldLoadScoped) {
+      const sdk = scopedDirectory ? sdkFor(scopedDirectory) : globalSDK.client
+      results.push(
+        ...(await Promise.allSettled([
+          task("path.get", () =>
+            sdk.path.get().then((x) => {
+              setGlobalStore("path", x.data!)
+            }),
+          ),
+          task("provider.list", () =>
+            sdk.provider.list().then((x) => {
+              setGlobalStore("provider", normalizeProviderList(x.data!))
+            }),
+          ),
+          task("provider.auth", () =>
+            sdk.provider.auth().then((x) => {
+              setGlobalStore("provider_auth", x.data ?? {})
+            }),
+          ),
+        ])),
+      )
+    }
 
-    const results = await Promise.allSettled(tasks)
     const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map((r) => r.reason)
 
     if (errors.length) {

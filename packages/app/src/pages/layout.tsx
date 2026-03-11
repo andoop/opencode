@@ -70,6 +70,7 @@ import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { navStart } from "@/utils/perf"
 import { DialogSelectDirectory } from "@/components/dialog-select-directory"
+import { DialogSelectProject } from "@/components/dialog-select-project"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
@@ -572,7 +573,7 @@ export default function Layout(props: ParentProps) {
 
   createEffect(
     on(
-      () => ({ ready: pageReady(), layoutReady: layoutReady(), dir: params.dir, list: layout.projects.list() }),
+      () => ({ ready: pageReady(), layoutReady: layoutReady(), dir: params.dir, list: layout.projects.list(), isAdmin: auth.isAdmin }),
       (value) => {
         if (!value.ready) return
         if (!value.layoutReady) return
@@ -1260,6 +1261,14 @@ export default function Layout(props: ParentProps) {
   }
 
   function openProject(directory: string, navigate = true) {
+    if (!auth.isAdmin && !globalSync.data.project.some((project) => project.worktree === directory)) {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: language.t("home.empty.descriptionRestricted"),
+      })
+      return
+    }
     layout.projects.open(directory)
     if (navigate) navigateToProject(directory)
   }
@@ -1280,6 +1289,7 @@ export default function Layout(props: ParentProps) {
     for (const input of urls) {
       const directory = parseDeepLink(input)
       if (!directory) continue
+      if (!auth.isAdmin && !globalSync.data.project.some((project) => project.worktree === directory)) continue
       openProject(directory)
     }
   }
@@ -1307,6 +1317,7 @@ export default function Layout(props: ParentProps) {
   const displayName = (project: LocalProject) => project.name || getFilename(project.worktree)
 
   async function renameProject(project: LocalProject, next: string) {
+    if (!auth.isAdmin) return
     const current = displayName(project)
     if (next === current) return
     const name = next === getFilename(project.worktree) ? "" : next
@@ -1343,6 +1354,11 @@ export default function Layout(props: ParentProps) {
   }
 
   async function chooseProject() {
+    if (!auth.isAdmin) {
+      dialog.show(() => <DialogSelectProject onSelect={(result) => result && openProject(result)} />)
+      return
+    }
+
     function resolve(result: string | string[] | null) {
       if (Array.isArray(result)) {
         for (const directory of result) {
@@ -2040,18 +2056,16 @@ export default function Layout(props: ParentProps) {
     )
   }
 
-  const NewSessionItem = (props: { slug: string; mobile?: boolean; dense?: boolean }): JSX.Element => {
+  const NewSessionItem = (props: { project: LocalProject; mobile?: boolean; dense?: boolean }): JSX.Element => {
     const label = language.t("command.session.new")
     const tooltip = () => props.mobile || !sidebarExpanded()
     const item = (
-      <A
-        href={`${props.slug}/session`}
-        end
+      <button
+        type="button"
         class={`flex items-center justify-between gap-3 min-w-0 text-left w-full focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
         onClick={() => {
           setState("hoverSession", undefined)
-          if (layout.sidebar.opened()) return
-          queueMicrotask(() => setState("hoverProject", undefined))
+          void createSession(props.project)
         }}
       >
         <div class="flex items-center gap-1 w-full">
@@ -2062,7 +2076,7 @@ export default function Layout(props: ParentProps) {
             {label}
           </span>
         </div>
-      </A>
+      </button>
     )
 
     return (
@@ -2335,7 +2349,7 @@ export default function Layout(props: ParentProps) {
 
           <Collapsible.Content>
             <nav class="flex flex-col gap-1 px-2">
-              <NewSessionItem slug={slug()} mobile={props.mobile} />
+              <NewSessionItem project={props.project} mobile={props.mobile} />
               <Show when={loading()}>
                 <SessionSkeleton />
               </Show>
@@ -2893,6 +2907,7 @@ export default function Layout(props: ParentProps) {
                       class="text-16-medium text-text-strong truncate"
                       displayClass="text-16-medium text-text-strong truncate"
                       stopPropagation
+                      openOnDblClick={auth.isAdmin}
                     />
 
                     <Tooltip

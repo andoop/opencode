@@ -436,8 +436,10 @@ export const dict = {
   "notification.session.error.fallbackDescription": "An error occurred",
 
   "home.recentProjects": "Recent projects",
+  "home.availableProjects": "Available projects",
   "home.empty.title": "No recent projects",
   "home.empty.description": "Get started by opening a local project",
+  "home.empty.descriptionRestricted": "Ask an administrator to add a project, then open one from the approved list",
 
   "session.tab.session": "Session",
   "session.tab.review": "Review",

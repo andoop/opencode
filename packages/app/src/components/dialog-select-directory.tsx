@@ -171,7 +171,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
   function toggleSelect(path: string) {
     if (!props.multiple) {
-      resolve(path)
+      setSelectedPaths(new Set([path]))
       return
     }
 
@@ -186,13 +186,20 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     })
   }
 
-  function resolve(path?: string) {
-    if (props.multiple) {
-      const selected = Array.from(selectedPaths())
-      props.onSelect(selected.length > 0 ? selected : null)
-    } else {
-      props.onSelect(path ?? null)
+  function submit(path?: string) {
+    if (path) {
+      props.onSelect(props.multiple ? [path] : path)
+      dialog.close()
+      return
     }
+
+    const selected = Array.from(selectedPaths())
+    props.onSelect(props.multiple ? (selected.length > 0 ? selected : null) : selected[0] ?? null)
+    dialog.close()
+  }
+
+  function cancel() {
+    props.onSelect(null)
     dialog.close()
   }
 
@@ -221,6 +228,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     const isLoading = () => loadingPaths().has(path())
     const isSelected = () => selectedPaths().has(path())
     const children = createMemo(() => directoryCache().get(path()) ?? [])
+    const canExpand = () => isLoading() || isExpanded() || !directoryCache().has(path()) || children().length > 0
 
   return (
       <div>
@@ -236,11 +244,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           }}
           onDblClick={(e) => {
           e.stopPropagation()
-            if (!multiple()) {
-              resolve(path())
-            } else {
-              toggleExpand(path())
-            }
+            toggleExpand(path())
           }}
         >
           <button
@@ -250,14 +254,11 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
               toggleExpand(path())
             }}
           >
-            <Show when={children().length > 0} fallback={<div class="w-4" />}>
-              <Icon
-                name={isExpanded() ? "chevron-down" : "chevron-right"}
-                class="size-3 text-icon-weak"
-              />
-            </Show>
-            <Show when={children().length === 0 && isLoading()}>
+            <Show when={isLoading()}>
               <div class="size-3 border-2 border-icon-weak border-t-transparent rounded-full animate-spin" />
+            </Show>
+            <Show when={!isLoading() && canExpand()} fallback={<div class="w-4" />}>
+              <Icon name={isExpanded() ? "chevron-down" : "chevron-right"} class="size-3 text-icon-weak" />
             </Show>
           </button>
           <FileIcon node={{ path: path(), type: "directory" }} class="shrink-0 size-4" />
@@ -312,12 +313,12 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
             class="flex-1 px-3 py-2 rounded-md border border-border-base bg-background-base text-14-regular text-text-strong focus:outline-none focus:ring-2 focus:ring-border-strong-base"
           />
-          <Show when={multiple() && selectedPaths().size > 0}>
-            <Button variant="primary" onClick={() => resolve()}>
+          <Show when={selectedPaths().size > 0}>
+            <Button variant="primary" onClick={() => submit()}>
               {language.t("common.submit")} ({selectedPaths().size})
             </Button>
           </Show>
-          <Button variant="ghost" onClick={() => resolve()}>
+          <Button variant="ghost" onClick={cancel}>
             {language.t("common.cancel")}
           </Button>
         </div>
@@ -377,11 +378,11 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
                       "bg-surface-base-active": selectedPaths().has(path),
                     }}
                     onClick={() => toggleSelect(path)}
-                    onDblClick={() => resolve(path)}
+                    onDblClick={() => submit(path)}
                   >
                     <FileIcon node={{ path, type: "directory" }} class="shrink-0 size-4" />
                     <span class="flex-1 text-14-regular text-text-strong">{displayPath(path)}</span>
-                    <Show when={multiple() && selectedPaths().has(path)}>
+                    <Show when={selectedPaths().has(path)}>
                       <Icon name="check" class="size-4 text-icon-success-base" />
                     </Show>
                   </div>

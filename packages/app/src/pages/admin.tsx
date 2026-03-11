@@ -3,9 +3,11 @@ import { useNavigate } from "@solidjs/router"
 import { useAuth, type AuthUser } from "@/context/auth"
 import { useServer } from "@/context/server"
 import { usePlatform } from "@/context/platform"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Dialog as KobalteDialog } from "@kobalte/core/dialog"
+import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 
 interface UserInfo {
   id: string
@@ -25,11 +27,25 @@ interface UserInfo {
   }
 }
 
+interface RegistryProject {
+  id: string
+  project_id: string
+  directory: string
+  name?: string
+  created_by?: string
+  vcs?: "git"
+  time: {
+    created: number
+    updated: number
+  }
+}
+
 export default function AdminPage() {
   const auth = useAuth()
   const navigate = useNavigate()
   const server = useServer()
   const platform = usePlatform()
+  const dialog = useDialog()
 
   // Redirect if not admin
   if (!auth.isAdmin) {
@@ -52,11 +68,22 @@ export default function AdminPage() {
     return response.json() as Promise<UserInfo[]>
   }
 
+  const fetchProjects = async () => {
+    const response = await fetchFn(`${server.url}/project/registry`, {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error("Failed to fetch projects")
+    return response.json() as Promise<RegistryProject[]>
+  }
+
   const [users, { refetch }] = createResource(fetchUsers)
+  const [projects, { refetch: refetchProjects }] = createResource(fetchProjects)
   const [showCreateDialog, setShowCreateDialog] = createSignal(false)
   const [showEditDialog, setShowEditDialog] = createSignal(false)
   const [showResetPasswordDialog, setShowResetPasswordDialog] = createSignal(false)
+  const [showProjectDialog, setShowProjectDialog] = createSignal(false)
   const [editingUser, setEditingUser] = createSignal<UserInfo | null>(null)
+  const [editingProject, setEditingProject] = createSignal<RegistryProject | null>(null)
   const [error, setError] = createSignal<string | null>(null)
 
   // Create user form state
@@ -83,6 +110,7 @@ export default function AdminPage() {
 
   // Reset password form state
   const [newPasswordReset, setNewPasswordReset] = createSignal("")
+  const [projectName, setProjectName] = createSignal("")
 
   const createUser = async () => {
     setError(null)
@@ -226,6 +254,100 @@ export default function AdminPage() {
     }
   }
 
+  const addProject = async (directory: string) => {
+    setError(null)
+    try {
+      const response = await fetchFn(`${server.url}/project/registry`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          directory,
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || data.message || "Failed to add project")
+      }
+      void refetchProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add project")
+    }
+  }
+
+  const chooseProjectDirectory = async () => {
+    const resolve = (result: string | string[] | null) => {
+      const directory = Array.isArray(result) ? result[0] : result
+      if (!directory) return
+      void addProject(directory)
+    }
+
+    if (platform.openDirectoryPickerDialog && server.isLocal()) {
+      const result = await platform.openDirectoryPickerDialog({
+        title: "Add project",
+        multiple: false,
+      })
+      resolve(result)
+      return
+    }
+
+    dialog.show(() => <DialogSelectDirectory onSelect={resolve} />)
+  }
+
+  const openProjectDialog = (project: RegistryProject) => {
+    setEditingProject(project)
+    setProjectName(project.name ?? "")
+    setShowProjectDialog(true)
+  }
+
+  const updateProject = async () => {
+    const project = editingProject()
+    if (!project) return
+    setError(null)
+    try {
+      const response = await fetchFn(`${server.url}/project/registry/${project.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          name: projectName(),
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || data.message || "Failed to update project")
+      }
+      setShowProjectDialog(false)
+      setEditingProject(null)
+      setProjectName("")
+      void refetchProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update project")
+    }
+  }
+
+  const deleteProject = async (project: RegistryProject) => {
+    if (!confirm(`Remove project ${project.name || project.directory}?`)) return
+    setError(null)
+    try {
+      const response = await fetchFn(`${server.url}/project/registry/${project.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || data.message || "Failed to remove project")
+      }
+      void refetchProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove project")
+    }
+  }
+
   const openEditDialog = (user: UserInfo) => {
     setEditingUser(user)
     setEditRole(user.role)
@@ -356,6 +478,60 @@ export default function AdminPage() {
                             Delete
                           </Button>
                         </Show>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </div>
+      </Show>
+
+      <div class="mt-10 mb-8 flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-semibold text-color-primary">Project Registry</h2>
+          <p class="mt-1 text-sm text-color-secondary">Pre-register local projects that non-admin users are allowed to open</p>
+        </div>
+        <Button variant="primary" onClick={() => void chooseProjectDirectory()}>
+          Add Project
+        </Button>
+      </div>
+
+      <Show when={projects.loading}>
+        <p class="text-color-secondary">Loading projects...</p>
+      </Show>
+
+      <Show when={projects.error}>
+        <p class="text-auxiliary-error">Failed to load projects</p>
+      </Show>
+
+      <Show when={projects()}>
+        <div class="rounded-lg border border-outline-dimmed">
+          <table class="w-full">
+            <thead class="border-b border-outline-dimmed bg-background-frame">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium">Name</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">Directory</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">Added</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={projects()}>
+                {(project) => (
+                  <tr class="border-b border-outline-dimmed last:border-0">
+                    <td class="px-4 py-3">{project.name || "-"}</td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">{project.directory}</td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">{formatDate(project.time.created)}</td>
+                    <td class="px-4 py-3">
+                      <div class="flex gap-2">
+                        <Button size="small" variant="ghost" onClick={() => openProjectDialog(project)}>
+                          Edit
+                        </Button>
+                        <Button size="small" variant="secondary" onClick={() => void deleteProject(project)}>
+                          Delete
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -637,6 +813,39 @@ export default function AdminPage() {
               </Button>
               <Button variant="primary" onClick={resetPassword} disabled={!newPasswordReset()}>
                 Reset Password
+              </Button>
+            </div>
+          </KobalteDialog.Content>
+        </KobalteDialog.Portal>
+      </KobalteDialog>
+
+      <KobalteDialog open={showProjectDialog()} onOpenChange={setShowProjectDialog}>
+        <KobalteDialog.Portal>
+          <KobalteDialog.Overlay class="fixed inset-0 bg-black/50" />
+          <KobalteDialog.Content class="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-outline-dimmed bg-background-base p-6">
+            <KobalteDialog.Title class="text-lg font-semibold">
+              Edit Project: {editingProject()?.name || editingProject()?.directory}
+            </KobalteDialog.Title>
+            <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
+              Update the display name for this registered project
+            </KobalteDialog.Description>
+
+            <div class="mt-4 space-y-4">
+              <TextField
+                label="Display Name"
+                value={projectName()}
+                onChange={setProjectName}
+                placeholder="Optional project name"
+              />
+              <TextField label="Directory" value={editingProject()?.directory ?? ""} disabled />
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setShowProjectDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={updateProject}>
+                Save Changes
               </Button>
             </div>
           </KobalteDialog.Content>

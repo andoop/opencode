@@ -1,5 +1,5 @@
 import { createSignal, Show, onMount, onCleanup } from "solid-js"
-import { useNavigate } from "@solidjs/router"
+import { useLocation, useNavigate } from "@solidjs/router"
 import { useAuth } from "@/context/auth"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
@@ -7,6 +7,7 @@ import { TextField } from "@opencode-ai/ui/text-field"
 export default function LoginPage() {
   const auth = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [username, setUsername] = createSignal("")
   const [password, setPassword] = createSignal("")

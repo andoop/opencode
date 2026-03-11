@@ -1,8 +1,6 @@
 import z from "zod"
 import fs from "fs/promises"
-import { Filesystem } from "../util/filesystem"
 import path from "path"
-import { $ } from "bun"
 import { Storage } from "../storage/storage"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
@@ -10,9 +8,12 @@ import { Session } from "../session"
 import { work } from "../util/queue"
 import { fn } from "@opencode-ai/util/fn"
 import { BusEvent } from "@/bus/bus-event"
-import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
+import { NamedError } from "@opencode-ai/util/error"
+import { resolveDirectory } from "./resolve"
+import { ProjectRegistry } from "./registry"
+import { Global } from "@/global"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
@@ -57,6 +58,11 @@ export namespace Project {
     return ["project"]
   }
 
+  function isManagedWorktree(directory: string, projectID: string) {
+    const root = path.join(Global.Path.data, "worktree", projectID)
+    return directory === root || directory.startsWith(root + path.sep)
+  }
+
   export const Info = z
     .object({
       id: z.string(),
@@ -91,130 +97,83 @@ export namespace Project {
     Updated: BusEvent.define("project.updated", Info),
   }
 
+  export const DirectoryAccessError = NamedError.create(
+    "ProjectDirectoryAccessError",
+    z.object({
+      directory: z.string(),
+    }),
+  )
+
+  function currentUserRole() {
+    if (!isMultiUserMode()) return
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { User } = require("../user")
+      return User.current()?.role as "admin" | "user" | undefined
+    } catch {
+      return
+    }
+  }
+
+  async function loadUserProjects(userID: string) {
+    const prefix = projectListPrefix(userID)
+    const keys = await Storage.list(prefix)
+    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
+    return projects
+      .filter((p): p is Info => !!p)
+      .map((project) => ({
+        ...project,
+        sandboxes: project.sandboxes?.filter((x) => existsSync(x)),
+      }))
+  }
+
+  function mergeRegistryProject(entry: ProjectRegistry.Info, userProject?: Info): Info {
+    return {
+      id: entry.project_id,
+      worktree: entry.directory,
+      vcs: entry.vcs ?? userProject?.vcs,
+      name: entry.name ?? userProject?.name,
+      icon: userProject?.icon,
+      commands: userProject?.commands,
+      sandboxes: userProject?.sandboxes?.filter((x) => existsSync(x)) ?? [],
+      time: {
+        created: userProject?.time.created ?? entry.time.created,
+        updated: Math.max(userProject?.time.updated ?? 0, entry.time.updated),
+        initialized: userProject?.time.initialized,
+      },
+    }
+  }
+
+  export async function assertDirectoryAccess(directory: string) {
+    if (!isMultiUserMode()) return
+    const userID = currentUserID()
+    if (!userID) throw new DirectoryAccessError({ directory })
+    if (currentUserRole() === "admin") return
+
+    const resolved = await resolveDirectory(directory)
+    const match = resolved.vcs === "git" && resolved.worktree !== "/" ? await ProjectRegistry.findByDirectory(resolved.worktree) : undefined
+    if (resolved.vcs !== "git" || resolved.worktree === "/") {
+      throw new DirectoryAccessError({ directory })
+    }
+    if (match) return
+
+    if (isManagedWorktree(directory, resolved.id)) {
+      const internal = await ProjectRegistry.findByProjectID(resolved.id)
+      if (internal) return
+    }
+
+    throw new DirectoryAccessError({ directory })
+  }
+
   export async function fromDirectory(directory: string) {
     log.info("fromDirectory", { directory })
-
-    const { id, sandbox, worktree, vcs } = await iife(async () => {
-      const matches = Filesystem.up({ targets: [".git"], start: directory })
-      const git = await matches.next().then((x) => x.value)
-      await matches.return()
-      if (git) {
-        let sandbox = path.dirname(git)
-
-        const gitBinary = Bun.which("git")
-
-        // cached id calculation
-        let id = await Bun.file(path.join(git, "opencode"))
-          .text()
-          .then((x) => x.trim())
-          .catch(() => undefined)
-
-        if (!gitBinary) {
-          return {
-            id: id ?? "global",
-            worktree: sandbox,
-            sandbox: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
-          }
-        }
-
-        // generate id from root commit
-        if (!id) {
-          const roots = await $`git rev-list --max-parents=0 --all`
-            .quiet()
-            .nothrow()
-            .cwd(sandbox)
-            .text()
-            .then((x) =>
-              x
-                .split("\n")
-                .filter(Boolean)
-                .map((x) => x.trim())
-                .toSorted(),
-            )
-            .catch(() => undefined)
-
-          if (!roots) {
-            return {
-              id: "global",
-              worktree: sandbox,
-              sandbox: sandbox,
-              vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
-            }
-          }
-
-          id = roots[0]
-          if (id) {
-            void Bun.file(path.join(git, "opencode"))
-              .write(id)
-              .catch(() => undefined)
-          }
-        }
-
-        if (!id) {
-          return {
-            id: "global",
-            worktree: sandbox,
-            sandbox: sandbox,
-            vcs: "git",
-          }
-        }
-
-        const top = await $`git rev-parse --show-toplevel`
-          .quiet()
-          .nothrow()
-          .cwd(sandbox)
-          .text()
-          .then((x) => path.resolve(sandbox, x.trim()))
-          .catch(() => undefined)
-
-        if (!top) {
-          return {
-            id,
-            sandbox,
-            worktree: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
-          }
-        }
-
-        sandbox = top
-
-        const worktree = await $`git rev-parse --git-common-dir`
-          .quiet()
-          .nothrow()
-          .cwd(sandbox)
-          .text()
-          .then((x) => {
-            const dirname = path.dirname(x.trim())
-            if (dirname === ".") return sandbox
-            return dirname
-          })
-          .catch(() => undefined)
-
-        if (!worktree) {
-          return {
-            id,
-            sandbox,
-            worktree: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
-          }
-        }
-
-        return {
-          id,
-          sandbox,
-          worktree,
-          vcs: "git",
-        }
-      }
-
-      return {
-        id: "global",
-        worktree: "/",
-        sandbox: "/",
-        vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
-      }
-    })
+    await assertDirectoryAccess(directory)
+    const { id, sandbox, worktree, vcs } = await resolveDirectory(directory)
+    const registry = vcs === "git" ? await ProjectRegistry.findByDirectory(worktree) : undefined
+    const registryByProject =
+      vcs === "git" && !registry && isManagedWorktree(directory, id) ? await ProjectRegistry.findByProjectID(id) : undefined
+    const canonicalWorktree = registry?.directory ?? registryByProject?.directory ?? worktree
+    const canonicalName = registry?.name ?? registryByProject?.name
 
     const userID = currentUserID()
     const key = projectKey(id, userID)
@@ -222,8 +181,9 @@ export namespace Project {
     if (!existing) {
       existing = {
         id,
-        worktree,
+        worktree: canonicalWorktree,
         vcs: vcs as Info["vcs"],
+        name: canonicalName,
         sandboxes: [],
         time: {
           created: Date.now(),
@@ -231,7 +191,7 @@ export namespace Project {
         },
       }
       if (id !== "global") {
-        await migrateFromGlobal(id, worktree)
+        await migrateFromGlobal(id, canonicalWorktree)
       }
     }
 
@@ -242,8 +202,9 @@ export namespace Project {
 
     const result: Info = {
       ...existing,
-      worktree,
+      worktree: canonicalWorktree,
       vcs: vcs as Info["vcs"],
+      name: canonicalName ?? existing.name,
       time: {
         ...existing.time,
         updated: Date.now(),
@@ -324,23 +285,22 @@ export namespace Project {
   }
 
   export async function list() {
-    // In multi-user mode, require a user to be logged in
     if (isMultiUserMode()) {
       const userID = currentUserID()
-      if (!userID) {
-        return []
+      if (!userID) return []
+
+      const userProjects = await loadUserProjects(userID)
+      const registry = await ProjectRegistry.list()
+      if (currentUserRole() === "admin") {
+        const merged = new Map(userProjects.map((project) => [project.worktree, project]))
+        for (const entry of registry) {
+          merged.set(entry.directory, mergeRegistryProject(entry, merged.get(entry.directory)))
+        }
+        return [...merged.values()]
       }
-      const prefix = projectListPrefix(userID)
-      const keys = await Storage.list(prefix)
-      const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
-      return projects
-        .filter((p): p is Info => !!p)
-        .map((project) => ({
-          ...project,
-          sandboxes: project.sandboxes?.filter((x) => existsSync(x)),
-        }))
+      return registry.map((entry) => mergeRegistryProject(entry, userProjects.find((x) => x.worktree === entry.directory)))
     }
-    // Single-user mode: return all projects
+
     const prefix = projectListPrefix()
     const keys = await Storage.list(prefix)
     const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))

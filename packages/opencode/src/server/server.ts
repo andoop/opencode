@@ -14,6 +14,7 @@ import { LSP } from "../lsp"
 import { Format } from "../format"
 import { TuiRoutes } from "./routes/tui"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { Vcs } from "../project/vcs"
 import { Agent } from "../agent/agent"
 import { Skill } from "../skill/skill"
@@ -72,6 +73,8 @@ export namespace Server {
             let status: ContentfulStatusCode
             if (err instanceof Storage.NotFoundError) status = 404
             else if (err instanceof Provider.ModelNotFoundError) status = 400
+            else if (err instanceof Project.DirectoryAccessError) status = 403
+            else if (err.name.startsWith("ProjectRegistry")) status = 400
             else if (err.name.startsWith("Worktree")) status = 400
             else status = 500
             return c.json(err.toObject(), { status })
@@ -305,6 +308,8 @@ export namespace Server {
         )
         .use(async (c, next) => {
           if (c.req.path === "/log") return next()
+          if (c.req.path === "/project" && c.req.method === "GET") return next()
+          if (c.req.path.startsWith("/project/registry")) return next()
           const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
           const directory = (() => {
             try {
@@ -313,6 +318,7 @@ export namespace Server {
               return raw
             }
           })()
+          await Project.assertDirectoryAccess(directory)
           return Instance.provide({
             directory,
             init: InstanceBootstrap,
