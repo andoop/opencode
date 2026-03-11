@@ -29,7 +29,7 @@ export namespace User {
   export const Permission = z.object({
     level: PermissionLevel,
     custom: CustomPermission.optional(),
-    allowed_agents: z.array(z.enum(["build", "plan"])).optional(),
+    allowed_agents: z.array(z.enum(["build", "ask", "plan"])).optional(),
   })
   export type Permission = z.infer<typeof Permission>
 

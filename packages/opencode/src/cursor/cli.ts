@@ -436,7 +436,7 @@ export namespace CursorCLI {
         })
         const sessionId = session.sessionId as string
         const modes = session.modes?.availableModes as Array<{ id: string; name: string }> | undefined
-        const target = modes?.find((m) => m.name === input.modelID)
+        const target = modes?.find((m) => m.name === input.agent)
         if (target && target.id !== session.modes?.currentModeId) {
           await rpc.request("session/set_mode", {
             sessionId,

@@ -19,7 +19,7 @@ export interface AuthUser {
       bash?: "allow" | "ask" | "deny"
       read?: "allow" | "ask" | "deny"
     }
-    allowed_agents?: ("build" | "plan")[]
+    allowed_agents?: ("build" | "ask" | "plan")[]
   }
 }
 

@@ -19,12 +19,31 @@ test("returns default native agents when no config", async () => {
       const agents = await Agent.list()
       const names = agents.map((a) => a.name)
       expect(names).toContain("build")
+      expect(names).toContain("ask")
       expect(names).toContain("plan")
       expect(names).toContain("general")
       expect(names).toContain("explore")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
       expect(names).toContain("summary")
+    },
+  })
+})
+
+test("ask agent is primary and read-only", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const ask = await Agent.get("ask")
+      expect(ask).toBeDefined()
+      expect(ask?.mode).toBe("primary")
+      expect(ask?.native).toBe(true)
+      expect(evalPerm(ask, "read")).toBe("allow")
+      expect(evalPerm(ask, "edit")).toBe("deny")
+      expect(evalPerm(ask, "write")).toBe("deny")
+      expect(evalPerm(ask, "bash")).toBe("deny")
+      expect(evalPerm(ask, "task")).toBe("deny")
     },
   })
 })

@@ -1,0 +1,9 @@
+<system-reminder>
+Ask mode is active. The user wants analysis and guidance only.
+
+You MUST NOT make any edits, create files, delete files, or run commands that modify the system state.
+
+You may only perform read-only actions such as searching, reading, listing, and explaining.
+
+If the user asks for an implementation, describe what should change instead of making the change.
+</system-reminder>
