@@ -138,6 +138,7 @@ export default function Layout(props: ParentProps) {
   const [state, setState] = createStore({
     autoselect: !initialDirectory,
     busyWorkspaces: new Set<string>(),
+    refreshingProjects: new Set<string>(),
     hoverSession: undefined as string | undefined,
     hoverProject: undefined as string | undefined,
     scrollSessionKey: undefined as string | undefined,
@@ -162,6 +163,16 @@ export default function Layout(props: ParentProps) {
     })
   }
   const isBusy = (directory: string) => state.busyWorkspaces.has(workspaceKey(directory))
+  const setRefreshingProject = (directory: string, value: boolean) => {
+    const key = workspaceKey(directory)
+    setState("refreshingProjects", (prev) => {
+      const next = new Set(prev)
+      if (value) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+  const isRefreshingProject = (directory: string) => state.refreshingProjects.has(workspaceKey(directory))
   const editorRef = { current: undefined as HTMLInputElement | undefined }
 
   const navLeave = { current: undefined as number | undefined }
@@ -681,6 +692,11 @@ export default function Layout(props: ParentProps) {
   )
 
   const workspaceKey = (directory: string) => directory.replace(/[\\/]+$/, "")
+  const currentDirectory = createMemo(() => decode64(params.dir))
+  const currentDirectoryKey = createMemo(() => {
+    const directory = currentDirectory()
+    return directory ? workspaceKey(directory) : ""
+  })
 
   const workspaceName = (directory: string, projectId?: string, branch?: string) => {
     const key = workspaceKey(directory)
@@ -1767,9 +1783,10 @@ export default function Layout(props: ParentProps) {
     const project = currentProject()
     if (!project) return
 
+    const dirs = workspaceIds(project)
+
     if (workspaceSetting()) {
       const activeDir = decode64(params.dir) ?? ""
-      const dirs = [project.worktree, ...(project.sandboxes ?? [])]
       for (const directory of dirs) {
         const expanded = store.workspaceExpanded[directory] ?? directory === project.worktree
         const active = directory === activeDir
@@ -1779,7 +1796,9 @@ export default function Layout(props: ParentProps) {
       return
     }
 
-    globalSync.project.loadSessions(project.worktree)
+    for (const directory of dirs) {
+      globalSync.project.loadSessions(directory)
+    }
   })
 
   function getDraggableId(event: unknown): string | undefined {
@@ -1989,7 +2008,12 @@ export default function Layout(props: ParentProps) {
     const item = (
       <A
         href={`${props.slug}/session/${props.session.id}`}
-        class={`flex items-center justify-between gap-3 min-w-0 text-left w-full focus:outline-none transition-[padding] ${menu.open ? "pr-7" : ""} group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7 ${props.dense ? "py-0.5" : "py-1"}`}
+        aria-current={isActive() ? "page" : undefined}
+        class={`flex items-center justify-between gap-3 min-w-0 text-left w-full rounded-md focus:outline-none transition-[padding,color] ${menu.open ? "pr-7" : ""} group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7 ${props.dense ? "py-0.5" : "py-1"}`}
+        classList={{
+          "text-text-strong": true,
+          "bg-surface-base-active": isActive(),
+        }}
         onPointerEnter={scheduleHoverPrefetch}
         onPointerLeave={cancelHoverPrefetch}
         onMouseEnter={scheduleHoverPrefetch}
@@ -2045,6 +2069,9 @@ export default function Layout(props: ParentProps) {
         data-session-id={props.session.id}
         class="group/session relative w-full rounded-md cursor-default transition-colors pl-2 pr-3
                hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[[data-expanded]]:bg-surface-raised-base-hover has-[.active]:bg-surface-base-active"
+        classList={{
+          "bg-surface-base-active ring-1 ring-border-weak-base": isActive(),
+        }}
       >
         <Show
           when={hoverEnabled()}
@@ -2256,8 +2283,8 @@ export default function Layout(props: ParentProps) {
     })
     const local = createMemo(() => props.directory === props.project.worktree)
     const active = createMemo(() => {
-      const current = decode64(params.dir) ?? ""
-      return current === props.directory
+      if (currentProject()?.worktree !== props.project.worktree) return false
+      return currentDirectoryKey() === workspaceKey(props.directory)
     })
     const workspaceValue = createMemo(() => {
       const branch = workspaceStore.vcs?.branch
@@ -2352,6 +2379,9 @@ export default function Layout(props: ParentProps) {
                   fallback={
                     <Collapsible.Trigger
                       class="flex items-center justify-between w-full pl-2 pr-16 py-1.5 rounded-md hover:bg-surface-raised-base-hover"
+                      classList={{
+                        "bg-surface-base-active ring-1 ring-border-weak-base": active(),
+                      }}
                       data-action="workspace-toggle"
                       data-workspace={base64Encode(props.directory)}
                     >
@@ -2359,7 +2389,14 @@ export default function Layout(props: ParentProps) {
                     </Collapsible.Trigger>
                   }
                 >
-                  <div class="flex items-center justify-between w-full pl-2 pr-16 py-1.5 rounded-md">{header()}</div>
+                  <div
+                    class="flex items-center justify-between w-full pl-2 pr-16 py-1.5 rounded-md"
+                    classList={{
+                      "bg-surface-base-active ring-1 ring-border-weak-base": active(),
+                    }}
+                  >
+                    {header()}
+                  </div>
                 </Show>
                 <div
                   class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 transition-opacity"
@@ -2467,10 +2504,7 @@ export default function Layout(props: ParentProps) {
 
   const SortableProject = (props: { project: LocalProject; mobile?: boolean }): JSX.Element => {
     const sortable = createSortable(props.project.worktree)
-    const selected = createMemo(() => {
-      const current = decode64(params.dir) ?? ""
-      return props.project.worktree === current || props.project.sandboxes?.includes(current)
-    })
+    const selected = createMemo(() => currentProject()?.worktree === props.project.worktree)
 
     const workspaces = createMemo(() => workspaceIds(props.project).slice(0, 2))
     const workspaceEnabled = createMemo(
@@ -2571,7 +2605,7 @@ export default function Layout(props: ParentProps) {
           data-project={base64Encode(props.project.worktree)}
           classList={{
             "flex items-center justify-center size-10 p-1 rounded-lg overflow-hidden transition-colors cursor-default": true,
-            "bg-transparent border-2 border-icon-strong-base hover:bg-surface-base-hover": selected(),
+            "bg-surface-base-active border-2 border-icon-strong-base shadow-xs-border-base": selected(),
             "bg-transparent border border-transparent hover:bg-surface-base-hover hover:border-border-weak-base":
               !selected() && !active(),
             "bg-surface-base-hover border border-border-weak-base": !selected() && active(),
@@ -2753,42 +2787,35 @@ export default function Layout(props: ParentProps) {
   }
 
   const LocalWorkspace = (props: { project: LocalProject; mobile?: boolean }): JSX.Element => {
-    const [workspaceStore, setWorkspaceStore] = globalSync.child(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
-    
-    // Pre-initialize all directories to avoid repeated bootstrap calls in memo
-    const projectDirs = createMemo(() => [props.project.worktree, ...(props.project.sandboxes ?? [])])
+
+    const projectDirs = createMemo(() => workspaceIds(props.project))
     createEffect(() => {
-      // Initialize all directories upfront, but don't bootstrap if already initialized
       const dirs = projectDirs()
       for (const dir of dirs) {
         globalSync.child(dir, { bootstrap: false })
       }
     })
-    
+
     const sessions = createMemo(() => {
-      // Collect sessions from project directory and all sandboxes (including session worktrees)
       const dirs = projectDirs()
-      const allSessions: typeof workspaceStore.session[number][] = []
+      const [rootStore] = globalSync.child(props.project.worktree, { bootstrap: false })
+      const allSessions: typeof rootStore.session[number][] = []
       const seenIds = new Set<string>()
-      
-      // Load sessions from each directory (already initialized, so no bootstrap overhead)
+
       for (const dir of dirs) {
         const [dirData] = globalSync.child(dir, { bootstrap: false })
         for (const session of dirData.session) {
-          // Deduplicate by session ID
           if (seenIds.has(session.id)) continue
           seenIds.add(session.id)
           allSessions.push(session)
         }
       }
-      
-      // Filter sessions that belong to this project
+
       return allSessions
         .filter((session) => {
           const sessionDir = session.directory
           const normalizedSessionDir = workspaceKey(sessionDir)
-          // Match if session directory matches any project directory
           return dirs.some((dir) => {
             const normalizedDir = workspaceKey(dir)
             return normalizedSessionDir === normalizedDir
@@ -2799,23 +2826,38 @@ export default function Layout(props: ParentProps) {
     })
     const children = createMemo(() => {
       const map = new Map<string, string[]>()
-      for (const session of workspaceStore.session) {
-        if (!session.parentID) continue
-        const existing = map.get(session.parentID)
-        if (existing) {
-          existing.push(session.id)
-          continue
+      for (const dir of projectDirs()) {
+        const [dirData] = globalSync.child(dir, { bootstrap: false })
+        for (const session of dirData.session) {
+          if (!session.parentID) continue
+          const existing = map.get(session.parentID)
+          if (existing) {
+            existing.push(session.id)
+            continue
+          }
+          map.set(session.parentID, [session.id])
         }
-        map.set(session.parentID, [session.id])
       }
       return map
     })
-    const booted = createMemo((prev) => prev || workspaceStore.status === "complete", false)
+    const booted = createMemo((prev) => {
+      if (prev) return true
+      const dirs = projectDirs()
+      if (dirs.length === 0) return false
+      return dirs.every((dir) => globalSync.child(dir, { bootstrap: false })[0].status === "complete")
+    }, false)
     const loading = createMemo(() => !booted() && sessions().length === 0)
-    const hasMore = createMemo(() => workspaceStore.sessionTotal > sessions().length)
+    const hasMore = createMemo(() => {
+      const total = projectDirs().reduce((sum, dir) => sum + globalSync.child(dir, { bootstrap: false })[0].sessionTotal, 0)
+      return total > sessions().length
+    })
     const loadMore = async () => {
-      setWorkspaceStore("limit", (limit) => limit + 5)
-      await globalSync.project.loadSessions(props.project.worktree)
+      const dirs = projectDirs()
+      for (const dir of dirs) {
+        const [, setDirStore] = globalSync.child(dir, { bootstrap: false })
+        setDirStore("limit", (limit) => limit + 5)
+      }
+      await Promise.all(dirs.map((dir) => globalSync.project.loadSessions(dir)))
     }
 
     return (
@@ -2968,6 +3010,25 @@ export default function Layout(props: ParentProps) {
     layout.mobileSidebar.hide()
   }
 
+  const refreshSessions = async (project: LocalProject) => {
+    if (isRefreshingProject(project.worktree)) return
+    const dirs = workspaceIds(project)
+    setRefreshingProject(project.worktree, true)
+    try {
+      for (const dir of dirs) {
+        globalSync.child(dir, { bootstrap: false })
+      }
+      await Promise.all(dirs.map((dir) => globalSync.project.loadSessions(dir)))
+    } catch (err) {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: errorMessage(err),
+      })
+    } finally {
+      setRefreshingProject(project.worktree, false)
+    }
+  }
+
   const SidebarPanel = (panelProps: { project: LocalProject | undefined; mobile?: boolean }) => {
     const projectName = createMemo(() => {
       const project = panelProps.project
@@ -2983,6 +3044,8 @@ export default function Layout(props: ParentProps) {
       return layout.sidebar.workspaces(project.worktree)()
     })
     const homedir = createMemo(() => globalSync.data.path.home)
+    const refreshLabel = createMemo(() => (language.locale().startsWith("zh") ? "刷新列表" : "Refresh list"))
+    const refreshing = createMemo(() => (panelProps.project ? isRefreshingProject(panelProps.project.worktree) : false))
 
     return (
       <div
@@ -3078,7 +3141,7 @@ export default function Layout(props: ParentProps) {
                   when={workspacesEnabled()}
                   fallback={
                     <>
-                      <div class="shrink-0 py-4 px-3">
+                      <div class="shrink-0 py-4 px-3 flex flex-col gap-2">
                         <TooltipKeybind
                           title={language.t("command.session.new")}
                           keybind={command.keybind("session.new")}
@@ -3093,6 +3156,9 @@ export default function Layout(props: ParentProps) {
                             {language.t("command.session.new")}
                           </Button>
                         </TooltipKeybind>
+                        <Button variant="secondary" size="large" class="w-full" loading={refreshing()} onClick={() => refreshSessions(p())}>
+                          {refreshLabel()}
+                        </Button>
                       </div>
                       <div class="flex-1 min-h-0">
                         <LocalWorkspace project={p()} mobile={panelProps.mobile} />
@@ -3101,7 +3167,7 @@ export default function Layout(props: ParentProps) {
                   }
                 >
                   <>
-                    <div class="shrink-0 py-4 px-3">
+                    <div class="shrink-0 py-4 px-3 flex flex-col gap-2">
                       <TooltipKeybind
                         title={language.t("workspace.new")}
                         keybind={command.keybind("workspace.new")}
@@ -3111,6 +3177,9 @@ export default function Layout(props: ParentProps) {
                           {language.t("workspace.new")}
                         </Button>
                       </TooltipKeybind>
+                      <Button variant="secondary" size="large" class="w-full" loading={refreshing()} onClick={() => refreshSessions(p())}>
+                        {refreshLabel()}
+                      </Button>
                     </div>
                     <div class="relative flex-1 min-h-0">
                       <DragDropProvider

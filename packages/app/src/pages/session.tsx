@@ -597,6 +597,21 @@ export default function Page() {
     navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
   }
 
+  const currentProject = () => {
+    const directory = decode64(params.dir)
+    const fallbackProjectRoot = sync.project?.worktree
+    const project =
+      layout.projects.list().find((p) => p.worktree === directory || p.sandboxes?.includes(directory ?? "")) ??
+      layout.projects.list().find((p) => p.worktree === fallbackProjectRoot)
+    return project
+  }
+
+  const createSessionFromCurrentProject = async () => {
+    const project = currentProject()
+    if (!project) return
+    await startSessionCreation(project)
+  }
+
   if (import.meta.env.DEV) {
     createEffect(
       on(
@@ -1005,7 +1020,7 @@ export default function Page() {
       slash: "new",
       disabled: ui.creating.open,
       onSelect: async () => {
-        const project = layout.projects.list().find((p) => p.worktree === decode64(params.dir) || p.sandboxes?.includes(decode64(params.dir) ?? ""))
+        const project = currentProject()
         if (project) {
           await startSessionCreation(project)
         } else {
@@ -2587,90 +2602,92 @@ export default function Page() {
                 </Show>
               </Match>
               <Match when={true}>
-                <NewSessionView />
+                <NewSessionView onCreate={() => void createSessionFromCurrentProject()} creating={ui.creating.status === "running"} />
               </Match>
             </Switch>
           </div>
 
           {/* Prompt input */}
-          <div
-            ref={(el) => (promptDock = el)}
-            class="absolute inset-x-0 bottom-0 pt-12 pb-4 flex flex-col justify-center items-center z-50 px-4 md:px-0 bg-gradient-to-t from-background-stronger via-background-stronger to-transparent pointer-events-none"
-          >
+          <Show when={params.id}>
             <div
-              classList={{
-                "w-full px-4 pointer-events-auto": true,
-                "md:max-w-200 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]": centered(),
-              }}
+              ref={(el) => (promptDock = el)}
+              class="absolute inset-x-0 bottom-0 pt-12 pb-4 flex flex-col justify-center items-center z-50 px-4 md:px-0 bg-gradient-to-t from-background-stronger via-background-stronger to-transparent pointer-events-none"
             >
-              <Show when={request()} keyed>
-                {(perm) => (
-                  <div data-component="tool-part-wrapper" data-permission="true" class="mb-3">
-                    <BasicTool
-                      icon="checklist"
-                      locked
-                      defaultOpen
-                      trigger={{
-                        title: language.t("notification.permission.title"),
-                        subtitle:
-                          perm.permission === "doom_loop"
-                            ? language.t("settings.permissions.tool.doom_loop.title")
-                            : perm.permission,
-                      }}
-                    >
-                      <Show when={perm.patterns.length > 0}>
-                        <div class="flex flex-col gap-1 py-2 px-3 max-h-40 overflow-y-auto no-scrollbar">
-                          <For each={perm.patterns}>
-                            {(pattern) => <code class="text-12-regular text-text-base break-all">{pattern}</code>}
-                          </For>
+              <div
+                classList={{
+                  "w-full px-4 pointer-events-auto": true,
+                  "md:max-w-200 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]": centered(),
+                }}
+              >
+                <Show when={request()} keyed>
+                  {(perm) => (
+                    <div data-component="tool-part-wrapper" data-permission="true" class="mb-3">
+                      <BasicTool
+                        icon="checklist"
+                        locked
+                        defaultOpen
+                        trigger={{
+                          title: language.t("notification.permission.title"),
+                          subtitle:
+                            perm.permission === "doom_loop"
+                              ? language.t("settings.permissions.tool.doom_loop.title")
+                              : perm.permission,
+                        }}
+                      >
+                        <Show when={perm.patterns.length > 0}>
+                          <div class="flex flex-col gap-1 py-2 px-3 max-h-40 overflow-y-auto no-scrollbar">
+                            <For each={perm.patterns}>
+                              {(pattern) => <code class="text-12-regular text-text-base break-all">{pattern}</code>}
+                            </For>
+                          </div>
+                        </Show>
+                        <Show when={perm.permission === "doom_loop"}>
+                          <div class="text-12-regular text-text-weak pb-2 px-3">
+                            {language.t("settings.permissions.tool.doom_loop.description")}
+                          </div>
+                        </Show>
+                      </BasicTool>
+                      <div data-component="permission-prompt">
+                        <div data-slot="permission-actions">
+                          <Button variant="ghost" size="small" onClick={() => decide("reject")} disabled={ui.responding}>
+                            {language.t("ui.permission.deny")}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="small"
+                            onClick={() => decide("always")}
+                            disabled={ui.responding}
+                          >
+                            {language.t("ui.permission.allowAlways")}
+                          </Button>
+                          <Button variant="primary" size="small" onClick={() => decide("once")} disabled={ui.responding}>
+                            {language.t("ui.permission.allowOnce")}
+                          </Button>
                         </div>
-                      </Show>
-                      <Show when={perm.permission === "doom_loop"}>
-                        <div class="text-12-regular text-text-weak pb-2 px-3">
-                          {language.t("settings.permissions.tool.doom_loop.description")}
-                        </div>
-                      </Show>
-                    </BasicTool>
-                    <div data-component="permission-prompt">
-                      <div data-slot="permission-actions">
-                        <Button variant="ghost" size="small" onClick={() => decide("reject")} disabled={ui.responding}>
-                          {language.t("ui.permission.deny")}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="small"
-                          onClick={() => decide("always")}
-                          disabled={ui.responding}
-                        >
-                          {language.t("ui.permission.allowAlways")}
-                        </Button>
-                        <Button variant="primary" size="small" onClick={() => decide("once")} disabled={ui.responding}>
-                          {language.t("ui.permission.allowOnce")}
-                        </Button>
                       </div>
                     </div>
-                  </div>
-                )}
-              </Show>
+                  )}
+                </Show>
 
-              <Show
-                when={prompt.ready()}
-                fallback={
-                  <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
-                    {handoff.prompt || language.t("prompt.loading")}
-                  </div>
-                }
-              >
-                <PromptInput
-                  ref={(el) => {
-                    inputRef = el
-                  }}
-                  onSubmit={resumeScroll}
-                  resolvedSessionDir={actualSessionDir()}
-                />
-              </Show>
+                <Show
+                  when={prompt.ready()}
+                  fallback={
+                    <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
+                      {handoff.prompt || language.t("prompt.loading")}
+                    </div>
+                  }
+                >
+                  <PromptInput
+                    ref={(el) => {
+                      inputRef = el
+                    }}
+                    onSubmit={resumeScroll}
+                    resolvedSessionDir={actualSessionDir()}
+                  />
+                </Show>
+              </div>
             </div>
-          </div>
+          </Show>
 
           <Show when={isDesktop() && layout.fileTree.opened()}>
             <ResizeHandle

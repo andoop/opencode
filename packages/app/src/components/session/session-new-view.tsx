@@ -3,11 +3,14 @@ import { DateTime } from "luxon"
 import { useSync } from "@/context/sync"
 import { useLanguage } from "@/context/language"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Button } from "@opencode-ai/ui/button"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 
 interface NewSessionViewProps {
   worktree?: string
   onWorktreeChange?: (value: string) => void
+  onCreate?: () => void
+  creating?: boolean
 }
 
 export function NewSessionView(props: NewSessionViewProps) {
@@ -18,7 +21,13 @@ export function NewSessionView(props: NewSessionViewProps) {
   const currentBranch = createMemo(() => sync.data.vcs?.branch)
 
   return (
-    <div class="size-full flex flex-col justify-end items-start gap-4 flex-[1_0_0] self-stretch max-w-200 mx-auto px-6 pb-[calc(var(--prompt-height,11.25rem)+64px)]">
+    <div
+      class="size-full flex flex-col justify-end items-start gap-4 flex-[1_0_0] self-stretch max-w-200 mx-auto px-6"
+      classList={{
+        "pb-[calc(var(--prompt-height,11.25rem)+64px)]": !props.onCreate,
+        "pb-16": !!props.onCreate,
+      }}
+    >
       <div class="text-20-medium text-text-weaker">{language.t("command.session.new")}</div>
       <div class="flex justify-center items-center gap-3">
         <Icon name="folder" size="small" />
@@ -54,6 +63,11 @@ export function NewSessionView(props: NewSessionViewProps) {
             </div>
           </div>
         )}
+      </Show>
+      <Show when={props.onCreate}>
+        <Button size="large" icon="plus-small" class="mt-2" onClick={props.onCreate} loading={props.creating}>
+          {language.t("command.session.new")}
+        </Button>
       </Show>
     </div>
   )
