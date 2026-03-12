@@ -32,6 +32,7 @@ import { BasicTool } from "@opencode-ai/ui/basic-tool"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { SessionReview } from "@opencode-ai/ui/session-review"
 import { Mark } from "@opencode-ai/ui/logo"
+import { Spinner } from "@opencode-ai/ui/spinner"
 
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"
@@ -81,6 +82,17 @@ import { DataProvider } from "@opencode-ai/ui/context"
 import { iife } from "@opencode-ai/util/iife"
 
 type DiffStyle = "unified" | "split"
+type SessionCreateStep = "create" | "worktree" | "open"
+
+const createSessionState = () => ({
+  open: false,
+  status: "idle" as "idle" | "running" | "error",
+  step: "create" as SessionCreateStep,
+  projectRoot: "",
+  sessionDirectory: "",
+  needsWorktree: false,
+  error: "",
+})
 
 const handoff = {
   prompt: "",
@@ -425,6 +437,15 @@ export default function Page() {
     pendingMessage: undefined as string | undefined,
     scrollGesture: 0,
     autoCreated: false,
+    creating: createSessionState(),
+  })
+
+  createEffect(() => {
+    document.body.style.overflow = ui.creating.open ? "hidden" : ""
+  })
+
+  onCleanup(() => {
+    document.body.style.overflow = ""
   })
 
   createEffect(
@@ -452,6 +473,129 @@ export default function Page() {
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const view = createMemo(() => layout.view(sessionKey))
+  const creatingCopy = createMemo(() =>
+    language.locale().startsWith("zh")
+      ? {
+          title: "正在创建新会话",
+          description: "正在准备独立工作区，请稍候。在创建完成前，当前页面操作会被暂时阻塞。",
+          project: "项目",
+          session: "会话目录",
+          loading: "处理中",
+          failed: "创建失败",
+          createTitle: "创建会话",
+          createDescription: "正在初始化新会话记录",
+          worktreeTitle: "准备工作区",
+          worktreeDescription: "正在创建并等待 Git worktree 就绪",
+          worktreeSkipped: "当前项目无需额外创建工作区",
+          openTitle: "进入会话",
+          openDescription: "正在同步数据并打开新会话",
+          pending: "等待中",
+          active: "进行中",
+          completed: "已完成",
+          skipped: "已跳过",
+          error: "失败",
+          retry: "重试",
+          close: "返回当前页面",
+        }
+      : {
+          title: "Creating new session",
+          description: "Preparing an isolated workspace. Interaction is temporarily blocked until the session is ready.",
+          project: "Project",
+          session: "Session directory",
+          loading: "Working",
+          failed: "Creation failed",
+          createTitle: "Create session",
+          createDescription: "Initializing the session record",
+          worktreeTitle: "Prepare workspace",
+          worktreeDescription: "Creating and waiting for the Git worktree",
+          worktreeSkipped: "No extra workspace is needed for this project",
+          openTitle: "Open session",
+          openDescription: "Syncing data and opening the new session",
+          pending: "Pending",
+          active: "In progress",
+          completed: "Completed",
+          skipped: "Skipped",
+          error: "Failed",
+          retry: "Retry",
+          close: "Back to current page",
+        },
+  )
+
+  const resetSessionCreation = () => {
+    setUi("creating", createSessionState())
+  }
+
+  const sessionCreateStepState = (step: SessionCreateStep) => {
+    if (!ui.creating.open) return "pending" as const
+    if (step === "create") {
+      if (ui.creating.step === "create") return ui.creating.status === "error" ? "error" : "active"
+      return "completed"
+    }
+    if (step === "worktree") {
+      if (!ui.creating.needsWorktree && ui.creating.step === "open") return "skipped"
+      if (ui.creating.step === "worktree") return ui.creating.status === "error" ? "error" : "active"
+      if (ui.creating.step === "open") return "completed"
+      return "pending"
+    }
+    if (ui.creating.step === "open") return ui.creating.status === "error" ? "error" : "active"
+    return "pending"
+  }
+
+  const startSessionCreation = async (project: { worktree: string }) => {
+    if (ui.creating.open && ui.creating.status === "running") return
+
+    setUi("creating", {
+      ...createSessionState(),
+      open: true,
+      status: "running",
+      projectRoot: project.worktree,
+    })
+
+    const fail = (message: string, step: SessionCreateStep) => {
+      setUi("creating", "status", "error")
+      setUi("creating", "step", step)
+      setUi("creating", "error", message)
+    }
+
+    const created = await globalSDK.client.session
+      .create({ directory: project.worktree })
+      .then((x) => x.data)
+      .catch((err) => {
+        fail(err instanceof Error ? err.message : String(err), "create")
+        return undefined
+      })
+
+    if (!created) return
+
+    const sessionDirectory = created.directory
+    const needsWorktree = sessionDirectory !== project.worktree
+    setUi("creating", "sessionDirectory", sessionDirectory)
+    setUi("creating", "needsWorktree", needsWorktree)
+
+    if (needsWorktree) {
+      setUi("creating", "step", "worktree")
+      const { Worktree: WorktreeState } = await import("@/utils/worktree")
+      WorktreeState.pending(sessionDirectory)
+
+      const timeoutMs = 5 * 60 * 1000
+      const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
+        setTimeout(() => {
+          resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
+        }, timeoutMs)
+      })
+
+      const result = await Promise.race([WorktreeState.wait(sessionDirectory), timeout])
+      if (result.status === "failed") {
+        fail(result.message, "worktree")
+        return
+      }
+    }
+
+    setUi("creating", "step", "open")
+    globalSync.child(sessionDirectory)
+    resetSessionCreation()
+    navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
+  }
 
   if (import.meta.env.DEV) {
     createEffect(
@@ -859,52 +1003,11 @@ export default function Page() {
       category: language.t("command.category.session"),
       keybind: "mod+shift+s",
       slash: "new",
+      disabled: ui.creating.open,
       onSelect: async () => {
         const project = layout.projects.list().find((p) => p.worktree === decode64(params.dir) || p.sandboxes?.includes(decode64(params.dir) ?? ""))
         if (project) {
-          const created = await globalSDK.client.session
-            .create({ directory: project.worktree })
-            .then((x) => x.data)
-            .catch((err) => {
-              showToast({
-                title: language.t("prompt.toast.sessionCreateFailed.title"),
-                description: err instanceof Error ? err.message : String(err),
-              })
-              return undefined
-            })
-          
-          if (created) {
-            const sessionDirectory = created.directory
-            const projectDirectory = project.worktree
-            
-            if (sessionDirectory !== projectDirectory) {
-              const { Worktree: WorktreeState } = await import("@/utils/worktree")
-              WorktreeState.pending(sessionDirectory)
-              
-              const timeoutMs = 5 * 60 * 1000
-              const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
-                setTimeout(() => {
-                  resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
-                }, timeoutMs)
-              })
-              
-              const result = await Promise.race([
-                WorktreeState.wait(sessionDirectory),
-                timeout,
-              ])
-              
-              if (result.status === "failed") {
-                showToast({
-                  title: language.t("prompt.toast.sessionCreateFailed.title"),
-                  description: result.message,
-                })
-                return
-              }
-            }
-            
-            globalSync.child(sessionDirectory)
-            navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
-          }
+          await startSessionCreation(project)
         } else {
           navigate(`/${params.dir}/session`)
         }
@@ -3506,6 +3609,130 @@ export default function Page() {
               </DragOverlay>
             </DragDropProvider>
           </Show>
+        </div>
+      </Show>
+      <Show when={ui.creating.open}>
+        <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div class="w-full max-w-xl mx-6 rounded-xl border border-border-weak-base bg-background-base shadow-lg">
+            <div class="px-6 pt-6 pb-5 border-b border-border-weak-base">
+              <div class="flex items-center gap-3">
+                <div class="flex size-10 items-center justify-center rounded-full bg-surface-base">
+                  <Spinner class="size-5" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="text-18-medium text-text-strong">{creatingCopy().title}</div>
+                  <div class="mt-1 text-13-regular text-text-weak">{creatingCopy().description}</div>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-2 rounded-lg bg-background-stronger p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-12-medium text-text-weak">{creatingCopy().project}</div>
+                  <div class="min-w-0 text-right text-12-regular text-text-strong break-all">{ui.creating.projectRoot}</div>
+                </div>
+                <Show when={ui.creating.sessionDirectory}>
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="text-12-medium text-text-weak">{creatingCopy().session}</div>
+                    <div class="min-w-0 text-right text-12-regular text-text-strong break-all">
+                      {ui.creating.sessionDirectory}
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            <div class="px-6 py-5 flex flex-col gap-3">
+              <For
+                each={[
+                  {
+                    key: "create" as SessionCreateStep,
+                    title: creatingCopy().createTitle,
+                    description: creatingCopy().createDescription,
+                  },
+                  {
+                    key: "worktree" as SessionCreateStep,
+                    title: creatingCopy().worktreeTitle,
+                    description: ui.creating.needsWorktree ? creatingCopy().worktreeDescription : creatingCopy().worktreeSkipped,
+                  },
+                  {
+                    key: "open" as SessionCreateStep,
+                    title: creatingCopy().openTitle,
+                    description: creatingCopy().openDescription,
+                  },
+                ]}
+              >
+                {(item) => {
+                  const state = () => sessionCreateStepState(item.key)
+                  const label = () =>
+                    state() === "active"
+                      ? creatingCopy().active
+                      : state() === "completed"
+                        ? creatingCopy().completed
+                        : state() === "skipped"
+                          ? creatingCopy().skipped
+                          : state() === "error"
+                            ? creatingCopy().error
+                            : creatingCopy().pending
+                  return (
+                    <div class="flex items-start gap-3 rounded-lg border border-border-weak-base px-4 py-3">
+                      <div class="mt-0.5 flex size-5 shrink-0 items-center justify-center">
+                        <Switch>
+                          <Match when={state() === "active"}>
+                            <Spinner class="size-4" />
+                          </Match>
+                          <Match when={state() === "completed"}>
+                            <Icon name="check" size="small" class="text-icon-success-base" />
+                          </Match>
+                          <Match when={state() === "skipped"}>
+                            <div class="size-2 rounded-full bg-text-weaker" />
+                          </Match>
+                          <Match when={state() === "error"}>
+                            <div class="size-2.5 rounded-full bg-icon-danger-base" />
+                          </Match>
+                          <Match when={true}>
+                            <div class="size-2 rounded-full bg-border-strong" />
+                          </Match>
+                        </Switch>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="text-13-medium text-text-strong">{item.title}</div>
+                          <div class="text-12-regular text-text-weak shrink-0">{label()}</div>
+                        </div>
+                        <div class="mt-1 text-12-regular text-text-weak">{item.description}</div>
+                      </div>
+                    </div>
+                  )
+                }}
+              </For>
+            </div>
+
+            <Show when={ui.creating.status === "error"}>
+              <div class="px-6 pb-6">
+                <div class="rounded-lg border border-auxiliary-error/20 bg-auxiliary-error/10 px-4 py-3 text-12-regular text-auxiliary-error">
+                  <div class="text-13-medium">{creatingCopy().failed}</div>
+                  <div class="mt-1 break-all">{ui.creating.error}</div>
+                </div>
+                <div class="mt-4 flex justify-end gap-3">
+                  <Button variant="ghost" onClick={resetSessionCreation}>
+                    {creatingCopy().close}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      const project = layout.projects.list().find((item) => item.worktree === ui.creating.projectRoot)
+                      if (!project) {
+                        resetSessionCreation()
+                        return
+                      }
+                      void startSessionCreation(project)
+                    }}
+                  >
+                    {creatingCopy().retry}
+                  </Button>
+                </div>
+              </div>
+            </Show>
+          </div>
         </div>
       </Show>
     </div>
