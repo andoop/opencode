@@ -462,7 +462,7 @@ export namespace CursorCLI {
         }
         queue.push({
           type: "finish-step",
-          finishReason: finishReason(response.stopReason ?? "end_turn"),
+          finishReason: finishReason(response?.stopReason ?? "end_turn"),
           usage: {
             inputTokens: 0,
             outputTokens: 0,
