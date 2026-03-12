@@ -1,4 +1,4 @@
-import { createSignal, createResource, For, Show } from "solid-js"
+import { createMemo, createSignal, createResource, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
 import { FEATURE_DEFAULTS, useAuth } from "@/context/auth"
@@ -32,6 +32,7 @@ interface UserInfo {
       servers?: boolean
       mcp?: boolean
     }
+    models?: string[] | null
   }
   time: {
     created: number
@@ -51,6 +52,18 @@ interface RegistryProject {
     created: number
     updated: number
   }
+}
+
+interface ProviderInfo {
+  id: string
+  name: string
+  models: Record<
+    string,
+    {
+      id: string
+      name: string
+    }
+  >
 }
 
 type FeatureState = {
@@ -90,6 +103,14 @@ function createFeatures(permission?: UserInfo["permission"]): FeatureState {
     servers: permission?.features?.servers ?? FEATURE_DEFAULTS.servers,
     mcp: permission?.features?.mcp ?? FEATURE_DEFAULTS.mcp,
   }
+}
+
+function modelSummary(permission?: UserInfo["permission"]) {
+  if (!permission) return "未配置"
+  if (permission.models === null) return "全开放"
+  if (permission.models === undefined) return "未配置"
+  if (permission.models.length === 0) return "0 个模型"
+  return `${permission.models.length} 个模型`
 }
 
 function FeatureMatrix(props: {
@@ -143,6 +164,165 @@ function FeatureMatrix(props: {
   )
 }
 
+function ModelWhitelist(props: {
+  providers?: ProviderInfo[]
+  search: string
+  value: string[] | null
+  disabled?: boolean
+  error?: string
+  onSearch: (value: string) => void
+  onToggle: (value: string, checked: boolean) => void
+  onAllowAll: () => void
+  onClear: () => void
+}) {
+  const unrestricted = createMemo(() => props.value === null)
+  const value = createMemo(() => new Set(props.value ?? []))
+  const selected = createMemo(() =>
+    (props.providers ?? [])
+      .flatMap((provider) =>
+        Object.values(provider.models)
+          .filter((model) => value().has(`${provider.id}/${model.id}`))
+          .map((model) => ({
+            key: `${provider.id}/${model.id}`,
+            providerID: provider.id,
+            providerName: provider.name,
+            modelID: model.id,
+            modelName: model.name,
+          })),
+      )
+      .sort((a, b) => a.providerName.localeCompare(b.providerName) || a.modelName.localeCompare(b.modelName)),
+  )
+  const filtered = createMemo(() => {
+    const query = props.search.trim().toLowerCase()
+    return (props.providers ?? []).flatMap((provider) => {
+      const models = Object.values(provider.models)
+        .filter((model) => {
+          if (!query) return true
+          return [provider.name, provider.id, model.name, model.id].some((item) =>
+            item.toLowerCase().includes(query),
+          )
+        })
+        .sort((a, b) => {
+          const aSelected = value().has(`${provider.id}/${a.id}`)
+          const bSelected = value().has(`${provider.id}/${b.id}`)
+          if (aSelected && !bSelected) return -1
+          if (!aSelected && bSelected) return 1
+          return a.name.localeCompare(b.name)
+        })
+      if (models.length === 0) return []
+      return [
+        {
+          ...provider,
+          models,
+        },
+      ]
+    })
+  })
+
+  return (
+    <div class="rounded border border-outline-dimmed p-4 space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-sm text-color-primary">可用模型</p>
+          <p class="text-xs text-color-secondary">默认不开放任何模型。只有“清空限制”才表示全开放，这里不影响供应商管理权限。</p>
+        </div>
+        <div class="flex gap-2">
+          <Button size="small" variant="ghost" onClick={props.onAllowAll} disabled={props.disabled}>
+            全部允许
+          </Button>
+          <Button size="small" variant="ghost" onClick={props.onClear} disabled={props.disabled}>
+            清空限制
+          </Button>
+        </div>
+      </div>
+      <input
+        value={props.search}
+        onInput={(e) => props.onSearch(e.currentTarget.value)}
+        placeholder="搜索 provider / model / id"
+        class="w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+      />
+      <Show when={props.error}>
+        <p class="text-xs text-auxiliary-error">{props.error}</p>
+      </Show>
+      <Show when={unrestricted()}>
+        <div class="rounded border border-outline-dimmed p-3 text-sm text-color-secondary">
+          当前为清空限制状态：该用户可使用所有模型，包括后续新增模型。
+        </div>
+      </Show>
+      <Show when={selected().length > 0}>
+        <div class="rounded border border-outline-dimmed p-3 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-sm text-color-primary">已选模型</p>
+            <p class="text-xs text-color-secondary">{selected().length} 个</p>
+          </div>
+          <div class="max-h-36 space-y-2 overflow-auto">
+            <For each={selected()}>
+              {(item) => (
+                <label class="flex items-start justify-between gap-3 rounded border border-outline-dimmed px-3 py-2 text-sm">
+                  <div>
+                    <div>{item.modelName}</div>
+                    <div class="text-xs text-color-secondary">
+                      {item.providerName} · {item.key}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked
+                    disabled={props.disabled}
+                    onChange={(e) => props.onToggle(item.key, e.currentTarget.checked)}
+                  />
+                </label>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
+      <div class="max-h-72 space-y-3 overflow-auto rounded border border-outline-dimmed p-3">
+        <Show when={props.providers} fallback={<p class="text-sm text-color-secondary">Loading models...</p>}>
+          <Show when={filtered().length > 0} fallback={<p class="text-sm text-color-secondary">No models found.</p>}>
+            <For each={filtered()}>
+              {(provider) => (
+                <div class="space-y-2">
+                  <div class="text-sm font-medium text-color-primary">
+                    {provider.name}
+                    <span class="ml-2 text-xs text-color-secondary">{provider.id}</span>
+                  </div>
+                  <div class="space-y-2">
+                    <For each={provider.models}>
+                      {(model) => {
+                        const key = `${provider.id}/${model.id}`
+                        return (
+                          <label class="flex items-start justify-between gap-3 rounded border border-outline-dimmed px-3 py-2 text-sm">
+                            <div>
+                              <div class="flex items-center gap-2">
+                                <span>{model.name}</span>
+                                <Show when={unrestricted() || value().has(key)}>
+                                  <span class="text-xs text-auxiliary-success">已选</span>
+                                </Show>
+                              </div>
+                              <div class="text-xs text-color-secondary">{key}</div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={unrestricted() || value().has(key)}
+                              disabled={props.disabled}
+                              onChange={(e) => props.onToggle(key, e.currentTarget.checked)}
+                            />
+                          </label>
+                        )
+                      }}
+                    </For>
+                  </div>
+                </div>
+              )}
+            </For>
+          </Show>
+        </Show>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const auth = useAuth()
   const navigate = useNavigate()
@@ -179,8 +359,18 @@ export default function AdminPage() {
     return response.json() as Promise<RegistryProject[]>
   }
 
+  const fetchProviders = async () => {
+    const response = await fetchFn(`${server.url}/provider`, {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error("Failed to fetch models")
+    const data = (await response.json()) as { all: ProviderInfo[]; connected: string[] }
+    return data.all.filter((provider) => data.connected.includes(provider.id))
+  }
+
   const [users, { refetch }] = createResource(fetchUsers)
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects)
+  const [providers] = createResource(fetchProviders)
   const [showCreateDialog, setShowCreateDialog] = createSignal(false)
   const [showEditDialog, setShowEditDialog] = createSignal(false)
   const [showResetPasswordDialog, setShowResetPasswordDialog] = createSignal(false)
@@ -212,6 +402,10 @@ export default function AdminPage() {
   const [newCustomRead, setNewCustomRead] = createSignal<"allow" | "ask" | "deny">("allow")
   const [newFeatures, setNewFeatures] = createStore<FeatureState>(createFeatures())
   const [editFeatures, setEditFeatures] = createStore<FeatureState>(createFeatures())
+  const [newModels, setNewModels] = createSignal<string[] | null>([])
+  const [editModels, setEditModels] = createSignal<string[] | null>([])
+  const [newModelSearch, setNewModelSearch] = createSignal("")
+  const [editModelSearch, setEditModelSearch] = createSignal("")
 
   // Reset password form state
   const [newPasswordReset, setNewPasswordReset] = createSignal("")
@@ -237,6 +431,30 @@ export default function AdminPage() {
     setFeatures(id, checked)
   }
 
+  const allModels = createMemo(() =>
+    (providers() ?? []).flatMap((provider) =>
+      Object.values(provider.models).map((model) => `${provider.id}/${model.id}`),
+    ),
+  )
+
+  const toggleModel = (
+    list: () => string[] | null,
+    setList: (value: string[] | null) => void,
+    value: string,
+    checked: boolean,
+  ) => {
+    if (list() === null) {
+      if (checked) return
+      setList(allModels().filter((item) => item !== value))
+      return
+    }
+    if (checked) {
+      setList(Array.from(new Set([...(list() ?? []), value])))
+      return
+    }
+    setList((list() ?? []).filter((item) => item !== value))
+  }
+
   const createUser = async () => {
     setError(null)
     try {
@@ -258,6 +476,7 @@ export default function AdminPage() {
           servers: newFeatures.servers,
           mcp: newFeatures.mcp,
         }
+        permission.models = newModels()
       }
 
       const response = await fetchFn(`${server.url}/user`, {
@@ -291,6 +510,8 @@ export default function AdminPage() {
       setNewCustomBash("ask")
       setNewCustomRead("allow")
       setNewFeatures(createFeatures())
+      setNewModels([])
+      setNewModelSearch("")
       void refetch()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create user")
@@ -321,6 +542,7 @@ export default function AdminPage() {
           servers: editFeatures.servers,
           mcp: editFeatures.mcp,
         }
+        permission.models = editModels()
       }
 
       const response = await fetchFn(`${server.url}/user/${user.id}`, {
@@ -511,6 +733,8 @@ export default function AdminPage() {
       setEditCustomRead("allow")
     }
     setEditFeatures(createFeatures(user.permission))
+    setEditModels(user.permission.models ?? [])
+    setEditModelSearch("")
     setShowEditDialog(true)
   }
 
@@ -565,6 +789,7 @@ export default function AdminPage() {
                 <th class="px-4 py-3 text-left text-sm font-medium">Email</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">Role</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">Permission</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">Models</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">Status</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">Last Login</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">Actions</th>
@@ -589,6 +814,9 @@ export default function AdminPage() {
                     </td>
                     <td class="px-4 py-3">
                       <span class="text-xs">{user.permission.level}</span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">
+                      {user.role === "admin" ? "全开放" : modelSummary(user.permission)}
                     </td>
                     <td class="px-4 py-3">
                       <span
@@ -693,7 +921,7 @@ export default function AdminPage() {
       <KobalteDialog open={showCreateDialog()} onOpenChange={setShowCreateDialog}>
         <KobalteDialog.Portal>
           <KobalteDialog.Overlay class="fixed inset-0 bg-black/50" />
-          <KobalteDialog.Content class="fixed left-1/2 top-1/2 max-h-[90vh] w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-outline-dimmed bg-background-base p-6">
+          <KobalteDialog.Content class="fixed left-1/2 top-1/2 max-h-[90vh] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-outline-dimmed bg-background-base p-6">
             <KobalteDialog.Title class="text-lg font-semibold">Create New User</KobalteDialog.Title>
             <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
               Add a new user to the system
@@ -812,6 +1040,16 @@ export default function AdminPage() {
                   value={newFeatures}
                   onToggle={(id, checked) => toggleFeatures(setNewFeatures, id, checked)}
                 />
+                <ModelWhitelist
+                  providers={providers()}
+                  search={newModelSearch()}
+                  value={newModels()}
+                  error={providers.error instanceof Error ? providers.error.message : undefined}
+                  onSearch={setNewModelSearch}
+                  onToggle={(value, checked) => toggleModel(newModels, setNewModels, value, checked)}
+                  onAllowAll={() => setNewModels(allModels())}
+                  onClear={() => setNewModels(null)}
+                />
               </Show>
             </div>
 
@@ -831,7 +1069,7 @@ export default function AdminPage() {
       <KobalteDialog open={showEditDialog()} onOpenChange={setShowEditDialog}>
         <KobalteDialog.Portal>
           <KobalteDialog.Overlay class="fixed inset-0 bg-black/50" />
-          <KobalteDialog.Content class="fixed left-1/2 top-1/2 max-h-[90vh] w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-outline-dimmed bg-background-base p-6">
+          <KobalteDialog.Content class="fixed left-1/2 top-1/2 max-h-[90vh] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-outline-dimmed bg-background-base p-6">
             <KobalteDialog.Title class="text-lg font-semibold">
               Edit User: {editingUser()?.username}
             </KobalteDialog.Title>
@@ -942,6 +1180,16 @@ export default function AdminPage() {
                 <FeatureMatrix
                   value={editFeatures}
                   onToggle={(id, checked) => toggleFeatures(setEditFeatures, id, checked)}
+                />
+                <ModelWhitelist
+                  providers={providers()}
+                  search={editModelSearch()}
+                  value={editModels()}
+                  error={providers.error instanceof Error ? providers.error.message : undefined}
+                  onSearch={setEditModelSearch}
+                  onToggle={(value, checked) => toggleModel(editModels, setEditModels, value, checked)}
+                  onAllowAll={() => setEditModels(allModels())}
+                  onClear={() => setEditModels(null)}
                 />
               </Show>
             </div>

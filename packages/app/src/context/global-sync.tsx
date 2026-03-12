@@ -265,6 +265,13 @@ function createGlobalSync() {
     }
   }
 
+  const needsModelData = () =>
+    auth.canFeature("models") ||
+    auth.canFeature("providers") ||
+    auth.canMode("ask") ||
+    auth.canMode("build") ||
+    auth.canMode("plan")
+
   // Track current user ID to prevent restoring cache from previous user
   // Initialize with current user ID to prevent restoring cache from a different user on first load
   let currentCacheUserID: string | null | undefined = auth.user?.id ?? null
@@ -573,7 +580,7 @@ function createGlobalSync() {
       if (!auth.canFeature("mcp")) {
         setStore("mcp", {})
       }
-      if (!auth.canFeature("models") && !auth.canFeature("providers")) {
+      if (!needsModelData()) {
         setStore("provider", { all: [], default: {}, connected: [] })
       }
 
@@ -582,7 +589,7 @@ function createGlobalSync() {
           sdk.project.current().then((x) => setStore("project", x.data!.id)),
         agent: () => sdk.app.agents().then((x) => setStore("agent", x.data ?? [])),
         config: () => sdk.config.get().then((x) => setStore("config", x.data!)),
-        ...(auth.canFeature("models") || auth.canFeature("providers")
+        ...(needsModelData()
           ? {
               provider: () =>
                 sdk.provider.list().then((x) => {
@@ -1094,7 +1101,7 @@ function createGlobalSync() {
     ])
     const scopedDirectory = auth.isMultiUserEnabled && !auth.isAdmin ? projects[0]?.worktree : undefined
     const shouldLoadScoped = !auth.isMultiUserEnabled || auth.isAdmin || !!scopedDirectory
-    if (!auth.canFeature("models") && !auth.canFeature("providers")) {
+    if (!needsModelData()) {
       setGlobalStore("provider", { all: [], default: {}, connected: [] })
       setGlobalStore("provider_auth", {})
     }
@@ -1107,7 +1114,7 @@ function createGlobalSync() {
               setGlobalStore("path", x.data!)
             }),
           ),
-          ...(auth.canFeature("models") || auth.canFeature("providers")
+          ...(needsModelData()
             ? [
                 task("provider.list", () =>
                   sdk.provider.list().then((x) => {

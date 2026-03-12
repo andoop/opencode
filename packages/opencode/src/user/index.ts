@@ -10,6 +10,7 @@ import z from "zod"
 
 export namespace User {
   const log = Log.create({ service: "user" })
+  type ModelRef = string | { providerID: string; modelID: string }
   const FEATURE_DEFAULTS = {
     modes: {
       ask: true,
@@ -76,6 +77,7 @@ export namespace User {
     custom: CustomPermission.optional(),
     allowed_agents: z.array(z.enum(["build", "ask", "plan"])).optional(),
     features: Features.optional(),
+    models: z.array(z.string()).nullable().optional(),
   })
   export type Permission = z.infer<typeof Permission>
 
@@ -208,6 +210,41 @@ export namespace User {
 
   export function featureEnabled(key: FeatureKey, input?: { role?: Role; permission?: Permission }) {
     return features(input)[key]
+  }
+
+  function modelKey(input: ModelRef) {
+    if (typeof input === "string") return input
+    return `${input.providerID}/${input.modelID}`
+  }
+
+  export function modelEnabled(model: ModelRef, input?: { role?: Role; permission?: Permission }) {
+    const role = input?.role ?? current()?.role
+    if (role === "admin") return true
+    const permission = input?.permission ?? current()?.permission
+    const allowed = permission?.models
+    if (allowed === null) return true
+    if (!allowed?.length) return false
+    return allowed.includes(modelKey(model))
+  }
+
+  export function requireModel(model: ModelRef, input?: { role?: Role; permission?: Permission }) {
+    if (modelEnabled(model, input)) return
+    throw new FeatureDisabledError({ feature: `models.${modelKey(model)}` })
+  }
+
+  export function filterModels<T extends { id: string; models: Record<string, { id: string }> }>(
+    items: T[],
+    input?: { role?: Role; permission?: Permission },
+  ) {
+    return items.flatMap((item) => {
+      const models = Object.fromEntries(
+        Object.values(item.models)
+          .filter((model) => modelEnabled({ providerID: item.id, modelID: model.id }, input))
+          .map((model) => [model.id, model]),
+      )
+      if (Object.keys(models).length === 0) return []
+      return [{ ...item, models } as T]
+    })
   }
 
   export function requireMode(name: string, input?: { role?: Role; permission?: Permission }) {

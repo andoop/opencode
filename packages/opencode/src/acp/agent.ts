@@ -530,11 +530,13 @@ export namespace ACP {
 
         const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
         if (lastUser?.role === "user") {
-          result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
-          this.sessionManager.setModel(sessionId, {
-            providerID: lastUser.model.providerID,
-            modelID: lastUser.model.modelID,
-          })
+          if (hasAvailableModel(result.models.availableModels, lastUser.model)) {
+            result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
+            this.sessionManager.setModel(sessionId, {
+              providerID: lastUser.model.providerID,
+              modelID: lastUser.model.modelID,
+            })
+          }
           if (result.modes?.availableModes.some((m) => m.id === lastUser.agent)) {
             result.modes.currentModeId = lastUser.agent
             this.sessionManager.setMode(sessionId, lastUser.agent)
@@ -1151,8 +1153,13 @@ export namespace ACP {
       const directory = session.cwd
 
       const current = session.model
-      const model = current ?? (await defaultModel(this.config, directory))
-      if (!current) {
+      const providers = await this.sdk.config
+        .providers({ directory }, { throwOnError: true })
+        .then((x) => x.data?.providers ?? [])
+        .catch(() => [])
+      const model =
+        current && hasProviderModel(providers, current) ? current : await defaultModel(this.config, directory)
+      if (!current || !hasProviderModel(providers, current)) {
         this.sessionManager.setModel(session.id, model)
       }
       const agent = session.modeId ?? (await AgentModule.defaultAgent())
@@ -1513,6 +1520,21 @@ export namespace ACP {
         return [base, ...variantOptions]
       })
     })
+  }
+
+  function hasAvailableModel(
+    models: ModelOption[],
+    current: { providerID: string; modelID: string },
+  ) {
+    const key = `${current.providerID}/${current.modelID}`
+    return models.some((model) => model.modelId === key || model.modelId.startsWith(`${key}/`))
+  }
+
+  function hasProviderModel(
+    providers: Array<{ id: string; models: Record<string, any> }>,
+    current: { providerID: string; modelID: string },
+  ) {
+    return providers.some((provider) => provider.id === current.providerID && !!provider.models[current.modelID])
   }
 
   function formatModelIdWithVariant(

@@ -12,6 +12,7 @@ import { User } from "@/user"
 
 function requireModelsOrProviders() {
   if (User.featureEnabled("models") || User.featureEnabled("providers")) return
+  if (User.modeEnabled("ask") || User.modeEnabled("build") || User.modeEnabled("plan")) return
   User.requireFeature("models")
 }
 
@@ -55,10 +56,12 @@ export const ProviderRoutes = lazy(() =>
         }
 
         const connected = await Provider.list()
-        const providers = Object.assign(
-          mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
-          connected,
+        const available = Object.fromEntries(
+          User.filterModels(Object.values(mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)))).map(
+            (provider) => [provider.id, provider],
+          ),
         )
+        const providers = Object.assign(available, connected)
         return c.json({
           all: Object.values(providers),
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),

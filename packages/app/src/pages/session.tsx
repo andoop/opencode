@@ -1017,7 +1017,7 @@ export default function Page() {
       category: language.t("command.category.model"),
       keybind: "mod+'",
       slash: "model",
-      disabled: !auth.canFeature("models"),
+      disabled: !local.model.current() && local.model.list().length === 0,
       onSelect: () => dialog.show(() => <DialogSelectModel />),
     },
     {

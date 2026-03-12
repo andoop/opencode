@@ -2176,7 +2176,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     variant="ghost"
                   />
                 </TooltipKeybind>
-                <Show when={auth.canFeature("models")}>
+                <Show when={local.model.current() || local.model.list().length > 0}>
                   <Show
                     when={providers.paid().length > 0}
                     fallback={
@@ -2224,7 +2224,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     </TooltipKeybind>
                   </Show>
                 </Show>
-                <Show when={auth.canFeature("models") && local.model.variant.list().length > 0}>
+                <Show when={local.model.variant.list().length > 0}>
                   <TooltipKeybind
                     placement="top"
                     gutter={8}

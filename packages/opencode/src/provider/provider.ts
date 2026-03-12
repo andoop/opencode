@@ -14,6 +14,7 @@ import { Env } from "../env"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
+import { User } from "@/user"
 
 // Direct imports for bundled providers
 import { createAmazonBedrock, type AmazonBedrockProviderSettings } from "@ai-sdk/amazon-bedrock"
@@ -1049,8 +1050,12 @@ export namespace Provider {
     }
   })
 
+  function filterProviders<T extends { id: string; models: Record<string, { id: string }> }>(providers: Record<string, T>) {
+    return Object.fromEntries(User.filterModels(Object.values(providers)).map((provider) => [provider.id, provider]))
+  }
+
   export async function list() {
-    return state().then((state) => state.providers)
+    return state().then((state) => filterProviders(state.providers))
   }
 
   async function getSDK(model: Model) {
@@ -1154,7 +1159,7 @@ export namespace Provider {
   }
 
   export async function getProvider(providerID: string) {
-    return state().then((s) => s.providers[providerID])
+    return list().then((providers) => providers[providerID])
   }
 
   export async function getModel(providerID: string, modelID: string) {
@@ -1174,6 +1179,7 @@ export namespace Provider {
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
+    User.requireModel({ providerID, modelID })
     return info
   }
 
@@ -1224,10 +1230,10 @@ export namespace Provider {
 
     if (cfg.small_model) {
       const parsed = parseModel(cfg.small_model)
-      return getModel(parsed.providerID, parsed.modelID)
+      if (User.modelEnabled(parsed)) return getModel(parsed.providerID, parsed.modelID)
     }
 
-    const provider = await state().then((state) => state.providers[providerID])
+    const provider = await getProvider(providerID)
     if (provider) {
       let priority = [
         "claude-haiku-4-5",
@@ -1253,7 +1259,7 @@ export namespace Provider {
     }
 
     // Check if opencode provider is available before using it
-    const opencodeProvider = await state().then((state) => state.providers["opencode"])
+    const opencodeProvider = await getProvider("opencode")
     if (opencodeProvider && opencodeProvider.models["gpt-5-nano"]) {
       return getModel("opencode", "gpt-5-nano")
     }
@@ -1273,7 +1279,10 @@ export namespace Provider {
 
   export async function defaultModel() {
     const cfg = await Config.get()
-    if (cfg.model) return parseModel(cfg.model)
+    if (cfg.model) {
+      const parsed = parseModel(cfg.model)
+      if (User.modelEnabled(parsed)) return parsed
+    }
 
     const provider = await list()
       .then((val) => Object.values(val))

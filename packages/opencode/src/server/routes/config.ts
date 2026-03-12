@@ -11,9 +11,25 @@ import { User } from "@/user"
 
 const log = Log.create({ service: "server" })
 
+function canReadProviders() {
+  return (
+    User.featureEnabled("models") ||
+    User.featureEnabled("providers") ||
+    User.modeEnabled("ask") ||
+    User.modeEnabled("build") ||
+    User.modeEnabled("plan")
+  )
+}
+
 function assertConfigFeatureAccess(config: z.infer<typeof Config.Info>) {
   if ((config.model !== undefined || config.small_model !== undefined) && !User.featureEnabled("models")) {
     User.requireFeature("models")
+  }
+  if (config.model !== undefined) {
+    User.requireModel(config.model)
+  }
+  if (config.small_model !== undefined) {
+    User.requireModel(config.small_model)
   }
 
   if (
@@ -102,7 +118,7 @@ export const ConfigRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        if (!User.featureEnabled("models") && !User.featureEnabled("providers")) {
+        if (!canReadProviders()) {
           User.requireFeature("models")
         }
         using _ = log.time("providers")

@@ -18,6 +18,12 @@ function assertConfigFeatureAccess(config: z.infer<typeof Config.Info>) {
   if ((config.model !== undefined || config.small_model !== undefined) && !User.featureEnabled("models")) {
     User.requireFeature("models")
   }
+  if (config.model !== undefined) {
+    User.requireModel(config.model)
+  }
+  if (config.small_model !== undefined) {
+    User.requireModel(config.small_model)
+  }
 
   if (
     (config.provider !== undefined ||

@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { batch, createMemo } from "solid-js"
+import { batch, createEffect, createMemo } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
@@ -21,6 +21,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     function isModelValid(model: ModelKey) {
       const provider = providers.all().find((x) => x.id === model.providerID)
       return (
+        auth.canModel(model) &&
         !!provider?.models[model.modelID] &&
         providers
           .connected()
@@ -96,6 +97,15 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       })
 
       const fallbackModel = createMemo<ModelKey | undefined>(() => {
+        const source = {
+          config: sync.data.config.model,
+          recent: models.recent.list().map((item) => `${item.providerID}/${item.modelID}`),
+          connected: providers.connected().map((p) => ({
+            id: p.id,
+            models: Object.keys(p.models).slice(0, 10),
+          })),
+          defaults: providers.default(),
+        }
         if (sync.data.config.model) {
           const [providerID, modelID] = sync.data.config.model.split("/")
           if (isModelValid({ providerID, modelID })) {
@@ -117,13 +127,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const configured = defaults[p.id]
           if (configured) {
             const key = { providerID: p.id, modelID: configured }
-            if (isModelValid(key)) return key
+            if (isModelValid(key)) {
+              return key
+            }
           }
 
           const first = Object.values(p.models)[0]
           if (!first) continue
           const key = { providerID: p.id, modelID: first.id }
-          if (isModelValid(key)) return key
+          if (isModelValid(key)) {
+            return key
+          }
         }
 
         return undefined
@@ -175,10 +189,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         set(model: ModelKey | undefined, options?: { recent?: boolean }) {
           batch(() => {
             const currentAgent = agent.current()
-            const next = model ?? fallbackModel()
+            const next = model && isModelValid(model) ? model : fallbackModel()
             if (currentAgent) setEphemeral("model", currentAgent.name, next)
-            if (model) models.setVisibility(model, true)
-            if (options?.recent && model) models.recent.push(model)
+            if (model && isModelValid(model)) models.setVisibility(model, true)
+            if (options?.recent && model && isModelValid(model)) models.recent.push(model)
           })
         },
         visible(model: ModelKey) {

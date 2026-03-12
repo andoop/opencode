@@ -9,6 +9,7 @@ import { iconNames } from "@opencode-ai/ui/icons/provider"
 import { type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useModels } from "@/context/models"
+import { useLocal } from "@/context/local"
 import { popularProviders } from "@/hooks/use-providers"
 
 type ModelItem = ReturnType<ReturnType<typeof useModels>["list"]>[number]
@@ -16,13 +17,22 @@ type ModelItem = ReturnType<ReturnType<typeof useModels>["list"]>[number]
 export const SettingsModels: Component = () => {
   const language = useLanguage()
   const models = useModels()
+  const local = useLocal()
+  const current = () => local.model.current()
   const icon = (id: string): IconName => (iconNames.includes(id as IconName) ? (id as IconName) : "synthetic")
 
   const list = useFilteredList<ModelItem>({
     items: (_filter) => models.list(),
     key: (x) => `${x.provider.id}:${x.id}`,
     filterKeys: ["provider.name", "name", "id"],
-    sortBy: (a, b) => a.name.localeCompare(b.name),
+    sortBy: (a, b) => {
+      const selected = current()
+      const aCurrent = selected?.provider.id === a.provider.id && selected.id === a.id
+      const bCurrent = selected?.provider.id === b.provider.id && selected.id === b.id
+      if (aCurrent && !bCurrent) return -1
+      if (!aCurrent && bCurrent) return 1
+      return a.name.localeCompare(b.name)
+    },
     groupBy: (x) => x.provider.id,
     sortGroupsBy: (a, b) => {
       const aIndex = popularProviders.indexOf(a.category)
@@ -100,10 +110,16 @@ export const SettingsModels: Component = () => {
                     <For each={group.items}>
                       {(item) => {
                         const key = { providerID: item.provider.id, modelID: item.id }
+                        const active = () => current()?.provider.id === item.provider.id && current()?.id === item.id
                         return (
                           <div class="flex flex-wrap items-center justify-between gap-4 py-3 border-b border-border-weak-base last:border-none">
                             <div class="min-w-0">
-                              <span class="text-14-regular text-text-strong truncate block">{item.name}</span>
+                              <div class="flex items-center gap-2">
+                                <span class="text-14-regular text-text-strong truncate block">{item.name}</span>
+                                <Show when={active()}>
+                                  <span class="text-12-medium text-accent-9">{language.t("prompt.context.active")}</span>
+                                </Show>
+                              </div>
                             </div>
                             <div class="flex-shrink-0">
                               <Switch

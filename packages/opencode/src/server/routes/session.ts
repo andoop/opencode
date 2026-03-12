@@ -521,6 +521,7 @@ export const SessionRoutes = lazy(() =>
         User.requireFeature("models")
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        User.requireModel({ providerID: body.providerID, modelID: body.modelID })
         const session = await Session.get(sessionID)
         await SessionRevert.cleanup(session)
         const msgs = await Session.messages({ sessionID })

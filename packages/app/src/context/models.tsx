@@ -1,9 +1,10 @@
-import { createMemo } from "solid-js"
+import { createEffect, createMemo } from "solid-js"
 import { createStore } from "solid-js/store"
 import { DateTime } from "luxon"
 import { filter, firstBy, flat, groupBy, mapValues, pipe, uniqueBy, values } from "remeda"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useProviders } from "@/hooks/use-providers"
+import { useAuth } from "@/context/auth"
 import { Persist, persisted } from "@/utils/persist"
 
 export type ModelKey = { providerID: string; modelID: string }
@@ -20,6 +21,7 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
   name: "Models",
   init: () => {
     const providers = useProviders()
+    const auth = useAuth()
 
     const [store, setStore, _, ready] = persisted(
       Persist.global("model", ["model.v1"]),
@@ -29,6 +31,22 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
         variant: {},
       }),
     )
+    let currentUserID: string | null | undefined = auth.user?.id ?? null
+
+    createEffect(() => {
+      const nextUserID = auth.user?.id ?? null
+      if (currentUserID === undefined) {
+        currentUserID = nextUserID
+        return
+      }
+      if (currentUserID === nextUserID) return
+      currentUserID = nextUserID
+      setStore({
+        user: [],
+        recent: [],
+        variant: {},
+      })
+    })
 
     const available = createMemo(() =>
       providers.connected().flatMap((p) =>
@@ -39,9 +57,18 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
       ),
     )
 
+    const allowed = createMemo(() =>
+      available().filter((model) =>
+        auth.canModel({
+          providerID: model.provider.id,
+          modelID: model.id,
+        }),
+      ),
+    )
+
     const latest = createMemo(() =>
       pipe(
-        available(),
+        allowed(),
         filter((x) => Math.abs(DateTime.fromISO(x.release_date).diffNow().as("months")) < 6),
         groupBy((x) => x.provider.id),
         mapValues((models) =>
@@ -70,7 +97,7 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
     })
 
     const list = createMemo(() =>
-      available().map((m) => ({
+      allowed().map((m) => ({
         ...m,
         name: m.name.replace("(latest)", "").trim(),
         latest: m.name.includes("(latest)"),

@@ -5,6 +5,7 @@ import { usePlatform } from "./platform"
 
 const AUTH_TOKEN_KEY = "opencode_auth_token"
 const AUTH_USER_KEY = "opencode_auth_user"
+type ModelRef = string | { providerID: string; modelID: string }
 
 export const FEATURE_DEFAULTS = {
   modes: {
@@ -87,6 +88,19 @@ export function canUseFeature(user: Pick<AuthUser, "role" | "permission"> | null
   return resolveAuthFeatures(user)[feature]
 }
 
+function modelKey(input: ModelRef) {
+  if (typeof input === "string") return input
+  return `${input.providerID}/${input.modelID}`
+}
+
+export function canUseModel(user: Pick<AuthUser, "role" | "permission"> | null | undefined, model: ModelRef) {
+  if (user?.role === "admin") return true
+  const allowed = user?.permission.models
+  if (allowed === null) return true
+  if (!allowed?.length) return false
+  return allowed.includes(modelKey(model))
+}
+
 export interface AuthUser {
   id: string
   username: string
@@ -102,6 +116,7 @@ export interface AuthUser {
     }
     allowed_agents?: ("build" | "ask" | "plan")[]
     features?: AuthFeatures
+    models?: string[] | null
   }
 }
 
@@ -293,6 +308,9 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
       },
       canMode(mode: string) {
         return canUseMode(user(), mode)
+      },
+      canModel(model: ModelRef) {
+        return canUseModel(user(), model)
       },
       login,
       logout,

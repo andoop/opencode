@@ -647,7 +647,9 @@ export namespace SessionPrompt {
 
   async function lastModel(sessionID: string) {
     for await (const item of MessageV2.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) return item.info.model
+      if (item.info.role !== "user" || !item.info.model) continue
+      if (User.modelEnabled(item.info.model)) return item.info.model
+      break
     }
     return Provider.defaultModel()
   }
@@ -664,9 +666,24 @@ export namespace SessionPrompt {
   }) {
     User.requireMode(input.agent)
     if (input.files > 0) User.requireFeature("files")
+    if (input.model) User.requireModel(input.model)
     if (!input.model || User.featureEnabled("models")) return
     if (sameModel(input.model, await lastModel(input.sessionID))) return
     User.requireFeature("models")
+  }
+
+  async function resolveModel(
+    sessionID: string,
+    ...choices: Array<
+      (() => ReturnType<typeof Provider.parseModel> | undefined) | (() => Promise<ReturnType<typeof Provider.parseModel> | undefined>)
+    >
+  ) {
+    for (const choice of choices) {
+      const model = await choice()
+      if (!model) continue
+      if (User.modelEnabled(model)) return model
+    }
+    return Provider.defaultModel()
   }
 
   async function resolveTools(input: {
@@ -854,13 +871,15 @@ export namespace SessionPrompt {
     const agentName = input.agent ?? (await Agent.defaultAgent())
     const agent = await Agent.get(agentName)
 
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     await assertPromptFeatureAccess({
       agent: agent.name,
       model: input.model,
       sessionID: input.sessionID,
       files: input.parts.filter((part) => part.type === "file").length,
     })
+    const model = input.model
+      ? input.model
+      : await resolveModel(input.sessionID, () => agent.model, () => lastModel(input.sessionID))
     const variant =
       input.variant ??
       (agent.variant &&
@@ -1416,7 +1435,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       await SessionRevert.cleanup(session)
     }
     const agent = await Agent.get(input.agent)
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    if (input.model) User.requireModel(input.model)
+    const model = input.model
+      ? input.model
+      : await resolveModel(input.sessionID, () => agent.model, () => lastModel(input.sessionID))
     const userMsg: MessageV2.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
@@ -1715,19 +1737,16 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     }
     template = template.trim()
 
-    const taskModel = await (async () => {
-      if (command.model) {
-        return Provider.parseModel(command.model)
-      }
-      if (command.agent) {
-        const cmdAgent = await Agent.get(command.agent)
-        if (cmdAgent?.model) {
-          return cmdAgent.model
-        }
-      }
-      if (input.model) return Provider.parseModel(input.model)
-      return await lastModel(input.sessionID)
-    })()
+    const taskModel = await resolveModel(
+      input.sessionID,
+      () => (command.model ? Provider.parseModel(command.model) : undefined),
+      async () => {
+        if (!command.agent) return undefined
+        return (await Agent.get(command.agent))?.model
+      },
+      () => (input.model ? Provider.parseModel(input.model) : undefined),
+      () => lastModel(input.sessionID),
+    )
 
     try {
       await Provider.getModel(taskModel.providerID, taskModel.modelID)

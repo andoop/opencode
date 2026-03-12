@@ -24,13 +24,15 @@ const ModelList: Component<{
 }> = (props) => {
   const local = useLocal()
   const language = useLanguage()
-
-  const models = createMemo(() =>
-    local.model
-      .list()
-      .filter((m) => local.model.visible({ modelID: m.id, providerID: m.provider.id }))
-      .filter((m) => (props.provider ? m.provider.id === props.provider : true)),
+  const current = createMemo(() => local.model.current())
+  const allowed = createMemo(() =>
+    local.model.list().filter((m) => (props.provider ? m.provider.id === props.provider : true)),
   )
+
+  const models = createMemo(() => {
+    const visible = allowed().filter((m) => local.model.visible({ modelID: m.id, providerID: m.provider.id }))
+    return visible.length > 0 ? visible : allowed()
+  })
 
   return (
     <List
@@ -41,7 +43,14 @@ const ModelList: Component<{
       items={models}
       current={local.model.current()}
       filterKeys={["provider.name", "name", "id"]}
-      sortBy={(a, b) => a.name.localeCompare(b.name)}
+      sortBy={(a, b) => {
+        const currentModel = current()
+        const aCurrent = currentModel?.provider.id === a.provider.id && currentModel.id === a.id
+        const bCurrent = currentModel?.provider.id === b.provider.id && currentModel.id === b.id
+        if (aCurrent && !bCurrent) return -1
+        if (!aCurrent && bCurrent) return 1
+        return a.name.localeCompare(b.name)
+      }}
       groupBy={(x) => x.provider.name}
       sortGroupsBy={(a, b) => {
         const aProvider = a.items[0].provider.id
@@ -73,9 +82,14 @@ const ModelList: Component<{
         props.onSelect()
       }}
     >
-      {(i) => (
+      {(i) => {
+        const selected = () => current()?.provider.id === i.provider.id && current()?.id === i.id
+        return (
         <div class="w-full flex items-center gap-x-2 text-13-regular">
           <span class="truncate">{i.name}</span>
+          <Show when={selected()}>
+            <Tag>{language.t("prompt.context.active")}</Tag>
+          </Show>
           <Show when={i.provider.id === "opencode" && (!i.cost || i.cost?.input === 0)}>
             <Tag>{language.t("model.tag.free")}</Tag>
           </Show>
@@ -83,7 +97,7 @@ const ModelList: Component<{
             <Tag>{language.t("model.tag.latest")}</Tag>
           </Show>
         </div>
-      )}
+      )}}
     </List>
   )
 }
@@ -227,16 +241,18 @@ export function ModelSelectorPopover<T extends ValidComponent = "div">(props: {
                     />
                   </Tooltip>
                 </Show>
-                <Tooltip placement="top" value={language.t("dialog.model.manage")}>
-                  <IconButton
-                    icon="sliders"
-                    variant="ghost"
-                    iconSize="normal"
-                    class="size-6"
-                    aria-label={language.t("dialog.model.manage")}
-                    onClick={handleManage}
-                  />
-                </Tooltip>
+                <Show when={auth.canFeature("models")}>
+                  <Tooltip placement="top" value={language.t("dialog.model.manage")}>
+                    <IconButton
+                      icon="sliders"
+                      variant="ghost"
+                      iconSize="normal"
+                      class="size-6"
+                      aria-label={language.t("dialog.model.manage")}
+                      onClick={handleManage}
+                    />
+                  </Tooltip>
+                </Show>
               </div>
             }
           />
@@ -250,7 +266,6 @@ export const DialogSelectModel: Component<{ provider?: string }> = (props) => {
   const auth = useAuth()
   const dialog = useDialog()
   const language = useLanguage()
-  if (!auth.canFeature("models")) return null
 
   return (
     <Dialog
@@ -269,13 +284,15 @@ export const DialogSelectModel: Component<{ provider?: string }> = (props) => {
       }
     >
       <ModelList provider={props.provider} onSelect={() => dialog.close()} />
-      <Button
-        variant="ghost"
-        class="ml-3 mt-5 mb-6 text-text-base self-start"
-        onClick={() => dialog.show(() => <DialogManageModels />)}
-      >
-        {language.t("dialog.model.manage")}
-      </Button>
+      <Show when={auth.canFeature("models")}>
+        <Button
+          variant="ghost"
+          class="ml-3 mt-5 mb-6 text-text-base self-start"
+          onClick={() => dialog.show(() => <DialogManageModels />)}
+        >
+          {language.t("dialog.model.manage")}
+        </Button>
+      </Show>
     </Dialog>
   )
 }
