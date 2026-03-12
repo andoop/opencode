@@ -165,12 +165,18 @@ export namespace Server {
           }
 
           const authHeader = c.req.header("Authorization")
-          if (!authHeader?.startsWith("Bearer ")) {
+          const queryToken = c.req.query("access_token")
+          const bearer =
+            authHeader?.startsWith("Bearer ")
+              ? authHeader.slice(7)
+              : c.req.header("Upgrade") === "websocket" && queryToken
+                ? queryToken
+                : undefined
+          if (!bearer) {
             return c.json({ error: "Authentication required" }, 401)
           }
 
-          const token = authHeader.slice(7)
-          const userContext = await UserAuth.getUserContext(token)
+          const userContext = await UserAuth.getUserContext(bearer)
           if (!userContext) {
             return c.json({ error: "Invalid or expired token" }, 401)
           }

@@ -2,7 +2,10 @@ import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { batch, createEffect, createMemo, createRoot, onCleanup } from "solid-js"
 import { useParams } from "@solidjs/router"
-import { useSDK } from "./sdk"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
+import { useGlobalSDK } from "./global-sdk"
+import { usePlatform } from "./platform"
+import { useAuth, addAuthInterceptor } from "./auth"
 import { Persist, persisted } from "@/utils/persist"
 
 export type LocalPTY = {
@@ -25,7 +28,12 @@ type TerminalCacheEntry = {
   dispose: VoidFunction
 }
 
-function createTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, session?: string) {
+function createTerminalSession(
+  dir: string,
+  client: ReturnType<typeof createOpencodeClient>,
+  onExit: (cb: (id: string) => void) => VoidFunction,
+  session?: string,
+) {
   const legacy = session ? [`${dir}/terminal/${session}.v1`, `${dir}/terminal.v1`] : [`${dir}/terminal.v1`]
 
   const numberFromTitle = (title: string) => {
@@ -46,8 +54,7 @@ function createTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, sess
     }),
   )
 
-  const unsub = sdk.event.on("pty.exited", (event) => {
-    const id = event.properties.id
+  const unsub = onExit((id) => {
     if (!store.all.some((x) => x.id === id)) return
     batch(() => {
       setStore(
@@ -102,8 +109,8 @@ function createTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, sess
           (number) => !existingTitleNumbers.has(number),
         ) ?? 1
 
-      sdk.client.pty
-        .create({ title: `Terminal ${nextNumber}` })
+      client.pty
+        .create({ title: `Terminal ${nextNumber}`, cwd: dir })
         .then((pty) => {
           const id = pty.data?.id
           if (!id) return
@@ -127,7 +134,7 @@ function createTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, sess
       if (index !== -1) {
         setStore("all", index, (existing) => ({ ...existing, ...pty }))
       }
-      sdk.client.pty
+      client.pty
         .update({
           ptyID: pty.id,
           title: pty.title,
@@ -141,9 +148,10 @@ function createTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, sess
       const index = store.all.findIndex((x) => x.id === id)
       const pty = store.all[index]
       if (!pty) return
-      const clone = await sdk.client.pty
+      const clone = await client.pty
         .create({
           title: pty.title,
+          cwd: dir,
         })
         .catch((e) => {
           console.error("Failed to clone terminal", e)
@@ -190,7 +198,7 @@ function createTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, sess
         setStore("all", filtered)
       })
 
-      await sdk.client.pty.remove({ ptyID: id }).catch((e) => {
+      await client.pty.remove({ ptyID: id }).catch((e) => {
         console.error("Failed to close terminal", e)
       })
     },
@@ -211,9 +219,12 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
   name: "Terminal",
   gate: false,
   init: () => {
-    const sdk = useSDK()
+    const globalSDK = useGlobalSDK()
+    const platform = usePlatform()
+    const auth = useAuth()
     const params = useParams()
     const cache = new Map<string, TerminalCacheEntry>()
+    const addAuth = (client: Parameters<typeof addAuthInterceptor>[0]) => addAuthInterceptor(client, () => auth.token)
 
     const disposeAll = () => {
       for (const entry of cache.values()) {
@@ -244,7 +255,22 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
 
       const entry = createRoot((dispose) => ({
-        value: createTerminalSession(sdk, dir, session),
+        value: createTerminalSession(
+          dir,
+          createOpencodeClient({
+            baseUrl: globalSDK.url,
+            fetch: platform.fetch,
+            directory: dir,
+            throwOnError: true,
+            onClient: addAuth,
+          }),
+          (cb) =>
+            globalSDK.event.on(dir, (event) => {
+              if (event.type !== "pty.exited") return
+              cb(event.properties.id)
+            }),
+          session,
+        ),
         dispose,
       }))
 
@@ -256,6 +282,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
     const workspace = createMemo(() => load(params.dir!, params.id))
 
     return {
+      directory: (dir: string, session?: string) => load(dir, session),
       ready: () => workspace().ready(),
       all: () => workspace().all(),
       active: () => workspace().active(),

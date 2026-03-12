@@ -1,15 +1,19 @@
 import type { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
-import { ComponentProps, createEffect, createSignal, onCleanup, onMount, splitProps } from "solid-js"
+import { ComponentProps, createEffect, createMemo, createSignal, onCleanup, onMount, splitProps } from "solid-js"
 import { useSDK } from "@/context/sdk"
+import { usePlatform } from "@/context/platform"
+import { useAuth, addAuthInterceptor } from "@/context/auth"
 import { monoFontFamily, useSettings } from "@/context/settings"
 import { SerializeAddon } from "@/addons/serialize"
 import { LocalPTY } from "@/context/terminal"
 import { resolveThemeVariant, useTheme, withAlpha, type HexColor } from "@opencode-ai/ui/theme"
 import { useLanguage } from "@/context/language"
 import { showToast } from "@opencode-ai/ui/toast"
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 
 export interface TerminalProps extends ComponentProps<"div"> {
   pty: LocalPTY
+  directory?: string
   onSubmit?: () => void
   onCleanup?: (pty: LocalPTY) => void
   onConnect?: () => void
@@ -53,11 +57,13 @@ const DEFAULT_TERMINAL_COLORS: Record<"light" | "dark", TerminalColors> = {
 
 export const Terminal = (props: TerminalProps) => {
   const sdk = useSDK()
+  const platform = usePlatform()
+  const auth = useAuth()
   const settings = useSettings()
   const theme = useTheme()
   const language = useLanguage()
   let container!: HTMLDivElement
-  const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnect", "onConnectError"])
+  const [local, others] = splitProps(props, ["pty", "directory", "class", "classList", "onConnect", "onConnectError"])
   let ws: WebSocket | undefined
   let term: Term | undefined
   let ghostty: Ghostty
@@ -103,6 +109,16 @@ export const Terminal = (props: TerminalProps) => {
   }
 
   const [terminalColors, setTerminalColors] = createSignal<TerminalColors>(getTerminalColors())
+  const directory = createMemo(() => local.directory ?? sdk.directory)
+  const client = createMemo(() =>
+    createOpencodeClient({
+      baseUrl: sdk.url,
+      fetch: platform.fetch,
+      directory: directory(),
+      throwOnError: true,
+      onClient: (client) => addAuthInterceptor(client, () => auth.token),
+    }),
+  )
 
   createEffect(() => {
     const colors = getTerminalColors()
@@ -145,7 +161,10 @@ export const Terminal = (props: TerminalProps) => {
 
       const once = { value: false }
 
-      const url = new URL(sdk.url + `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`)
+      const url = new URL(sdk.url + `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(directory())}`)
+      if (auth.token) {
+        url.searchParams.set("access_token", auth.token)
+      }
       if (window.__OPENCODE__?.serverPassword) {
         url.username = "opencode"
         url.password = window.__OPENCODE__?.serverPassword
@@ -318,7 +337,7 @@ export const Terminal = (props: TerminalProps) => {
       cleanups.push(() => window.removeEventListener("resize", handleResize))
       const onResize = t.onResize(async (size) => {
         if (socket.readyState === WebSocket.OPEN) {
-          await sdk.client.pty
+          await client().pty
             .update({
               ptyID: local.pty.id,
               size: {
@@ -348,7 +367,8 @@ export const Terminal = (props: TerminalProps) => {
 
       const handleOpen = () => {
         local.onConnect?.()
-        sdk.client.pty
+        client()
+          .pty
           .update({
             ptyID: local.pty.id,
             size: {

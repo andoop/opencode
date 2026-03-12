@@ -9,7 +9,17 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { useTerminal, type LocalPTY } from "@/context/terminal"
 import { useLanguage } from "@/context/language"
 
-export function SortableTerminalTab(props: { terminal: LocalPTY; onClose?: () => void }): JSX.Element {
+type TerminalState = {
+  all: () => LocalPTY[]
+  close: (id: string) => void | Promise<void>
+  update: (pty: Partial<LocalPTY> & { id: string }) => void
+}
+
+export function SortableTerminalTab(props: {
+  terminal: LocalPTY
+  state?: TerminalState
+  onClose?: () => void
+}): JSX.Element {
   const terminal = useTerminal()
   const language = useLanguage()
   const sortable = createSortable(props.terminal.id)
@@ -42,8 +52,9 @@ export function SortableTerminalTab(props: { terminal: LocalPTY; onClose?: () =>
   }
 
   const close = () => {
-    const count = terminal.all().length
-    terminal.close(props.terminal.id)
+    const state = props.state ?? terminal
+    const count = state.all().length
+    state.close(props.terminal.id)
     if (count === 1) {
       props.onClose?.()
     }
@@ -90,8 +101,9 @@ export function SortableTerminalTab(props: { terminal: LocalPTY; onClose?: () =>
     if (!store.blurEnabled) return
 
     const value = store.title.trim()
+    const state = props.state ?? terminal
     if (value && value !== props.terminal.title) {
-      terminal.update({ id: props.terminal.id, title: value })
+      state.update({ id: props.terminal.id, title: value })
     }
     setStore("editing", false)
   }

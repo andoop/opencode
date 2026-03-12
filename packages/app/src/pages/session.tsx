@@ -239,7 +239,7 @@ export default function Page() {
   const local = useLocal()
   const file = useFile()
   const sync = useSync()
-  const terminal = useTerminal()
+  const terminalContext = useTerminal()
   const dialog = useDialog()
   const codeComponent = useCodeComponent()
   const command = useCommand()
@@ -365,6 +365,20 @@ export default function Page() {
   })
   const sessionSyncData = createMemo(() => sessionSyncResult().data)
   const actualSessionDir = createMemo(() => sessionSyncResult().directory)
+  const terminalDir = createMemo(() => actualSessionDir() || sdk.directory)
+  const terminal = {
+    ready: () => terminalContext.directory(terminalDir(), params.id).ready(),
+    all: () => terminalContext.directory(terminalDir(), params.id).all(),
+    active: () => terminalContext.directory(terminalDir(), params.id).active(),
+    new: () => terminalContext.directory(terminalDir(), params.id).new(),
+    update: (pty: Partial<LocalPTY> & { id: string }) => terminalContext.directory(terminalDir(), params.id).update(pty),
+    clone: (id: string) => terminalContext.directory(terminalDir(), params.id).clone(id),
+    open: (id: string) => terminalContext.directory(terminalDir(), params.id).open(id),
+    close: (id: string) => terminalContext.directory(terminalDir(), params.id).close(id),
+    move: (id: string, to: number) => terminalContext.directory(terminalDir(), params.id).move(id, to),
+    next: () => terminalContext.directory(terminalDir(), params.id).next(),
+    previous: () => terminalContext.directory(terminalDir(), params.id).previous(),
+  }
   // Get session info from sessionSyncData (which may be from worktree store)
   // Cache the result to prevent losing session info when the session is temporarily
   // removed from the store by trimSessions.
@@ -3412,6 +3426,7 @@ export default function Page() {
                         {(pty) => (
                           <SortableTerminalTab
                             terminal={pty}
+                            state={terminal}
                             onClose={() => {
                               view().terminal.close()
                               setUi("autoCreated", false)
@@ -3450,6 +3465,7 @@ export default function Page() {
                         <Show when={pty.id} keyed>
                           <Terminal
                             pty={pty}
+                            directory={terminalDir()}
                             onCleanup={terminal.update}
                             onConnectError={() => terminal.clone(pty.id)}
                           />
