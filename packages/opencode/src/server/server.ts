@@ -74,6 +74,8 @@ export namespace Server {
             if (err instanceof Storage.NotFoundError) status = 404
             else if (err instanceof Provider.ModelNotFoundError) status = 400
             else if (err instanceof Project.DirectoryAccessError) status = 403
+            else if (err.name === "InvalidCredentialsError") status = 401
+            else if (err.name === "UserDuplicateError") status = 400
             else if (err.name.startsWith("UserFeature")) status = 403
             else if (err.name.startsWith("ProjectRegistry")) status = 400
             else if (err.name.startsWith("Worktree")) status = 400
@@ -155,6 +157,7 @@ export namespace Server {
           // Public routes that don't require authentication
           const publicPaths = [
             "/user-auth/login",
+            "/user-auth/register",
             "/health",
             "/global/health",
             "/doc",

@@ -1,5 +1,5 @@
 import { createSignal, Show, onMount, onCleanup } from "solid-js"
-import { useLocation, useNavigate } from "@solidjs/router"
+import { useNavigate } from "@solidjs/router"
 import { useAuth } from "@/context/auth"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
@@ -7,7 +7,6 @@ import { TextField } from "@opencode-ai/ui/text-field"
 export default function LoginPage() {
   const auth = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
 
   const [username, setUsername] = createSignal("")
   const [password, setPassword] = createSignal("")
@@ -54,33 +53,40 @@ export default function LoginPage() {
 
           <div class="space-y-4">
             <TextField
-              label="Username"
-              type="text"
+              label="手机号"
+              type="tel"
               value={username()}
               onChange={setUsername}
-              placeholder="Enter your username"
+              placeholder="请输入手机号"
               autofocus
               required
             />
 
             <TextField
-              label="Password"
+              label="密码"
               type="password"
               value={password()}
               onChange={setPassword}
-              placeholder="Enter your password"
+              placeholder="请输入密码"
               required
             />
           </div>
 
-          <Button
-            type="submit"
-            class="w-full"
-            variant="primary"
-            disabled={auth.loading || !username() || !password()}
-          >
-            {auth.loading ? "Signing in..." : "Sign in"}
-          </Button>
+          <div class="space-y-3">
+            <Button
+              type="submit"
+              class="w-full"
+              variant="primary"
+              disabled={auth.loading || !username() || !password()}
+            >
+              {auth.loading ? "登录中..." : "登录"}
+            </Button>
+            <Show when={auth.isMultiUserEnabled}>
+              <Button type="button" class="w-full" variant="ghost" onClick={() => navigate("/register")}>
+                注册
+              </Button>
+            </Show>
+          </div>
         </form>
       </div>
     </div>

@@ -138,3 +138,18 @@ test("filterModels removes non-whitelisted models and empty providers", () => {
     },
   ])
 })
+
+test("defaultRegisteredPermission enables ask only with cursor-cli whitelist", () => {
+  const permission = User.defaultRegisteredPermission()
+
+  expect(User.modeEnabled("ask", { role: "user", permission })).toBe(true)
+  expect(User.modeEnabled("build", { role: "user", permission })).toBe(false)
+  expect(User.modeEnabled("plan", { role: "user", permission })).toBe(false)
+  expect(User.featureEnabled("models", { role: "user", permission })).toBe(false)
+  expect(User.featureEnabled("providers", { role: "user", permission })).toBe(false)
+  expect(User.featureEnabled("servers", { role: "user", permission })).toBe(false)
+  expect(User.modelEnabled("cursor-cli/auto", { role: "user", permission })).toBe(true)
+  expect(User.modelEnabled("cursor-cli/composer-1", { role: "user", permission })).toBe(true)
+  expect(User.modelEnabled("cursor-cli/composer-1.5", { role: "user", permission })).toBe(true)
+  expect(User.modelEnabled("cursor-cli/composer-2", { role: "user", permission })).toBe(false)
+})

@@ -11,6 +11,7 @@ import z from "zod"
 export namespace User {
   const log = Log.create({ service: "user" })
   type ModelRef = string | { providerID: string; modelID: string }
+  const DEFAULT_REGISTERED_MODELS = ["cursor-cli/auto", "cursor-cli/composer-1", "cursor-cli/composer-1.5"] as const
   const FEATURE_DEFAULTS = {
     modes: {
       ask: true,
@@ -255,6 +256,32 @@ export namespace User {
   export function requireFeature(key: FeatureKey, input?: { role?: Role; permission?: Permission }) {
     if (featureEnabled(key, input)) return
     throw new FeatureDisabledError({ feature: key })
+  }
+
+  export function defaultRegisteredPermission(): Permission {
+    return {
+      level: "custom",
+      custom: {
+        edit: "allow",
+        write: "allow",
+        bash: "ask",
+        read: "allow",
+      },
+      allowed_agents: ["ask"],
+      features: {
+        modes: {
+          ask: true,
+          build: false,
+          plan: false,
+        },
+        files: true,
+        models: false,
+        providers: false,
+        servers: false,
+        mcp: false,
+      },
+      models: [...DEFAULT_REGISTERED_MODELS],
+    }
   }
 
   // Helper to omit password

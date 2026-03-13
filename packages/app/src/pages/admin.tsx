@@ -90,6 +90,23 @@ const FEATURE_ROWS = [
   { id: "mcp", label: "MCP 管理", description: "MCP 列表、开关与管理入口" },
 ] as const
 
+const DEFAULT_REGISTER_MODELS = ["cursor-cli/auto", "cursor-cli/composer-1", "cursor-cli/composer-1.5"]
+
+function createRegisteredFeatures(): FeatureState {
+  return {
+    modes: {
+      ask: true,
+      build: false,
+      plan: false,
+    },
+    files: true,
+    models: false,
+    providers: false,
+    servers: false,
+    mcp: false,
+  }
+}
+
 function createFeatures(permission?: UserInfo["permission"]): FeatureState {
   return {
     modes: {
@@ -384,7 +401,7 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = createSignal("")
   const [newEmail, setNewEmail] = createSignal("")
   const [newRole, setNewRole] = createSignal<"admin" | "user">("user")
-  const [newPermissionLevel, setNewPermissionLevel] = createSignal<"full" | "readonly" | "custom">("full")
+  const [newPermissionLevel, setNewPermissionLevel] = createSignal<"full" | "readonly" | "custom">("custom")
 
   // Edit user form state
   const [editRole, setEditRole] = createSignal<"admin" | "user">("user")
@@ -400,9 +417,9 @@ export default function AdminPage() {
   const [newCustomWrite, setNewCustomWrite] = createSignal<"allow" | "ask" | "deny">("allow")
   const [newCustomBash, setNewCustomBash] = createSignal<"allow" | "ask" | "deny">("ask")
   const [newCustomRead, setNewCustomRead] = createSignal<"allow" | "ask" | "deny">("allow")
-  const [newFeatures, setNewFeatures] = createStore<FeatureState>(createFeatures())
+  const [newFeatures, setNewFeatures] = createStore<FeatureState>(createRegisteredFeatures())
   const [editFeatures, setEditFeatures] = createStore<FeatureState>(createFeatures())
-  const [newModels, setNewModels] = createSignal<string[] | null>([])
+  const [newModels, setNewModels] = createSignal<string[] | null>([...DEFAULT_REGISTER_MODELS])
   const [editModels, setEditModels] = createSignal<string[] | null>([])
   const [newModelSearch, setNewModelSearch] = createSignal("")
   const [editModelSearch, setEditModelSearch] = createSignal("")
@@ -504,13 +521,13 @@ export default function AdminPage() {
       setNewPassword("")
       setNewEmail("")
       setNewRole("user")
-      setNewPermissionLevel("full")
+      setNewPermissionLevel("custom")
       setNewCustomEdit("allow")
       setNewCustomWrite("allow")
       setNewCustomBash("ask")
       setNewCustomRead("allow")
-      setNewFeatures(createFeatures())
-      setNewModels([])
+      setNewFeatures(createRegisteredFeatures())
+      setNewModels([...DEFAULT_REGISTER_MODELS])
       setNewModelSearch("")
       void refetch()
     } catch (e) {

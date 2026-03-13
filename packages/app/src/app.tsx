@@ -36,6 +36,7 @@ import { Suspense } from "solid-js"
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
 const Login = lazy(() => import("@/pages/login"))
+const Register = lazy(() => import("@/pages/register"))
 const Admin = lazy(() => import("@/pages/admin"))
 const Loading = () => <div class="size-full" />
 
@@ -46,7 +47,7 @@ function AuthGuard(props: ParentProps) {
 
   createEffect(() => {
     // Don't redirect if already on login page
-    if (location.pathname === "/login") return
+    if (location.pathname === "/login" || location.pathname === "/register") return
     
     if (auth.isMultiUserEnabled && !auth.loading && !auth.isAuthenticated) {
       navigate("/login")
@@ -54,7 +55,7 @@ function AuthGuard(props: ParentProps) {
   })
 
   // Don't render protected content if on login page
-  if (location.pathname === "/login") {
+  if (location.pathname === "/login" || location.pathname === "/register") {
     return null
   }
 
@@ -168,12 +169,12 @@ export function AppInterface(props: { defaultUrl?: string }) {
               <Router
                 root={(props) => {
                   const location = useLocation()
-                  const isLoginPage = createMemo(() => location.pathname === "/login")
+                  const isAuthPage = createMemo(() => location.pathname === "/login" || location.pathname === "/register")
                   
-                  // Login page should not use Layout
+                  // Auth pages should not use Layout
                   return (
                     <Show
-                      when={!isLoginPage()}
+                      when={!isAuthPage()}
                       fallback={<>{props.children}</>}
                     >
                       <SettingsProvider>
@@ -200,6 +201,14 @@ export function AppInterface(props: { defaultUrl?: string }) {
                   component={() => (
                     <Suspense fallback={<Loading />}>
                       <Login />
+                    </Suspense>
+                  )}
+                />
+                <Route
+                  path="/register"
+                  component={() => (
+                    <Suspense fallback={<Loading />}>
+                      <Register />
                     </Suspense>
                   )}
                 />

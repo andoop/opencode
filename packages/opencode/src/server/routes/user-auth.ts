@@ -3,9 +3,21 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { User } from "@/user"
 import { UserAuth } from "@/user/auth"
+import { Flag } from "@/flag/flag"
 import { errors } from "../error"
 
 export function UserAuthRoutes() {
+  const registerSchema = z
+    .object({
+      phone: z.string().trim().regex(/^1[3-9]\d{9}$/, "Invalid phone number"),
+      password: z.string().min(6),
+      confirmPassword: z.string().min(6),
+    })
+    .refine((value) => value.password === value.confirmPassword, {
+      message: "Passwords do not match",
+      path: ["confirmPassword"],
+    })
+
   return new Hono()
     .post(
       "/login",
@@ -36,6 +48,47 @@ export function UserAuthRoutes() {
         const { username, password } = c.req.valid("json")
         const result = await UserAuth.login(username, password)
         return c.json(result)
+      },
+    )
+    .post(
+      "/register",
+      describeRoute({
+        summary: "Register user",
+        description: "Register a new user in multi-user mode using a phone number",
+        operationId: "userAuth.register",
+        responses: {
+          200: {
+            description: "Register successful",
+            content: {
+              "application/json": {
+                schema: resolver(UserAuth.LoginResponse),
+              },
+            },
+          },
+          ...errors(400, 403),
+        },
+      }),
+      validator("json", registerSchema),
+      async (c) => {
+        const multiUserEnabled = Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
+        if (!multiUserEnabled) {
+          return c.json({ error: "Registration is only available in multi-user mode" }, 403)
+        }
+
+        const { phone, password } = c.req.valid("json")
+        const user = await User.create({
+          username: phone,
+          password,
+          role: "user",
+          permission: User.defaultRegisteredPermission(),
+        })
+        const token = await UserAuth.sign({
+          user_id: user.id,
+          username: user.username,
+          role: user.role,
+          permission: user.permission,
+        })
+        return c.json({ token, user })
       },
     )
     .post(

@@ -232,6 +232,36 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
       }
     }
 
+    const register = async (phone: string, password: string, confirmPassword: string) => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const response = await fetchFn(`${server.url}/user-auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, password, confirmPassword }),
+        })
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error || data.message || "Registration failed")
+        }
+
+        const data = await response.json()
+        setToken(data.token)
+        setUser(data.user)
+        setMultiUserEnabledSignal(true)
+        return true
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Registration failed"
+        setError(message)
+        return false
+      } finally {
+        setLoading(false)
+      }
+    }
+
     const logout = () => {
       setToken(null)
       setUser(null)
@@ -313,6 +343,7 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
         return canUseModel(user(), model)
       },
       login,
+      register,
       logout,
       refreshToken,
     }
