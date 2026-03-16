@@ -20,6 +20,7 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
         if (!text) return true
         return (
           (project.name ?? "").toLowerCase().includes(text) ||
+          (project.description ?? "").toLowerCase().includes(text) ||
           project.worktree.toLowerCase().includes(text) ||
           getFilename(project.worktree).toLowerCase().includes(text)
         )
@@ -73,6 +74,9 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
                     onClick={() => resolve(project.worktree)}
                   >
                     <div class="text-14-medium text-text-strong">{project.name || getFilename(project.worktree)}</div>
+                    <Show when={project.description}>
+                      <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
+                    </Show>
                     <div class="text-12-regular text-text-weak">{label(project.worktree)}</div>
                   </button>
                 )}

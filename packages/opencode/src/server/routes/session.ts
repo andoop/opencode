@@ -20,6 +20,16 @@ import { User } from "@/user"
 
 const log = Log.create({ service: "server" })
 
+function requireAdmin() {
+  return async (c: any, next: any) => {
+    const user = User.current()
+    if (!user || user.role !== "admin") {
+      return c.json({ error: "Admin access required" }, 403)
+    }
+    return next()
+  }
+}
+
 export const SessionRoutes = lazy(() =>
   new Hono()
     .get(
@@ -65,6 +75,85 @@ export const SessionRoutes = lazy(() =>
           if (query.limit !== undefined && sessions.length >= query.limit) break
         }
         return c.json(sessions)
+      },
+    )
+    .get(
+      "/admin/summary",
+      describeRoute({
+        summary: "Get admin session summary",
+        description: "Retrieve cross-user session statistics for admins.",
+        operationId: "session.admin.summary",
+        responses: {
+          200: {
+            description: "Admin session summary",
+            content: {
+              "application/json": {
+                schema: resolver(Session.AdminAuditSummary),
+              },
+            },
+          },
+          ...errors(403),
+        },
+      }),
+      requireAdmin(),
+      async (c) => {
+        return c.json(await Session.adminSummary({}))
+      },
+    )
+    .get(
+      "/admin/list",
+      describeRoute({
+        summary: "List admin session audit entries",
+        description: "Retrieve cross-user session audit entries for admins.",
+        operationId: "session.admin.list",
+        responses: {
+          200: {
+            description: "Admin session audit entries",
+            content: {
+              "application/json": {
+                schema: resolver(Session.AdminAuditEntry.array()),
+              },
+            },
+          },
+          ...errors(403),
+        },
+      }),
+      requireAdmin(),
+      validator(
+        "query",
+        z.object({
+          search: z.string().optional(),
+          userID: z.string().optional(),
+          projectID: z.string().optional(),
+          limit: z.coerce.number().optional(),
+        }),
+      ),
+      async (c) => {
+        return c.json(await Session.adminAudit(c.req.valid("query")))
+      },
+    )
+    .get(
+      "/admin/:sessionID/prompts",
+      describeRoute({
+        summary: "Get admin session prompts",
+        description: "Retrieve user prompts for a session for admin auditing.",
+        operationId: "session.admin.prompts",
+        responses: {
+          200: {
+            description: "Admin session prompts",
+            content: {
+              "application/json": {
+                schema: resolver(Session.AdminPrompt.array()),
+              },
+            },
+          },
+          ...errors(403),
+        },
+      }),
+      requireAdmin(),
+      validator("param", z.object({ sessionID: z.string() })),
+      async (c) => {
+        return c.json(await Session.adminPrompts(c.req.valid("param").sessionID))
       },
     )
     .get(

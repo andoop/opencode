@@ -28,6 +28,7 @@ import { Global } from "@/global"
 import { User } from "@/user"
 import { GlobalBus } from "@/bus/global"
 import { Worktree } from "@/worktree"
+import { ProjectRegistry } from "@/project/registry"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -212,6 +213,161 @@ export namespace Session {
       }),
     ),
   }
+
+  export const AdminPrompt = z
+    .object({
+      messageID: Identifier.schema("message"),
+      created: z.number(),
+      text: z.string(),
+    })
+    .meta({
+      ref: "SessionAdminPrompt",
+    })
+  export type AdminPrompt = z.infer<typeof AdminPrompt>
+
+  export const AdminAuditEntry = z
+    .object({
+      session: Info,
+      user: z.object({
+        id: z.string().optional(),
+        username: z.string().optional(),
+      }),
+      project: z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        directory: z.string(),
+      }),
+      message_count: z.number(),
+      prompt_count: z.number(),
+      last_prompt: z.string().optional(),
+      last_prompt_at: z.number().optional(),
+    })
+    .meta({
+      ref: "SessionAdminAuditEntry",
+    })
+  export type AdminAuditEntry = z.infer<typeof AdminAuditEntry>
+
+  export const AdminAuditSummary = z
+    .object({
+      sessions: z.number(),
+      users: z.number(),
+      projects: z.number(),
+      prompts: z.number(),
+      last_activity: z.number().optional(),
+    })
+    .meta({
+      ref: "SessionAdminAuditSummary",
+    })
+  export type AdminAuditSummary = z.infer<typeof AdminAuditSummary>
+
+  async function listAllSessions() {
+    const prefix = isMultiUserMode() ? ["user_session"] : ["session"]
+    const items = await Storage.list(prefix)
+    const sessions = await Promise.all(items.map((item) => Storage.read<Info>(item).catch(() => undefined)))
+    return sessions.filter((item): item is Info => !!item).toSorted((a, b) => b.time.updated - a.time.updated)
+  }
+
+  function promptText(msg: MessageV2.WithParts) {
+    if (msg.info.role !== "user") return
+    const text = msg.parts
+      .filter((part): part is MessageV2.TextPart => part.type === "text")
+      .filter((part) => !part.synthetic && !part.ignored)
+      .map((part) => part.text.trim())
+      .filter(Boolean)
+      .join("\n\n")
+    if (!text) return
+    return {
+      messageID: msg.info.id,
+      created: msg.info.time.created,
+      text,
+    } satisfies AdminPrompt
+  }
+
+  export const adminPrompts = fn(Identifier.schema("session"), async (sessionID) => {
+    return (await messages({ sessionID })).flatMap((msg) => {
+      const text = promptText(msg)
+      return text ? [text] : []
+    })
+  })
+
+  export const adminAudit = fn(
+    z.object({
+      search: z.string().optional(),
+      userID: Identifier.schema("user").optional(),
+      projectID: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async (input) => {
+      const users = new Map((await User.list()).map((user) => [user.id, user]))
+      const projects = new Map((await ProjectRegistry.list()).map((project) => [project.project_id, project]))
+      const term = input.search?.trim().toLowerCase()
+      const result = [] as AdminAuditEntry[]
+      for (const session of await listAllSessions()) {
+        if (input.userID && session.userID !== input.userID) continue
+        if (input.projectID && session.projectID !== input.projectID) continue
+        const prompts = await adminPrompts(session.id)
+        const lastPrompt = prompts.at(-1)
+        const user = session.userID ? users.get(session.userID) : undefined
+        const project = projects.get(session.projectID)
+        const row: AdminAuditEntry = {
+          session,
+          user: {
+            id: session.userID,
+            username: user?.username,
+          },
+          project: {
+            id: session.projectID,
+            name: project?.name,
+            description: project?.description,
+            directory: project?.directory ?? session.directory,
+          },
+          message_count: (await messages({ sessionID: session.id })).length,
+          prompt_count: prompts.length,
+          last_prompt: lastPrompt?.text,
+          last_prompt_at: lastPrompt?.created,
+        }
+        if (term) {
+          const haystack = [
+            row.session.title,
+            row.user.username,
+            row.project.name,
+            row.project.description,
+            row.project.directory,
+            row.last_prompt,
+          ]
+            .filter(Boolean)
+            .join("\n")
+            .toLowerCase()
+          if (!haystack.includes(term)) continue
+        }
+        result.push(row)
+        if (input.limit && result.length >= input.limit) break
+      }
+      return result
+    },
+  )
+
+  export const adminSummary = fn(z.object({}), async () => {
+    const sessions = await listAllSessions()
+    const users = new Set<string>()
+    const projects = new Set<string>()
+    let prompts = 0
+    let lastActivity = 0
+    for (const session of sessions) {
+      if (session.userID) users.add(session.userID)
+      projects.add(session.projectID)
+      prompts += (await adminPrompts(session.id)).length
+      lastActivity = Math.max(lastActivity, session.time.updated)
+    }
+    return {
+      sessions: sessions.length,
+      users: users.size,
+      projects: projects.size,
+      prompts,
+      last_activity: lastActivity || undefined,
+    } satisfies AdminAuditSummary
+  })
 
   export const create = fn(
     z

@@ -23,6 +23,7 @@ export type Project = {
   worktree: string
   vcs?: "git"
   name?: string
+  description?: string
   icon?: {
     url?: string
     override?: string

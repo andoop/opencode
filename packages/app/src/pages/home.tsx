@@ -114,11 +114,17 @@ export default function Home() {
                   <Button
                     size="large"
                     variant="ghost"
-                    class="text-14-mono text-left justify-between px-3"
+                    class="h-auto px-3 py-3 text-left"
                     onClick={() => openProject(project.worktree)}
                   >
-                    {project.worktree.replace(homedir(), "~")}
-                    <div class="text-14-regular text-text-weak">
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-14-medium text-text-strong">{project.name || project.worktree.replace(homedir(), "~")}</div>
+                      <Show when={project.description}>
+                        <div class="mt-1 line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
+                      </Show>
+                      <div class="mt-1 truncate text-12-regular text-text-weak">{project.worktree.replace(homedir(), "~")}</div>
+                    </div>
+                    <div class="ml-4 shrink-0 text-14-regular text-text-weak">
                       {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
                     </div>
                   </Button>

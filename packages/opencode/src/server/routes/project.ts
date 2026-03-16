@@ -90,6 +90,7 @@ export const ProjectRoutes = lazy(() =>
         z.object({
           directory: z.string(),
           name: z.string().optional(),
+          description: z.string().optional(),
         }),
       ),
       async (c) => {
@@ -126,6 +127,7 @@ export const ProjectRoutes = lazy(() =>
         "json",
         z.object({
           name: z.string().optional(),
+          description: z.string().optional(),
         }),
       ),
       async (c) => {
@@ -133,6 +135,7 @@ export const ProjectRoutes = lazy(() =>
         const body = c.req.valid("json")
         const project = await ProjectRegistry.update(id, (draft) => {
           if (body.name !== undefined) draft.name = body.name
+          if (body.description !== undefined) draft.description = body.description
         })
         return c.json(project)
       },

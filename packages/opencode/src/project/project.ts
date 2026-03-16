@@ -69,6 +69,7 @@ export namespace Project {
       worktree: z.string(),
       vcs: z.literal("git").optional(),
       name: z.string().optional(),
+      description: z.string().optional(),
       icon: z
         .object({
           url: z.string().optional(),
@@ -133,6 +134,7 @@ export namespace Project {
       worktree: entry.directory,
       vcs: entry.vcs ?? userProject?.vcs,
       name: entry.name ?? userProject?.name,
+      description: entry.description ?? userProject?.description,
       icon: userProject?.icon,
       commands: userProject?.commands,
       sandboxes: userProject?.sandboxes?.filter((x) => existsSync(x)) ?? [],
@@ -174,6 +176,7 @@ export namespace Project {
       vcs === "git" && !registry && isManagedWorktree(directory, id) ? await ProjectRegistry.findByProjectID(id) : undefined
     const canonicalWorktree = registry?.directory ?? registryByProject?.directory ?? worktree
     const canonicalName = registry?.name ?? registryByProject?.name
+    const canonicalDescription = registry?.description ?? registryByProject?.description
 
     const userID = currentUserID()
     const key = projectKey(id, userID)
@@ -184,6 +187,7 @@ export namespace Project {
         worktree: canonicalWorktree,
         vcs: vcs as Info["vcs"],
         name: canonicalName,
+        description: canonicalDescription,
         sandboxes: [],
         time: {
           created: Date.now(),
@@ -205,6 +209,7 @@ export namespace Project {
       worktree: canonicalWorktree,
       vcs: vcs as Info["vcs"],
       name: canonicalName ?? existing.name,
+      description: canonicalDescription ?? existing.description,
       time: {
         ...existing.time,
         updated: Date.now(),

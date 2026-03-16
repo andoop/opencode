@@ -14,6 +14,7 @@ export namespace ProjectRegistry {
       project_id: z.string(),
       directory: z.string(),
       name: z.string().optional(),
+      description: z.string().optional(),
       created_by: z.string().optional(),
       vcs: z.literal("git").optional(),
       time: z.object({
@@ -75,7 +76,7 @@ export namespace ProjectRegistry {
     return items.find((item) => item.project_id === projectID)
   }
 
-  export async function add(input: { directory: string; name?: string; created_by?: string }) {
+  export async function add(input: { directory: string; name?: string; description?: string; created_by?: string }) {
     const resolved = await resolveDirectory(input.directory)
     if (resolved.vcs !== "git" || resolved.worktree === "/") {
       throw new InvalidDirectoryError({
@@ -93,6 +94,7 @@ export namespace ProjectRegistry {
       project_id: resolved.id,
       directory: resolved.worktree,
       name: input.name?.trim() || undefined,
+      description: input.description?.trim() || undefined,
       created_by: input.created_by,
       vcs: resolved.vcs,
       time: {
@@ -110,6 +112,7 @@ export namespace ProjectRegistry {
     const info = await Storage.update<Info>(key(id), (draft) => {
       editor(draft)
       draft.name = draft.name?.trim() || undefined
+      draft.description = draft.description?.trim() || undefined
       draft.time.updated = Date.now()
     })
     await publishUpdated(info)

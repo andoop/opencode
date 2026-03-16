@@ -1,9 +1,10 @@
-import { createMemo, createSignal, createResource, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, createResource, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
 import { FEATURE_DEFAULTS, useAuth } from "@/context/auth"
 import { useServer } from "@/context/server"
 import { usePlatform } from "@/context/platform"
+import { useLanguage } from "@/context/language"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
@@ -46,6 +47,7 @@ interface RegistryProject {
   project_id: string
   directory: string
   name?: string
+  description?: string
   created_by?: string
   vcs?: "git"
   time: {
@@ -64,6 +66,47 @@ interface ProviderInfo {
       name: string
     }
   >
+}
+
+interface AuditSummary {
+  sessions: number
+  users: number
+  projects: number
+  prompts: number
+  last_activity?: number
+}
+
+interface AuditSession {
+  session: {
+    id: string
+    title: string
+    projectID: string
+    userID?: string
+    time: {
+      created: number
+      updated: number
+    }
+  }
+  user: {
+    id?: string
+    username?: string
+  }
+  project: {
+    id: string
+    name?: string
+    description?: string
+    directory: string
+  }
+  message_count: number
+  prompt_count: number
+  last_prompt?: string
+  last_prompt_at?: number
+}
+
+interface AuditPrompt {
+  messageID: string
+  created: number
+  text: string
 }
 
 type FeatureState = {
@@ -345,7 +388,9 @@ export default function AdminPage() {
   const navigate = useNavigate()
   const server = useServer()
   const platform = usePlatform()
+  const language = useLanguage()
   const dialog = useDialog()
+  let rootRef: HTMLDivElement | undefined
 
   // Redirect if not admin
   if (!auth.isAdmin) {
@@ -385,9 +430,51 @@ export default function AdminPage() {
     return data.all.filter((provider) => data.connected.includes(provider.id))
   }
 
+  const fetchAuditSummary = async () => {
+    const response = await fetchFn(`${server.url}/session/admin/summary`, {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error("Failed to fetch session summary")
+    return response.json() as Promise<AuditSummary>
+  }
+
   const [users, { refetch }] = createResource(fetchUsers)
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects)
   const [providers] = createResource(fetchProviders)
+  const [auditSearch, setAuditSearch] = createSignal("")
+  const [auditSearchDraft, setAuditSearchDraft] = createSignal("")
+  const [auditUserFilter, setAuditUserFilter] = createSignal("")
+  const [auditProjectFilter, setAuditProjectFilter] = createSignal("")
+  const [selectedAuditSessionID, setSelectedAuditSessionID] = createSignal<string | null>(null)
+  let auditScrollSnapshot: { top: number; left: number } | null = null
+  const [auditSummary, { refetch: refetchAuditSummary }] = createResource(fetchAuditSummary)
+  const [auditSessions, { refetch: refetchAuditSessions }] = createResource(
+    () => ({
+      search: auditSearch().trim(),
+      userID: auditUserFilter() || undefined,
+      projectID: auditProjectFilter() || undefined,
+    }),
+    async (query) => {
+      const url = new URL(`${server.url}/session/admin/list`)
+      url.searchParams.set("limit", "50")
+      if (query.search) url.searchParams.set("search", query.search)
+      if (query.userID) url.searchParams.set("userID", query.userID)
+      if (query.projectID) url.searchParams.set("projectID", query.projectID)
+      const response = await fetchFn(url.toString(), {
+        headers: authHeaders(),
+      })
+      if (!response.ok) throw new Error("Failed to fetch session audit")
+      return response.json() as Promise<AuditSession[]>
+    },
+  )
+  const [auditPrompts, { refetch: refetchAuditPrompts }] = createResource(selectedAuditSessionID, async (sessionID) => {
+    if (!sessionID) return [] as AuditPrompt[]
+    const response = await fetchFn(`${server.url}/session/admin/${sessionID}/prompts`, {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error("Failed to fetch session prompts")
+    return response.json() as Promise<AuditPrompt[]>
+  })
   const [showCreateDialog, setShowCreateDialog] = createSignal(false)
   const [showEditDialog, setShowEditDialog] = createSignal(false)
   const [showResetPasswordDialog, setShowResetPasswordDialog] = createSignal(false)
@@ -426,7 +513,59 @@ export default function AdminPage() {
 
   // Reset password form state
   const [newPasswordReset, setNewPasswordReset] = createSignal("")
+  const [projectDirectory, setProjectDirectory] = createSignal("")
   const [projectName, setProjectName] = createSignal("")
+  const [projectDescription, setProjectDescription] = createSignal("")
+  const selectedAuditSession = createMemo(() =>
+    (auditSessions() ?? []).find((item) => item.session.id === selectedAuditSessionID()),
+  )
+  const scrollElement = () => {
+    let node = rootRef?.parentElement
+    while (node) {
+      const style = getComputedStyle(node)
+      const overflowY = style.overflowY || style.overflow
+      if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
+        return node
+      }
+      node = node.parentElement
+    }
+    return (document.scrollingElement as HTMLElement | null) ?? document.documentElement
+  }
+  const captureStableScroll = () => {
+    const el = scrollElement()
+    return {
+      top: el.scrollTop,
+      left: el.scrollLeft,
+    }
+  }
+  const restoreStableScroll = () => {
+    const snapshot = auditScrollSnapshot
+    if (!snapshot) return
+    const el = scrollElement()
+    el.scrollTo({ top: snapshot.top, left: snapshot.left, behavior: "auto" })
+    auditScrollSnapshot = null
+  }
+  const preserveStableScroll = (run: () => void) => {
+    auditScrollSnapshot = captureStableScroll()
+    run()
+  }
+  const openAuditPrompts = (sessionID: string) => {
+    preserveStableScroll(() => {
+      setSelectedAuditSessionID(sessionID)
+    })
+  }
+  const applyAuditSearch = () => {
+    preserveStableScroll(() => {
+      setAuditSearch(auditSearchDraft())
+    })
+  }
+  createEffect(() => {
+    auditSessions()
+    if (auditScrollSnapshot) restoreStableScroll()
+  })
+  createEffect(() => {
+    auditPrompts()
+  })
 
   const toggleFeatures = (
     setFeatures: typeof setNewFeatures,
@@ -650,12 +789,18 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           directory,
+          name: projectName() || undefined,
+          description: projectDescription() || undefined,
         }),
       })
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.error || data.message || "Failed to add project")
       }
+      setShowProjectDialog(false)
+      setProjectDirectory("")
+      setProjectName("")
+      setProjectDescription("")
       void refetchProjects()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add project")
@@ -666,7 +811,11 @@ export default function AdminPage() {
     const resolve = (result: string | string[] | null) => {
       const directory = Array.isArray(result) ? result[0] : result
       if (!directory) return
-      void addProject(directory)
+      setEditingProject(null)
+      setProjectDirectory(directory)
+      setProjectName("")
+      setProjectDescription("")
+      setShowProjectDialog(true)
     }
 
     if (platform.openDirectoryPickerDialog && server.isLocal()) {
@@ -683,15 +832,20 @@ export default function AdminPage() {
 
   const openProjectDialog = (project: RegistryProject) => {
     setEditingProject(project)
+    setProjectDirectory(project.directory)
     setProjectName(project.name ?? "")
+    setProjectDescription(project.description ?? "")
     setShowProjectDialog(true)
   }
 
-  const updateProject = async () => {
+  const saveProject = async () => {
     const project = editingProject()
-    if (!project) return
     setError(null)
     try {
+      if (!project) {
+        await addProject(projectDirectory())
+        return
+      }
       const response = await fetchFn(`${server.url}/project/registry/${project.id}`, {
         method: "PATCH",
         headers: {
@@ -700,6 +854,7 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           name: projectName(),
+          description: projectDescription(),
         }),
       })
       if (!response.ok) {
@@ -708,7 +863,9 @@ export default function AdminPage() {
       }
       setShowProjectDialog(false)
       setEditingProject(null)
+      setProjectDirectory("")
       setProjectName("")
+      setProjectDescription("")
       void refetchProjects()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update project")
@@ -766,19 +923,23 @@ export default function AdminPage() {
     return new Date(timestamp).toLocaleString()
   }
 
+  const projectLabel = (item: { name?: string; directory: string }) => item.name || item.directory
+  const showProjectDirectory = (item: { name?: string; directory: string }) =>
+    !!item.name && item.name !== item.directory
+
   return (
-    <div class="mx-auto max-w-6xl p-8">
+    <div ref={rootRef} class="mx-auto max-w-6xl p-6 lg:p-8">
       <div class="mb-8 flex items-center justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-color-primary">User Management</h1>
-          <p class="mt-1 text-sm text-color-secondary">Manage users and their permissions</p>
+          <h1 class="text-2xl font-semibold text-color-primary">{language.t("sidebar.userManagement")}</h1>
+          <p class="mt-1 text-sm text-color-secondary">{language.t("admin.page.description")}</p>
         </div>
         <div class="flex gap-4">
           <Button variant="ghost" onClick={() => navigate("/")}>
-            Back to Home
+            {language.t("admin.action.backHome")}
           </Button>
           <Button variant="primary" onClick={() => setShowCreateDialog(true)}>
-            Create User
+            {language.t("admin.action.createUser")}
           </Button>
         </div>
       </div>
@@ -798,8 +959,8 @@ export default function AdminPage() {
       </Show>
 
       <Show when={users()}>
-        <div class="rounded-lg border border-outline-dimmed">
-          <table class="w-full">
+        <div class="overflow-x-auto rounded-lg border border-outline-dimmed">
+          <table class="min-w-[920px] w-full">
             <thead class="border-b border-outline-dimmed bg-background-frame">
               <tr>
                 <th class="px-4 py-3 text-left text-sm font-medium">Username</th>
@@ -882,11 +1043,11 @@ export default function AdminPage() {
 
       <div class="mt-10 mb-8 flex items-center justify-between">
         <div>
-          <h2 class="text-2xl font-semibold text-color-primary">Project Registry</h2>
-          <p class="mt-1 text-sm text-color-secondary">Pre-register local projects that non-admin users are allowed to open</p>
+          <h2 class="text-2xl font-semibold text-color-primary">{language.t("admin.projectRegistry.title")}</h2>
+          <p class="mt-1 text-sm text-color-secondary">{language.t("admin.projectRegistry.description")}</p>
         </div>
         <Button variant="primary" onClick={() => void chooseProjectDirectory()}>
-          Add Project
+          {language.t("admin.projectRegistry.add")}
         </Button>
       </div>
 
@@ -899,14 +1060,15 @@ export default function AdminPage() {
       </Show>
 
       <Show when={projects()}>
-        <div class="rounded-lg border border-outline-dimmed">
-          <table class="w-full">
+        <div class="overflow-x-auto rounded-lg border border-outline-dimmed">
+          <table class="min-w-[980px] w-full table-fixed">
             <thead class="border-b border-outline-dimmed bg-background-frame">
               <tr>
-                <th class="px-4 py-3 text-left text-sm font-medium">Name</th>
-                <th class="px-4 py-3 text-left text-sm font-medium">Directory</th>
-                <th class="px-4 py-3 text-left text-sm font-medium">Added</th>
-                <th class="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.name")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.description")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.directory")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.added")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -914,15 +1076,18 @@ export default function AdminPage() {
                 {(project) => (
                   <tr class="border-b border-outline-dimmed last:border-0">
                     <td class="px-4 py-3">{project.name || "-"}</td>
-                    <td class="px-4 py-3 text-sm text-color-secondary">{project.directory}</td>
+                    <td class="max-w-md px-4 py-3 text-sm text-color-secondary">
+                      <div class="line-clamp-3 whitespace-pre-wrap break-words">{project.description || "-"}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-color-secondary break-all">{project.directory}</td>
                     <td class="px-4 py-3 text-sm text-color-secondary">{formatDate(project.time.created)}</td>
                     <td class="px-4 py-3">
                       <div class="flex gap-2">
                         <Button size="small" variant="ghost" onClick={() => openProjectDialog(project)}>
-                          Edit
+                          {language.t("common.edit")}
                         </Button>
                         <Button size="small" variant="secondary" onClick={() => void deleteProject(project)}>
-                          Delete
+                          {language.t("common.delete")}
                         </Button>
                       </div>
                     </td>
@@ -933,6 +1098,233 @@ export default function AdminPage() {
           </table>
         </div>
       </Show>
+
+      <div class="mt-10 mb-8 flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-semibold text-color-primary">{language.t("admin.audit.title")}</h2>
+          <p class="mt-1 text-sm text-color-secondary">{language.t("admin.audit.description")}</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            void refetchAuditSummary()
+            void refetchAuditSessions()
+            if (selectedAuditSessionID()) void refetchAuditPrompts()
+          }}
+        >
+          {language.t("admin.audit.refresh")}
+        </Button>
+      </div>
+
+      <Show when={auditSummary()}>
+        {(summary) => (
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div class="rounded-lg border border-outline-dimmed p-4">
+              <div class="text-xs text-color-secondary">{language.t("admin.audit.summary.sessions")}</div>
+              <div class="mt-2 text-2xl font-semibold text-color-primary">{summary().sessions}</div>
+            </div>
+            <div class="rounded-lg border border-outline-dimmed p-4">
+              <div class="text-xs text-color-secondary">{language.t("admin.audit.summary.users")}</div>
+              <div class="mt-2 text-2xl font-semibold text-color-primary">{summary().users}</div>
+            </div>
+            <div class="rounded-lg border border-outline-dimmed p-4">
+              <div class="text-xs text-color-secondary">{language.t("admin.audit.summary.projects")}</div>
+              <div class="mt-2 text-2xl font-semibold text-color-primary">{summary().projects}</div>
+            </div>
+            <div class="rounded-lg border border-outline-dimmed p-4">
+              <div class="text-xs text-color-secondary">{language.t("admin.audit.summary.prompts")}</div>
+              <div class="mt-2 text-2xl font-semibold text-color-primary">{summary().prompts}</div>
+            </div>
+            <div class="rounded-lg border border-outline-dimmed p-4">
+              <div class="text-xs text-color-secondary">{language.t("admin.audit.summary.lastActivity")}</div>
+              <div class="mt-2 text-sm text-color-primary">{formatDate(summary().last_activity)}</div>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      <div class="mt-6 rounded-lg border border-outline-dimmed p-4">
+        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <input
+            value={auditSearchDraft()}
+            onInput={(e) => {
+              setAuditSearchDraft(e.currentTarget.value)
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return
+              e.preventDefault()
+              applyAuditSearch()
+            }}
+            placeholder={language.t("admin.audit.searchPlaceholder")}
+            class="w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+          />
+          <select
+            value={auditUserFilter()}
+            onChange={(e) => {
+              preserveStableScroll(() => {
+                setAuditUserFilter(e.currentTarget.value)
+              })
+            }}
+            class="w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+          >
+            <option value="">{language.t("admin.audit.filter.allUsers")}</option>
+            <For each={users() ?? []}>{(user) => <option value={user.id}>{user.username}</option>}</For>
+          </select>
+          <select
+            value={auditProjectFilter()}
+            onChange={(e) => {
+              preserveStableScroll(() => {
+                setAuditProjectFilter(e.currentTarget.value)
+              })
+            }}
+            class="w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+          >
+            <option value="">{language.t("admin.audit.filter.allProjects")}</option>
+            <For each={projects() ?? []}>{(project) => <option value={project.project_id}>{project.name || project.directory}</option>}</For>
+          </select>
+          <Button variant="primary" onClick={applyAuditSearch}>
+            {language.t("common.search.placeholder")}
+          </Button>
+        </div>
+      </div>
+
+      <Show when={auditSessions.loading}>
+        <p class="mt-4 text-color-secondary">{language.t("admin.audit.loading")}</p>
+      </Show>
+
+      <Show when={auditSessions.error}>
+        <p class="mt-4 text-auxiliary-error">{language.t("admin.audit.loadFailed")}</p>
+      </Show>
+
+      <Show when={auditSessions()}>
+        <div class="mt-4 overflow-x-auto rounded-lg border border-outline-dimmed">
+          <table class="min-w-[1100px] w-full table-fixed">
+            <thead class="border-b border-outline-dimmed bg-background-frame">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.user")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.project")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.session")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.prompts")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.updated")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.latestPrompt")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.audit.column.actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={auditSessions()}>
+                {(item) => (
+                  <tr class="border-b border-outline-dimmed last:border-0">
+                    <td class="px-4 py-3">{item.user.username || item.user.id || "-"}</td>
+                    <td class="px-4 py-3">
+                      <div class="break-words">{projectLabel(item.project)}</div>
+                      <Show when={showProjectDirectory(item.project)}>
+                        <div class="text-xs text-color-secondary break-all">{item.project.directory}</div>
+                      </Show>
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="break-words">{item.session.title}</div>
+                      <div class="text-xs text-color-secondary break-all">{item.session.id}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">
+                      {item.prompt_count} / {item.message_count}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">{formatDate(item.session.time.updated)}</td>
+                    <td class="max-w-md px-4 py-3 text-sm text-color-secondary">
+                      <div class="line-clamp-2 whitespace-pre-wrap break-words">{item.last_prompt || "-"}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                      <Button size="small" variant="ghost" onClick={() => openAuditPrompts(item.session.id)}>
+                        {language.t("admin.audit.viewPrompts")}
+                      </Button>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </div>
+      </Show>
+
+      <KobalteDialog
+        open={!!selectedAuditSession()}
+        onOpenChange={(open) => {
+          if (!open) {
+            preserveStableScroll(() => {
+              setSelectedAuditSessionID(null)
+            })
+          }
+        }}
+      >
+        <KobalteDialog.Portal>
+          <KobalteDialog.Overlay
+            class="fixed inset-0"
+            style={{ "background-color": "rgb(0 0 0 / 0.5)" }}
+          />
+          <KobalteDialog.Content
+            class="fixed left-1/2 top-1/2 max-h-[85vh] w-full max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-outline-dimmed bg-background-base p-6"
+            onOpenAutoFocus={(e) => {
+              restoreStableScroll()
+              e.preventDefault()
+            }}
+            onCloseAutoFocus={(e) => {
+              restoreStableScroll()
+              e.preventDefault()
+            }}
+          >
+            <Show when={selectedAuditSession()}>
+              {(item) => (
+                <>
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <KobalteDialog.Title class="text-lg font-semibold text-color-primary">
+                        {language.t("admin.audit.promptDetail.title")}
+                      </KobalteDialog.Title>
+                      <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
+                        {item().user.username || item().user.id || "-"} · {projectLabel(item().project)} ·{" "}
+                        {item().session.title}
+                      </KobalteDialog.Description>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        preserveStableScroll(() => {
+                          setSelectedAuditSessionID(null)
+                        })
+                      }}
+                    >
+                      {language.t("common.close")}
+                    </Button>
+                  </div>
+
+                  <Show when={auditPrompts.loading}>
+                    <p class="mt-4 text-color-secondary">{language.t("admin.audit.prompts.loading")}</p>
+                  </Show>
+
+                  <Show when={auditPrompts.error}>
+                    <p class="mt-4 text-auxiliary-error">{language.t("admin.audit.prompts.loadFailed")}</p>
+                  </Show>
+
+                  <Show
+                    when={(auditPrompts() ?? []).length > 0}
+                    fallback={<p class="mt-4 text-sm text-color-secondary">{language.t("admin.audit.prompts.empty")}</p>}
+                  >
+                    <div class="mt-4 space-y-3">
+                      <For each={auditPrompts()}>
+                        {(prompt) => (
+                          <div class="rounded border border-outline-dimmed p-3">
+                            <div class="text-xs text-color-secondary">{formatDate(prompt.created)}</div>
+                            <div class="mt-2 whitespace-pre-wrap break-words text-sm text-color-primary">{prompt.text}</div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </>
+              )}
+            </Show>
+          </KobalteDialog.Content>
+        </KobalteDialog.Portal>
+      </KobalteDialog>
 
       {/* Create User Dialog */}
       <KobalteDialog open={showCreateDialog()} onOpenChange={setShowCreateDialog}>
@@ -1262,28 +1654,51 @@ export default function AdminPage() {
           <KobalteDialog.Overlay class="fixed inset-0 bg-black/50" />
           <KobalteDialog.Content class="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-outline-dimmed bg-background-base p-6">
             <KobalteDialog.Title class="text-lg font-semibold">
-              Edit Project: {editingProject()?.name || editingProject()?.directory}
+              {editingProject()
+                ? language.t("admin.projectDialog.editTitle", { project: editingProject()?.name || editingProject()?.directory || "" })
+                : language.t("admin.projectDialog.addTitle")}
             </KobalteDialog.Title>
             <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
-              Update the display name for this registered project
+              {editingProject()
+                ? language.t("admin.projectDialog.editDescription")
+                : language.t("admin.projectDialog.addDescription")}
             </KobalteDialog.Description>
 
             <div class="mt-4 space-y-4">
               <TextField
-                label="Display Name"
+                label={language.t("admin.projectDialog.displayName")}
                 value={projectName()}
                 onChange={setProjectName}
-                placeholder="Optional project name"
+                placeholder={language.t("admin.projectDialog.displayNamePlaceholder")}
               />
-              <TextField label="Directory" value={editingProject()?.directory ?? ""} disabled />
+              <div>
+                <label class="block text-sm font-medium">{language.t("admin.projectDialog.description")}</label>
+                <textarea
+                  value={projectDescription()}
+                  onInput={(e) => setProjectDescription(e.currentTarget.value)}
+                  placeholder={language.t("admin.projectDialog.descriptionPlaceholder")}
+                  rows={4}
+                  class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+                />
+              </div>
+              <TextField label={language.t("admin.projectDialog.directory")} value={projectDirectory()} disabled />
             </div>
 
             <div class="mt-6 flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setShowProjectDialog(false)}>
-                Cancel
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowProjectDialog(false)
+                  setEditingProject(null)
+                  setProjectDirectory("")
+                  setProjectName("")
+                  setProjectDescription("")
+                }}
+              >
+                {language.t("common.cancel")}
               </Button>
-              <Button variant="primary" onClick={updateProject}>
-                Save Changes
+              <Button variant="primary" onClick={saveProject} disabled={!projectDirectory()}>
+                {editingProject() ? language.t("common.save") : language.t("admin.projectRegistry.add")}
               </Button>
             </div>
           </KobalteDialog.Content>
