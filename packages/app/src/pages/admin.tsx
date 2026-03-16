@@ -106,7 +106,12 @@ interface AuditSession {
 interface AuditPrompt {
   messageID: string
   created: number
-  text: string
+  role: "user" | "assistant"
+  text?: string
+  parts: Array<{
+    type: string
+    count: number
+  }>
 }
 
 type FeatureState = {
@@ -469,10 +474,10 @@ export default function AdminPage() {
   )
   const [auditPrompts, { refetch: refetchAuditPrompts }] = createResource(selectedAuditSessionID, async (sessionID) => {
     if (!sessionID) return [] as AuditPrompt[]
-    const response = await fetchFn(`${server.url}/session/admin/${sessionID}/prompts`, {
+    const response = await fetchFn(`${server.url}/session/admin/${sessionID}/messages`, {
       headers: authHeaders(),
     })
-    if (!response.ok) throw new Error("Failed to fetch session prompts")
+    if (!response.ok) throw new Error("Failed to fetch session conversation")
     return response.json() as Promise<AuditPrompt[]>
   })
   const [showCreateDialog, setShowCreateDialog] = createSignal(false)
@@ -926,6 +931,21 @@ export default function AdminPage() {
   const projectLabel = (item: { name?: string; directory: string }) => item.name || item.directory
   const showProjectDirectory = (item: { name?: string; directory: string }) =>
     !!item.name && item.name !== item.directory
+  const isChinese = () => language.locale() === "zh" || language.locale() === "zht"
+  const auditMessageRole = (role: AuditPrompt["role"]) =>
+    role === "assistant" ? (isChinese() ? "AI" : "AI") : isChinese() ? "用户" : "User"
+  const auditPartLabel = (type: string) => {
+    if (type === "tool") return isChinese() ? "工具调用" : "Tool call"
+    if (type === "reasoning") return isChinese() ? "推理内容" : "Reasoning"
+    if (type === "file") return isChinese() ? "文件上下文" : "File context"
+    if (type === "patch") return isChinese() ? "代码补丁" : "Code patch"
+    if (type === "snapshot") return isChinese() ? "快照" : "Snapshot"
+    if (type === "agent") return isChinese() ? "智能体信息" : "Agent info"
+    if (type === "subtask") return isChinese() ? "子任务" : "Subtask"
+    if (type === "retry") return isChinese() ? "重试信息" : "Retry info"
+    if (type === "compaction") return isChinese() ? "上下文压缩" : "Context compaction"
+    return isChinese() ? "其他内容" : "Other content"
+  }
 
   return (
     <div ref={rootRef} class="mx-auto max-w-6xl p-6 lg:p-8">
@@ -1312,8 +1332,26 @@ export default function AdminPage() {
                       <For each={auditPrompts()}>
                         {(prompt) => (
                           <div class="rounded border border-outline-dimmed p-3">
-                            <div class="text-xs text-color-secondary">{formatDate(prompt.created)}</div>
-                            <div class="mt-2 whitespace-pre-wrap break-words text-sm text-color-primary">{prompt.text}</div>
+                            <div class="flex items-center justify-between gap-3 text-xs text-color-secondary">
+                              <span>{auditMessageRole(prompt.role)}</span>
+                              <span>{formatDate(prompt.created)}</span>
+                            </div>
+                            <Show when={prompt.text}>
+                              <div class="mt-2 whitespace-pre-wrap break-words text-sm text-color-primary">
+                                {prompt.text}
+                              </div>
+                            </Show>
+                            <Show when={prompt.parts.length > 0}>
+                              <div class="mt-2 flex flex-wrap gap-2">
+                                <For each={prompt.parts}>
+                                  {(part) => (
+                                    <span class="rounded bg-background-frame px-2 py-1 text-xs text-color-secondary">
+                                      {auditPartLabel(part.type)} x{part.count}
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </Show>
                           </div>
                         )}
                       </For>

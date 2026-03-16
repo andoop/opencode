@@ -225,6 +225,29 @@ export namespace Session {
     })
   export type AdminPrompt = z.infer<typeof AdminPrompt>
 
+  export const AdminConversationPart = z
+    .object({
+      type: z.string(),
+      count: z.number(),
+    })
+    .meta({
+      ref: "SessionAdminConversationPart",
+    })
+  export type AdminConversationPart = z.infer<typeof AdminConversationPart>
+
+  export const AdminConversationMessage = z
+    .object({
+      messageID: Identifier.schema("message"),
+      created: z.number(),
+      role: z.enum(["user", "assistant"]),
+      text: z.string().optional(),
+      parts: AdminConversationPart.array(),
+    })
+    .meta({
+      ref: "SessionAdminConversationMessage",
+    })
+  export type AdminConversationMessage = z.infer<typeof AdminConversationMessage>
+
   export const AdminAuditEntry = z
     .object({
       session: Info,
@@ -284,10 +307,43 @@ export namespace Session {
     } satisfies AdminPrompt
   }
 
+  function conversationMessage(msg: MessageV2.WithParts) {
+    const text = msg.parts
+      .filter((part): part is MessageV2.TextPart => part.type === "text")
+      .filter((part) => !part.synthetic && !part.ignored)
+      .map((part) => part.text.trim())
+      .filter(Boolean)
+      .join("\n\n")
+    const counts = msg.parts.reduce(
+      (acc, part) => {
+        if (part.type === "text" || part.type === "step-start" || part.type === "step-finish") return acc
+        acc.set(part.type, (acc.get(part.type) ?? 0) + 1)
+        return acc
+      },
+      new Map<string, number>(),
+    )
+    const parts = Array.from(counts, ([type, count]) => ({ type, count }))
+    if (!text && parts.length === 0) return
+    return {
+      messageID: msg.info.id,
+      created: msg.info.time.created,
+      role: msg.info.role,
+      text: text || undefined,
+      parts,
+    } satisfies AdminConversationMessage
+  }
+
   export const adminPrompts = fn(Identifier.schema("session"), async (sessionID) => {
     return (await messages({ sessionID })).flatMap((msg) => {
       const text = promptText(msg)
       return text ? [text] : []
+    })
+  })
+
+  export const adminConversation = fn(Identifier.schema("session"), async (sessionID) => {
+    return (await messages({ sessionID })).flatMap((msg) => {
+      const item = conversationMessage(msg)
+      return item ? [item] : []
     })
   })
 

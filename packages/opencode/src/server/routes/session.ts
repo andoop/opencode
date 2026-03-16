@@ -133,17 +133,17 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .get(
-      "/admin/:sessionID/prompts",
+      "/admin/:sessionID/messages",
       describeRoute({
-        summary: "Get admin session prompts",
-        description: "Retrieve user prompts for a session for admin auditing.",
-        operationId: "session.admin.prompts",
+        summary: "Get admin session conversation",
+        description: "Retrieve session conversation messages for admin auditing.",
+        operationId: "session.admin.messages",
         responses: {
           200: {
-            description: "Admin session prompts",
+            description: "Admin session conversation",
             content: {
               "application/json": {
-                schema: resolver(Session.AdminPrompt.array()),
+                schema: resolver(Session.AdminConversationMessage.array()),
               },
             },
           },
@@ -153,7 +153,7 @@ export const SessionRoutes = lazy(() =>
       requireAdmin(),
       validator("param", z.object({ sessionID: z.string() })),
       async (c) => {
-        return c.json(await Session.adminPrompts(c.req.valid("param").sessionID))
+        return c.json(await Session.adminConversation(c.req.valid("param").sessionID))
       },
     )
     .get(
