@@ -98,6 +98,7 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             "*": "deny",
+            doom_loop: "ask",
             question: "allow",
             grep: "allow",
             glob: "allow",
