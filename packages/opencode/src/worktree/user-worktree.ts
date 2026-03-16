@@ -36,8 +36,20 @@ export namespace UserWorktree {
     return [outputText(result.stderr), outputText(result.stdout)].filter(Boolean).join("\n")
   }
 
+  function isStaleRegistrationError(message: string) {
+    return (
+      message.includes("already used by worktree") ||
+      message.includes("already registered") ||
+      message.includes("gitdir file points to non-existent location")
+    )
+  }
+
   async function exists(target: string): Promise<boolean> {
     return fs.stat(target).then(() => true).catch(() => false)
+  }
+
+  async function prune(mainDirectory: string) {
+    return $`git worktree prune --verbose`.quiet().nothrow().cwd(mainDirectory)
   }
 
   /**
@@ -100,34 +112,31 @@ export namespace UserWorktree {
 
     const branch = `user/${username}`
 
+    await prune(mainDirectory)
+
     // Check if branch exists
     const branchCheck = await $`git show-ref --verify --quiet refs/heads/${branch}`
       .quiet()
       .nothrow()
       .cwd(mainDirectory)
 
-    if (branchCheck.exitCode === 0) {
-      // Branch exists, create worktree from it
-      const created = await $`git worktree add ${worktreeDir} ${branch}`
-        .quiet()
-        .nothrow()
-        .cwd(mainDirectory)
-      if (created.exitCode !== 0) {
-        throw new CreateFailedError({
-          message: errorText(created) || "Failed to create user worktree",
-        })
-      }
-    } else {
-      // Create new branch and worktree
-      const created = await $`git worktree add -b ${branch} ${worktreeDir}`
-        .quiet()
-        .nothrow()
-        .cwd(mainDirectory)
-      if (created.exitCode !== 0) {
-        throw new CreateFailedError({
-          message: errorText(created) || "Failed to create user worktree with new branch",
-        })
-      }
+    const create = () =>
+      branchCheck.exitCode === 0
+        ? $`git worktree add ${worktreeDir} ${branch}`.quiet().nothrow().cwd(mainDirectory)
+        : $`git worktree add -b ${branch} ${worktreeDir}`.quiet().nothrow().cwd(mainDirectory)
+
+    let created = await create()
+    let message = errorText(created)
+    if (created.exitCode !== 0 && isStaleRegistrationError(message)) {
+      await prune(mainDirectory)
+      created = await create()
+      message = errorText(created)
+    }
+
+    if (created.exitCode !== 0) {
+      throw new CreateFailedError({
+        message: message || (branchCheck.exitCode === 0 ? "Failed to create user worktree" : "Failed to create user worktree with new branch"),
+      })
     }
 
     log.info("created_user_worktree", {
