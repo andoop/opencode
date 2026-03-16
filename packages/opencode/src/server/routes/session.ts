@@ -16,6 +16,7 @@ import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { Instance } from "@/project/instance"
 import { User } from "@/user"
 
 const log = Log.create({ service: "server" })
@@ -469,7 +470,18 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        SessionPrompt.cancel(c.req.valid("param").sessionID)
+        const sessionID = c.req.valid("param").sessionID
+        const session = await Session.get(sessionID)
+        if (session.directory === Instance.directory) {
+          SessionPrompt.cancel(sessionID)
+          return c.json(true)
+        }
+        await Instance.provide({
+          directory: session.directory,
+          fn: () => {
+            SessionPrompt.cancel(sessionID)
+          },
+        })
         return c.json(true)
       },
     )

@@ -622,6 +622,7 @@ export namespace SessionPrompt {
         tools,
         model,
       })
+      if (abort.aborted) break
       if (result === "stop") break
       if (result === "compact") {
         await SessionCompaction.create({

@@ -347,6 +347,26 @@ export function SessionTurn(
     return result
   })
 
+  const activeTask = createMemo(() => {
+    const msgs = assistantMessages()
+    for (let mi = msgs.length - 1; mi >= 0; mi--) {
+      const msgParts = data.store.part[msgs[mi].id] ?? emptyParts
+      for (let pi = msgParts.length - 1; pi >= 0; pi--) {
+        const part = msgParts[pi]
+        if (
+          part?.type === "tool" &&
+          part.tool === "task" &&
+          "metadata" in part.state &&
+          part.state.metadata?.sessionId &&
+          part.state.status === "running"
+        ) {
+          return part as ToolPart
+        }
+      }
+    }
+    return undefined
+  })
+
   const shellModePart = createMemo(() => {
     const p = parts()
     if (p.length === 0) return
@@ -415,6 +435,11 @@ export function SessionTurn(
 
   const status = createMemo(() => data.store.session_status[props.sessionID] ?? idle)
   const working = createMemo(() => status().type !== "idle" && isLastUserMessage())
+  const fallbackStatus = createMemo(() => {
+    if (activeTask()) return i18n.t("ui.sessionTurn.status.delegating")
+    if (!hasSteps()) return i18n.t("ui.sessionTurn.status.thinking")
+    return i18n.t("ui.sessionTurn.status.consideringNextSteps")
+  })
   const retry = createMemo(() => {
     // session_status is session-scoped; only show retry on the active (last) turn
     if (!isLastUserMessage()) return
@@ -575,6 +600,16 @@ export function SessionTurn(
     }
   })
 
+  createEffect(() => {
+    if (working()) return
+    if (statusTimeout) {
+      clearTimeout(statusTimeout)
+      statusTimeout = undefined
+    }
+    if (store.status === undefined) return
+    setStore("status", undefined)
+  })
+
   onCleanup(() => {
     if (!statusTimeout) return
     clearTimeout(statusTimeout)
@@ -682,7 +717,7 @@ export function SessionTurn(
                               </Match>
                               <Match when={working()}>
                                 <span data-slot="session-turn-status-text">
-                                  {store.status ?? i18n.t("ui.sessionTurn.status.consideringNextSteps")}
+                                  {store.status ?? fallbackStatus()}
                                 </span>
                               </Match>
                               <Match when={props.stepsExpanded}>

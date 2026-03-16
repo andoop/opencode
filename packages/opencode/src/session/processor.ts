@@ -234,6 +234,7 @@ export namespace SessionProcessor {
                   break
 
                 case "finish-step":
+                  input.abort.throwIfAborted()
                   const usage = Session.getUsage({
                     model: input.model,
                     usage: value.usage,
