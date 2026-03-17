@@ -7,7 +7,7 @@
     </picture>
   </a>
 </p>
-<p align="center">開源的 AI Coding Agent。</p>
+<p align="center">基於 OpenCode 定製的公司內部 AI 研發協作 Web 平台。</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
@@ -38,97 +38,169 @@
 
 ---
 
-### 安裝
+## 專案定位
+
+這個倉庫不是在介紹一個通用的桌面 AI Coding 工具，而是在介紹一套基於 OpenCode 定製開發的公司內部 Web AI 研發平台。
+
+- 這是一個 **Web-first** 的內部產品，當前定製重點就是 Web App
+- 它服務的不是單個開發者本地使用場景，而是公司內部的 **多使用者協作**
+- 它關注的不是「讓大家隨便連接伺服器目錄」，而是讓使用者在 **管理員預先控制的專案邊界內** 使用 AI
+- 它提供的是 **統一 AI 平台能力**，而不只是一個「和 AI 聊天改程式碼」的頁面
+
+可以把它理解為：
+
+> 一套公司內部受控、可治理、面向多人協作的 AI 研發工作台。
+
+## 我們的理念
+
+這套平台想做的，不只是一個 AI 寫程式碼頁面，而是逐步建設成公司內部統一的 AI 研發協作平台。
+
+我們的核心理念是：
+
+- **不是遠端桌面，而是受控專案內的 AI 工作台**
+- **不是讓少數開發者獨享 AI，而是讓更多角色在授權範圍內參與軟體生產**
+- **不是讓 AI 只回答問題，而是讓 AI 逐步成為研發流程中的執行層**
+- **不是放開邊界，而是在權限、專案、會話、模型等治理前提下提升效率**
+
+對應到產品設計上，當前最重要的三個邊界是：
+
+- **專案邊界**：普通使用者只能進入管理員預先登記的專案
+- **會話邊界**：一個任務對應一個獨立會話和獨立工作區
+- **權限邊界**：不同使用者看到什麼、能做什麼、能用哪些模型，都由平台控制
+
+## 當前重點能力
+
+當前這套定製版重點能力主要集中在 Web App：
+
+- 多使用者註冊、登入與帳號管理
+- 管理員可見的使用者、專案、模型與審計能力
+- 專案註冊機制，只開放允許使用的程式碼倉庫
+- 會話級獨立工作區，盡量基於 Git worktree 做任務隔離
+- 模型、Provider、權限、模式的統一治理
+- 面向團隊的統一 AI 平台入口
+
+這意味著平台當前的重點，不是桌面端，也不是 TUI，而是：
+
+> 讓公司內部使用者透過 Web 頁面，在受控專案中完成問答、分析、修改、執行和協作。
+
+## 多使用者與統一 AI 平台
+
+在當前設計裡，平台不是「誰登入進來就能隨便用所有能力」，而是：
+
+1. 管理員先在服務端機器上準備專案程式碼
+2. 管理員把允許存取的目錄註冊為專案
+3. 使用者透過 Web 頁面註冊、登入
+4. 普通使用者只能看到被開放的專案
+5. 使用者進入專案後，再基於會話開始具體工作
+
+統一 AI 平台主要體現在：
+
+- 統一模型入口
+- 統一 Provider 管理
+- 統一權限控制
+- 統一會話工作方式
+- 統一審計與治理邊界
+
+這套設計適合公司內部逐步推廣：先在低風險權限下開放，再按角色和場景逐步增加能力。
+
+## Cursor CLI 支援
+
+這套平台支援把 **Cursor CLI** 作為統一 AI 平台中的一個模型/Provider 接入來源。
+
+### 接入方式
+
+服務所在機器需要先安裝 Cursor CLI，並確保 `agent` 指令在 shell 中可用：
 
 ```bash
-# 直接安裝 (YOLO)
-curl -fsSL https://opencode.ai/install | bash
-
-# 套件管理員
-npm i -g opencode-ai@latest        # 也可使用 bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS 與 Linux（推薦，始終保持最新）
-brew install opencode              # macOS 與 Linux（官方 brew formula，更新頻率較低）
-paru -S opencode-bin               # Arch Linux
-mise use -g opencode               # 任何作業系統
-nix run nixpkgs#opencode           # 或使用 github:anomalyco/opencode 以取得最新開發分支
+agent login
 ```
 
-> [!TIP]
-> 安裝前請先移除 0.1.x 以前的舊版本。
+登入完成後，平台就可以複用本機已有的 Cursor 登入狀態。
 
-### 桌面應用程式 (BETA)
+### 在平台中的使用方式
 
-OpenCode 也提供桌面版應用程式。您可以直接從 [發佈頁面 (releases page)](https://github.com/anomalyco/opencode/releases) 或 [opencode.ai/download](https://opencode.ai/download) 下載。
+- 管理員可以在使用者權限裡控制是否開放模型入口、Provider 入口
+- 預設受限註冊使用者通常只開放 `ask` 模式
+- 當前預設白名單模型通常包括：
+  - `cursor-cli/auto`
+  - `cursor-cli/composer-1`
+  - `cursor-cli/composer-1.5`
 
-| 平台                  | 下載連結                              |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, 或 AppImage           |
+如果服務機器沒有正確安裝 Cursor CLI，或 `agent` 指令不可用，那麼平台裡不會出現 `Cursor CLI` 相關模型或 Provider。
+
+### 配置建議
+
+對於公司內部初期落地，推薦這樣配置：
+
+- 普通註冊使用者預設只開放 `ask`
+- 預設模型白名單優先使用 `cursor-cli` 系列
+- 不預設開放 Provider、Server、MCP 等高風險管理入口
+- 由管理員按人、按角色逐步擴展能力
+
+這樣做的好處是：
+
+- 接入成本低
+- 風險邊界清晰
+- 模型來源統一
+- 使用者體驗簡單，便於內部推廣
+
+### 它在系統裡的意義
+
+接入 Cursor CLI 後，平台並不是簡單呼叫一個外部模型介面，而是把當前會話上下文、專案邊界和平台工具能力統一組織起來，再轉給 Cursor CLI 參與執行。
+
+這使得 `cursor-cli` 在這裡不是一個孤立工具，而是統一 AI 平台中的一部分。
+
+## 管理員推薦落地方式
+
+建議按以下方式使用這套系統：
+
+1. 先準備受控的專案目錄
+2. 只註冊明確允許開放的倉庫
+3. 預設給普通使用者受限權限
+4. 優先開放 Web 端問答和低風險能力
+5. 再逐步引入更多模型、更多模式和更多流程能力
+
+一句話說，推薦的不是「先把所有能力都打開」，而是：
+
+> 先把專案邊界、權限邊界、模型邊界和會話邊界建好，再逐步放大平台能力。
+
+## 本地開發
+
+當前倉庫的定製重點是 Web App，因此本地開發也建議優先按 Web 方式啟動。
+
+安裝依賴：
 
 ```bash
-# macOS (Homebrew Cask)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
 ```
 
-#### 安裝目錄
-
-安裝腳本會依據以下優先順序決定安裝路徑：
-
-1. `$OPENCODE_INSTALL_DIR` - 自定義安裝目錄
-2. `$XDG_BIN_DIR` - 符合 XDG 基礎目錄規範的路徑
-3. `$HOME/bin` - 標準使用者執行檔目錄 (若存在或可建立)
-4. `$HOME/.opencode/bin` - 預設備用路徑
+一鍵啟動本地服務：
 
 ```bash
-# 範例
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+sh restart-services.sh
 ```
 
-### Agents
+預設位址：
 
-OpenCode 內建了兩種 Agent，您可以使用 `Tab` 鍵快速切換。
+- 後端：`http://localhost:4096`
+- 前端：`http://localhost:3000`
 
-- **build** - 預設模式，具備完整權限的 Agent，適用於開發工作。
-- **plan** - 唯讀模式，適用於程式碼分析與探索。
-  - 預設禁止修改檔案。
-  - 執行 bash 指令前會詢問權限。
-  - 非常適合用來探索陌生的程式碼庫或規劃變更。
+如果要分別啟動：
 
-此外，OpenCode 還包含一個 **general** 子 Agent，用於處理複雜搜尋與多步驟任務。此 Agent 供系統內部使用，亦可透過在訊息中輸入 `@general` 來呼叫。
+```bash
+bun run --cwd packages/opencode dev
+bun run --cwd packages/app dev
+```
 
-了解更多關於 [Agents](https://opencode.ai/docs/agents) 的資訊。
+## 相關文件
 
-### 線上文件
+- `docs/internal-web-user-manual.md`
+  - 面向管理員和普通使用者的使用說明
+- `docs/internal-ai-platform-vision.md`
+  - 面向團隊內部的產品理念與未來方向
 
-關於如何設定 OpenCode 的詳細資訊，請參閱我們的 [**官方文件**](https://opencode.ai/docs)。
-
-### 參與貢獻
-
-如果您有興趣參與 OpenCode 的開發，請在提交 Pull Request 前先閱讀我們的 [貢獻指南 (Contributing Docs)](./CONTRIBUTING.md)。
-
-### 基於 OpenCode 進行開發
-
-如果您正在開發與 OpenCode 相關的專案，並在名稱中使用了 "opencode"（例如 "opencode-dashboard" 或 "opencode-mobile"），請在您的 README 中加入聲明，說明該專案並非由 OpenCode 團隊開發，且與我們沒有任何隸屬關係。
-
-### 常見問題 (FAQ)
-
-#### 這跟 Claude Code 有什麼不同？
-
-在功能面上與 Claude Code 非常相似。以下是關鍵差異：
-
-- 100% 開源。
-- 不綁定特定的服務提供商。雖然我們推薦使用透過 [OpenCode Zen](https://opencode.ai/zen) 提供的模型，但 OpenCode 也可搭配 Claude, OpenAI, Google 甚至本地模型使用。隨著模型不斷演進，彼此間的差距會縮小且價格會下降，因此具備「不限廠商 (provider-agnostic)」的特性至關重要。
-- 內建 LSP (語言伺服器協定) 支援。
-- 專注於終端機介面 (TUI)。OpenCode 由 Neovim 愛好者與 [terminal.shop](https://terminal.shop) 的創作者打造。我們將不斷挑戰終端機介面的極限。
-- 客戶端/伺服器架構 (Client/Server Architecture)。這讓 OpenCode 能夠在您的電腦上運行的同時，由行動裝置進行遠端操控。這意味著 TUI 前端只是眾多可能的客戶端之一。
+這兩個文件比當前 README 更詳細，也更接近這套定製版產品本身的真實目標。
 
 ---
 
-**加入我們的社群** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**當前版本重點**：Web App、多使用者、統一 AI 平台、受控專案協作。

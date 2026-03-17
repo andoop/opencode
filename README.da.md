@@ -7,7 +7,7 @@
     </picture>
   </a>
 </p>
-<p align="center">Den open source AI-kodeagent.</p>
+<p align="center">Tilpasset intern AI R&D-samarbejdswebplatform baseret på OpenCode.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
@@ -38,98 +38,169 @@
 
 ---
 
-### Installation
+## Projektpositionering
+
+Dette repository beskriver ikke et generisk desktop AI-kodningsværktøj, men en intern web AI R&D-platform tilpasset baseret på OpenCode.
+
+- Det er et **Web-first** internt produkt; den nuværende tilpasningsfokus er Web App
+- Det tjener **multi-bruger-samarbejde** i organisationen, ikke enkeltudvikler-brug lokalt
+- Det tillader ikke at forbinde frit til servermapper; brugere arbejder inden for **admin-kontrollerede projektgrænser**
+- Det leverer **forenet AI-platform-kapaciteter**, ikke blot en "chat med AI for at redigere kode"-side
+
+Forstå det som:
+
+> En kontrolleret, styrebar, multi-bruger AI R&D-arbejdsbænk til intern brug.
+
+## Vores filosofi
+
+Platformen sigter mod at blive en forenet intern AI R&D-samarbejdsplatform, ikke blot en AI-kodningsside.
+
+Kerneprincipper:
+
+- **Ikke fjernskrivebord, men en AI-arbejdsbænk inden for kontrollerede projekter**
+- **Ikke for få udviklere der monopoliserer AI, men for flere roller der deltager i softwareproduktion inden for deres autoriserede omfang**
+- **Ikke AI der kun svarer på spørgsmål, men AI der gradvist bliver udførelseslaget i R&D-workflowet**
+- **Ikke at fjerne grænser, men effektivitet under governance af tilladelser, projekter, sessioner og modeller**
+
+I produktdesign er de tre vigtigste grænser:
+
+- **Projektgrænse**: normale brugere kan kun tilgå projekter førregistreret af admins
+- **Sessiongrænse**: én opgave svarer til én uafhængig session og ét uafhængigt arbejdsområde
+- **Tilladelsesgrænse**: hvad brugere ser, hvad de kan gøre og hvilke modeller de kan bruge styres af platformen
+
+## Nuværende kernekapaciteter
+
+Tilpasningen fokuserer på Web App:
+
+- Multi-bruger-registrering, login og kontostyring
+- Admin-synlige bruger-, projekt-, model- og audit-kapaciteter
+- Projektregistrering for kun at eksponere godkendte kode-repositoryer
+- Session-baserede isolerede arbejdsområder, typisk via Git worktrees
+- Forenet governance af modeller, providere, tilladelser og tilstande
+- Forenet AI-platform-indgangspunkt for teams
+
+Fokus er ikke på desktop eller TUI, men på:
+
+> At lade interne brugere fuldføre Q&A, analyse, redigering, udførelse og samarbejde via web, inden for kontrollerede projekter.
+
+## Multi-bruger og forenet AI-platform
+
+Platformen giver ikke fuld adgang til alle der logger ind. I stedet:
+
+1. Admins forbereder projektkode på serveren
+2. Admins registrerer tilladte mapper som projekter
+3. Brugere registrerer sig og logger ind via web
+4. Normale brugere ser kun projekter der er åbnet for dem
+5. Brugere starter arbejde i sessioner efter at være gået ind i et projekt
+
+Den forenede AI-platform leverer:
+
+- Forenet model-indgangspunkt
+- Forenet provider-styring
+- Forenet tilladelseskontrol
+- Forenet session-workflow
+- Forenede audit- og governance-grænser
+
+Dette design understøtter gradvis intern rollout: start med lav-risiko-tilladelser, udvid derefter efter rolle og scenario.
+
+## Cursor CLI-understøttelse
+
+Platformen understøtter **Cursor CLI** som model/provider-kilde i den forenede AI-platform.
+
+### Sådan forbinder du
+
+Server-maskinen skal have Cursor CLI installeret og kommandoen `agent` tilgængelig i shell:
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Pakkehåndteringer
-npm i -g opencode-ai@latest        # eller bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS og Linux (anbefalet, altid up to date)
-brew install opencode              # macOS og Linux (officiel brew formula, opdateres sjældnere)
-paru -S opencode-bin               # Arch Linux
-mise use -g opencode               # alle OS
-nix run nixpkgs#opencode           # eller github:anomalyco/opencode for nyeste dev-branch
+agent login
 ```
 
-> [!TIP]
-> Fjern versioner ældre end 0.1.x før installation.
+Efter login genbruger platformen den eksisterende lokale Cursor-login-status.
 
-### Desktop-app (BETA)
+### Brug i platformen
 
-OpenCode findes også som desktop-app. Download direkte fra [releases-siden](https://github.com/anomalyco/opencode/releases) eller [opencode.ai/download](https://opencode.ai/download).
+- Admins styrer om brugere kan tilgå model- og provider-indstillinger
+- Standard-begrænsede brugere har typisk kun `ask`-tilstand
+- Standard model-whitelist inkluderer typisk:
+  - `cursor-cli/auto`
+  - `cursor-cli/composer-1`
+  - `cursor-cli/composer-1.5`
 
-| Platform              | Download                              |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, eller AppImage        |
+Hvis Cursor CLI ikke er installeret eller `agent` ikke er tilgængelig, vises Cursor CLI-relationerede modeller og providere ikke i platformen.
+
+### Konfigurationsanbefalinger
+
+For indledende intern rollout:
+
+- Standard begrænsede brugere: kun `ask`-tilstand
+- Standard model-whitelist: foretræk cursor-cli-modeller
+- Eksponer ikke Provider, Server, MCP eller anden høj-risiko-styring som standard
+- Lad admins udvide kapaciteter per bruger eller rolle efter behov
+
+Fordele:
+
+- Lav onboarding-omkostning
+- Klare risikogrænser
+- Forenet modelkilde
+- Simpel UX til intern adoption
+
+### Rolle i systemet
+
+Med Cursor CLI forbundet kalder platformen ikke blot en ekstern model-API. Den samler session-kontekst, projektgrænser og platformværktøjer og overgiver dem til Cursor CLI til udførelse.
+
+Så `cursor-cli` er ikke et isoleret værktøj her, men en del af den forenede AI-platform.
+
+## Admin-anbefalinger til rollout
+
+Anbefalet tilgang:
+
+1. Forbered kontrollerede projektmapper
+2. Registrer kun eksplicit godkendte repositoryer
+3. Giv normale brugere begrænsede tilladelser som standard
+4. Prioriter web Q&A og lav-risiko-kapaciteter
+5. Tilføj gradvist flere modeller, tilstande og workflow-funktioner
+
+Kort sagt: aktiver ikke alt på én gang. I stedet:
+
+> Etabler først projekt-, tilladelses-, model- og sessiongrænser, udvid derefter platformkapaciteter trin for trin.
+
+## Lokal udvikling
+
+Tilpasningsfokus er Web App, så lokal udvikling bør starte web-stacken.
+
+Installér afhængigheder:
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
 ```
 
-#### Installationsmappe
-
-Installationsscriptet bruger følgende prioriteringsrækkefølge for installationsstien:
-
-1. `$OPENCODE_INSTALL_DIR` - Tilpasset installationsmappe
-2. `$XDG_BIN_DIR` - Sti der følger XDG Base Directory Specification
-3. `$HOME/bin` - Standard bruger-bin-mappe (hvis den findes eller kan oprettes)
-4. `$HOME/.opencode/bin` - Standard fallback
+Én-kommando-start:
 
 ```bash
-# Eksempler
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+sh restart-services.sh
 ```
 
-### Agents
+Standard-URL'er:
 
-OpenCode har to indbyggede agents, som du kan skifte mellem med `Tab`-tasten.
+- Backend: `http://localhost:4096`
+- Frontend: `http://localhost:3000`
 
-- **build** - Standard, agent med fuld adgang til udviklingsarbejde
-- **plan** - Skrivebeskyttet agent til analyse og kodeudforskning
-  - Afviser filredigering som standard
-  - Spørger om tilladelse før bash-kommandoer
-  - Ideel til at udforske ukendte kodebaser eller planlægge ændringer
+For at starte separat:
 
-Derudover findes der en **general**-subagent til komplekse søgninger og flertrinsopgaver.
-Den bruges internt og kan kaldes via `@general` i beskeder.
+```bash
+bun run --cwd packages/opencode dev
+bun run --cwd packages/app dev
+```
 
-Læs mere om [agents](https://opencode.ai/docs/agents).
+## Relateret dokumentation
 
-### Dokumentation
+- `docs/internal-web-user-manual.md`
+  - Brugervejledning for admins og normale brugere
+- `docs/internal-ai-platform-vision.md`
+  - Produktvision og fremtidig retning for teamet
 
-For mere info om konfiguration af OpenCode, [**se vores docs**](https://opencode.ai/docs).
-
-### Bidrag
-
-Hvis du vil bidrage til OpenCode, så læs vores [contributing docs](./CONTRIBUTING.md) før du sender en pull request.
-
-### Bygget på OpenCode
-
-Hvis du arbejder på et projekt der er relateret til OpenCode og bruger "opencode" som en del af navnet; f.eks. "opencode-dashboard" eller "opencode-mobile", så tilføj en note i din README, der tydeliggør at projektet ikke er bygget af OpenCode-teamet og ikke er tilknyttet os på nogen måde.
-
-### FAQ
-
-#### Hvordan adskiller dette sig fra Claude Code?
-
-Det minder meget om Claude Code i forhold til funktionalitet. Her er de vigtigste forskelle:
-
-- 100% open source
-- Ikke låst til en udbyder. Selvom vi anbefaler modellerne via [OpenCode Zen](https://opencode.ai/zen); kan OpenCode bruges med Claude, OpenAI, Google eller endda lokale modeller. Efterhånden som modeller udvikler sig vil forskellene mindskes og priserne falde, så det er vigtigt at være provider-agnostic.
-- LSP-support out of the box
-- Fokus på TUI. OpenCode er bygget af neovim-brugere og skaberne af [terminal.shop](https://terminal.shop); vi vil skubbe grænserne for hvad der er muligt i terminalen.
-- Klient/server-arkitektur. Det kan f.eks. lade OpenCode køre på din computer, mens du styrer den eksternt fra en mobilapp. Det betyder at TUI-frontend'en kun er en af de mulige clients.
+Disse dokumenter er mere detaljerede og tættere på de faktiske mål for dette tilpassede produkt.
 
 ---
 
-**Bliv en del af vores community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Nuværende fokus**: Web App, multi-bruger, forenet AI-platform, kontrolleret projektsamarbejde.

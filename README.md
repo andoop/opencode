@@ -3,11 +3,11 @@
     <picture>
       <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="RealseeCode logo">
+      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
     </picture>
   </a>
 </p>
-<p align="center">The open source AI coding agent.</p>
+<p align="center">Customized internal AI R&D collaboration web platform based on OpenCode.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
@@ -34,102 +34,173 @@
   <a href="README.tr.md">Türkçe</a>
 </p>
 
-[![RealseeCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
 
 ---
 
-### Installation
+## Project Positioning
+
+This repository does not describe a generic desktop AI coding tool. It describes an internal web-based AI R&D platform customized from OpenCode.
+
+- This is a **Web-first** internal product; the current customization focus is the Web App
+- It serves **multi-user collaboration** within the organization, not single-developer local usage
+- It does not let users freely connect to arbitrary server directories; users work within **admin-controlled project boundaries**
+- It provides **unified AI platform capabilities**, not just a "chat with AI to edit code" page
+
+Think of it as:
+
+> A controlled, governable, multi-user AI R&D workbench for internal use.
+
+## Our Philosophy
+
+The platform aims to become a unified internal AI R&D collaboration platform, not just an AI coding page.
+
+Core principles:
+
+- **Not a remote desktop, but an AI workbench within controlled projects**
+- **Not for a few developers to monopolize AI, but for more roles to participate in software production within authorized scope**
+- **Not AI that only answers questions, but AI that gradually becomes the execution layer in the R&D workflow**
+- **Not unbounded access, but efficiency gains under governance of permissions, projects, sessions, and models**
+
+In product terms, the three most important boundaries are:
+
+- **Project boundary**: Regular users can only access projects pre-registered by admins
+- **Session boundary**: One task maps to one independent session and workspace
+- **Permission boundary**: What users see, what they can do, and which models they can use are all controlled by the platform
+
+## Current Key Capabilities
+
+The customization focuses on the Web App:
+
+- Multi-user registration, login, and account management
+- Admin-facing user, project, model, and audit capabilities
+- Project registration so only approved code repositories are exposed
+- Session-level isolated workspaces, typically via Git worktrees
+- Unified governance of models, providers, permissions, and modes
+- A unified AI platform entry point for teams
+
+The platform’s focus is not desktop or TUI, but:
+
+> Enabling internal users to complete Q&A, analysis, editing, execution, and collaboration via the web, within controlled projects.
+
+## Multi-User and Unified AI Platform
+
+The platform does not grant full access to everyone who logs in. Instead:
+
+1. Admins prepare project code on the server
+2. Admins register allowed directories as projects
+3. Users register and log in via the web
+4. Regular users only see projects that have been opened to them
+5. Users start work in sessions after entering a project
+
+The unified AI platform provides:
+
+- Unified model entry point
+- Unified provider management
+- Unified permission control
+- Unified session workflow
+- Unified audit and governance boundaries
+
+This design supports gradual internal rollout: start with low-risk permissions, then expand by role and scenario.
+
+## Cursor CLI Support
+
+The platform supports **Cursor CLI** as a model/provider source in the unified AI platform.
+
+### How to Connect
+
+The server machine must have Cursor CLI installed and the `agent` command available in the shell:
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-paru -S opencode-bin               # Arch Linux
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+agent login
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
+After login, the platform reuses the local Cursor login state.
 
-### Desktop App (BETA)
+### Usage in the Platform
 
-RealseeCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
+- Admins control whether users can access model and provider settings
+- Default restricted users typically only have `ask` mode
+- Default model whitelist usually includes:
+  - `cursor-cli/auto`
+  - `cursor-cli/composer-1`
+  - `cursor-cli/composer-1.5`
 
-| Platform              | Download                              |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, or AppImage           |
+If Cursor CLI is not installed or `agent` is not available, Cursor CLI models and providers will not appear in the platform.
+
+### Configuration Recommendations
+
+For initial internal rollout:
+
+- Default restricted users: only `ask` mode
+- Default model whitelist: prefer `cursor-cli` models
+- Do not expose Provider, Server, MCP, or other high-risk management by default
+- Let admins expand capabilities per user or role as needed
+
+Benefits:
+
+- Low onboarding cost
+- Clear risk boundaries
+- Unified model source
+- Simple UX for internal adoption
+
+### Role in the System
+
+With Cursor CLI connected, the platform does not simply call an external model API. It assembles session context, project boundaries, and platform tools, then hands them to Cursor CLI for execution.
+
+So `cursor-cli` is not a standalone tool here, but part of the unified AI platform.
+
+## Admin Rollout Recommendations
+
+Recommended approach:
+
+1. Prepare controlled project directories
+2. Register only explicitly approved repositories
+3. Give regular users restricted permissions by default
+4. Prioritize web Q&A and low-risk capabilities
+5. Gradually add more models, modes, and workflow features
+
+In short: do not enable everything at once. Instead:
+
+> Establish project, permission, model, and session boundaries first, then expand platform capabilities step by step.
+
+## Local Development
+
+The customization focuses on the Web App, so local development should start the web stack.
+
+Install dependencies:
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
 ```
 
-#### Installation Directory
-
-The install script respects the following priority order for the installation path:
-
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
+One-command startup:
 
 ```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+sh restart-services.sh
 ```
 
-### Agents
+Default URLs:
 
-RealseeCode includes two built-in agents you can switch between with the `Tab` key.
+- Backend: `http://localhost:4096`
+- Frontend: `http://localhost:3000`
 
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
+To start separately:
 
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
+```bash
+bun run --cwd packages/opencode dev
+bun run --cwd packages/app dev
+```
 
-Learn more about [agents](https://opencode.ai/docs/agents).
+## Related Documentation
 
-### Documentation
+- `docs/internal-web-user-manual.md`
+  - User guide for admins and regular users
+- `docs/internal-ai-platform-vision.md`
+  - Product vision and future direction for the team
 
-For more info on how to configure RealseeCode, [**head over to our docs**](https://opencode.ai/docs).
-
-### Contributing
-
-If you're interested in contributing to RealseeCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-### Building on RealseeCode
-
-If you are working on a project that's related to RealseeCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the RealseeCode team and is not affiliated with us in any way.
-
-### FAQ
-
-#### How is this different from Claude Code?
-
-It's very similar to Claude Code in terms of capability. Here are the key differences:
-
-- 100% open source
-- Not coupled to any provider. Although we recommend the models we provide through [RealseeCode Zen](https://opencode.ai/zen), RealseeCode can be used with Claude, OpenAI, Google, or even local models. As models evolve, the gaps between them will close and pricing will drop, so being provider-agnostic is important.
-- Out-of-the-box LSP support
-- A focus on TUI. RealseeCode is built by neovim users and the creators of [terminal.shop](https://terminal.shop); we are going to push the limits of what's possible in the terminal.
-- A client/server architecture. This, for example, can allow RealseeCode to run on your computer while you drive it remotely from a mobile app, meaning that the TUI frontend is just one of the possible clients.
+These documents are more detailed and closer to the actual goals of this customized product.
 
 ---
 
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Current focus**: Web App, multi-user, unified AI platform, controlled project collaboration.

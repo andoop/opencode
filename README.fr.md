@@ -3,11 +3,11 @@
     <picture>
       <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="Logo OpenCode">
+      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
     </picture>
   </a>
 </p>
-<p align="center">L'agent de codage IA open source.</p>
+<p align="center">Plateforme web interne de collaboration R&D IA personnalisée basée sur OpenCode.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
@@ -38,98 +38,169 @@
 
 ---
 
-### Installation
+## Positionnement du projet
+
+Ce dépôt ne décrit pas un outil générique de codage IA pour poste de travail, mais une plateforme web interne de R&D IA personnalisée à partir d’OpenCode.
+
+- C’est un produit interne **Web-first** ; la personnalisation actuelle se concentre sur l’application web
+- Il sert la **collaboration multi-utilisateurs** en interne, pas l’usage local d’un seul développeur
+- Il ne permet pas de se connecter librement à des répertoires serveur ; les utilisateurs travaillent dans des **limites de projet contrôlées par l’administrateur**
+- Il fournit des **capacités de plateforme IA unifiée**, pas seulement une page « discuter avec l’IA pour modifier le code »
+
+On peut le voir comme :
+
+> Un poste de travail R&D IA contrôlé, gouvernable et multi-utilisateurs pour usage interne.
+
+## Notre philosophie
+
+La plateforme vise à devenir une plateforme interne unifiée de collaboration R&D IA, pas seulement une page de codage IA.
+
+Principes clés :
+
+- **Pas un bureau à distance, mais un poste de travail IA dans des projets contrôlés**
+- **Pas pour que quelques développeurs monopolisent l’IA, mais pour que plus de rôles participent à la production logicielle dans leur périmètre autorisé**
+- **Pas une IA qui ne fait que répondre, mais une IA qui devient progressivement la couche d’exécution du flux R&D**
+- **Pas de suppression des limites, mais une efficacité accrue sous gouvernance des permissions, projets, sessions et modèles**
+
+En termes de produit, les trois limites les plus importantes sont :
+
+- **Limite de projet** : les utilisateurs normaux n’accèdent qu’aux projets préenregistrés par les administrateurs
+- **Limite de session** : une tâche correspond à une session et un espace de travail indépendants
+- **Limite de permissions** : ce que les utilisateurs voient, font et quels modèles ils utilisent sont contrôlés par la plateforme
+
+## Capacités actuelles clés
+
+La personnalisation se concentre sur l’application web :
+
+- Inscription multi-utilisateurs, connexion et gestion de comptes
+- Capacités utilisateur, projet, modèle et audit visibles par les administrateurs
+- Enregistrement de projets pour n’exposer que les dépôts de code approuvés
+- Espaces de travail isolés par session, typiquement via Git worktrees
+- Gouvernance unifiée des modèles, fournisseurs, permissions et modes
+- Point d’entrée unifié vers la plateforme IA pour les équipes
+
+Le focus n’est pas sur le poste de travail ni le TUI, mais sur :
+
+> Permettre aux utilisateurs internes de faire Q&A, analyse, édition, exécution et collaboration via le web, dans des projets contrôlés.
+
+## Multi-utilisateurs et plateforme IA unifiée
+
+La plateforme ne donne pas accès complet à tout le monde. En revanche :
+
+1. Les administrateurs préparent le code du projet sur le serveur
+2. Les administrateurs enregistrent les répertoires autorisés comme projets
+3. Les utilisateurs s’inscrivent et se connectent via le web
+4. Les utilisateurs normaux ne voient que les projets qui leur sont ouverts
+5. Les utilisateurs commencent à travailler en sessions après être entrés dans un projet
+
+La plateforme IA unifiée offre :
+
+- Point d’entrée unifié des modèles
+- Gestion unifiée des fournisseurs
+- Contrôle unifié des permissions
+- Flux de travail unifié par session
+- Limites unifiées d’audit et de gouvernance
+
+Ce design permet un déploiement interne progressif : commencer avec des permissions à faible risque, puis étendre par rôle et scénario.
+
+## Support Cursor CLI
+
+La plateforme prend en charge **Cursor CLI** comme source de modèle/fournisseur dans la plateforme IA unifiée.
+
+### Comment connecter
+
+La machine serveur doit avoir Cursor CLI installé et la commande `agent` disponible dans le shell :
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Gestionnaires de paquets
-npm i -g opencode-ai@latest        # ou bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS et Linux (recommandé, toujours à jour)
-brew install opencode              # macOS et Linux (formule officielle brew, mise à jour moins fréquente)
-paru -S opencode-bin               # Arch Linux
-mise use -g opencode               # n'importe quel OS
-nix run nixpkgs#opencode           # ou github:anomalyco/opencode pour la branche dev la plus récente
+agent login
 ```
 
-> [!TIP]
-> Supprimez les versions antérieures à 0.1.x avant d'installer.
+Après connexion, la plateforme réutilise l’état de connexion Cursor local existant.
 
-### Application de bureau (BETA)
+### Utilisation dans la plateforme
 
-OpenCode est aussi disponible en application de bureau. Téléchargez-la directement depuis la [page des releases](https://github.com/anomalyco/opencode/releases) ou [opencode.ai/download](https://opencode.ai/download).
+- Les administrateurs contrôlent si les utilisateurs peuvent accéder aux modèles et fournisseurs
+- Les utilisateurs restreints par défaut ont généralement uniquement le mode `ask`
+- La liste blanche de modèles par défaut inclut généralement :
+  - `cursor-cli/auto`
+  - `cursor-cli/composer-1`
+  - `cursor-cli/composer-1.5`
 
-| Plateforme            | Téléchargement                        |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, ou AppImage           |
+Si Cursor CLI n’est pas installé ou `agent` n’est pas disponible, les modèles et fournisseurs Cursor CLI n’apparaîtront pas dans la plateforme.
+
+### Recommandations de configuration
+
+Pour le déploiement interne initial :
+
+- Utilisateurs restreints par défaut : uniquement le mode `ask`
+- Liste blanche de modèles par défaut : privilégier les modèles `cursor-cli`
+- Ne pas exposer Provider, Server, MCP ou autre gestion à haut risque par défaut
+- Laisser les administrateurs étendre les capacités par utilisateur ou rôle selon les besoins
+
+Avantages :
+
+- Faible coût d’intégration
+- Limites de risque claires
+- Source de modèles unifiée
+- UX simple pour l’adoption interne
+
+### Rôle dans le système
+
+Avec Cursor CLI connecté, la plateforme ne fait pas qu’appeler une API de modèle externe. Elle assemble le contexte de session, les limites du projet et les outils de la plateforme, puis les transmet à Cursor CLI pour exécution.
+
+Ainsi, `cursor-cli` n’est pas un outil isolé ici, mais une partie de la plateforme IA unifiée.
+
+## Recommandations de déploiement pour administrateurs
+
+Approche recommandée :
+
+1. Préparer des répertoires de projet contrôlés
+2. N’enregistrer que les dépôts explicitement approuvés
+3. Donner des permissions restreintes par défaut aux utilisateurs normaux
+4. Prioriser le Q&A web et les capacités à faible risque
+5. Ajouter progressivement plus de modèles, modes et fonctions de flux de travail
+
+En bref : ne pas tout activer d’un coup. À la place :
+
+> Établir d’abord les limites de projet, permissions, modèles et sessions, puis étendre les capacités de la plateforme étape par étape.
+
+## Développement local
+
+La personnalisation se concentre sur l’application web, donc le développement local doit démarrer le stack web.
+
+Installer les dépendances :
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
 ```
 
-#### Répertoire d'installation
-
-Le script d'installation respecte l'ordre de priorité suivant pour le chemin d'installation :
-
-1. `$OPENCODE_INSTALL_DIR` - Répertoire d'installation personnalisé
-2. `$XDG_BIN_DIR` - Chemin conforme à la spécification XDG Base Directory
-3. `$HOME/bin` - Répertoire binaire utilisateur standard (s'il existe ou peut être créé)
-4. `$HOME/.opencode/bin` - Repli par défaut
+Démarrage en une commande :
 
 ```bash
-# Exemples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+sh restart-services.sh
 ```
 
-### Agents
+URLs par défaut :
 
-OpenCode inclut deux agents intégrés que vous pouvez basculer avec la touche `Tab`.
+- Backend : `http://localhost:4096`
+- Frontend : `http://localhost:3000`
 
-- **build** - Par défaut, agent avec accès complet pour le travail de développement
-- **plan** - Agent en lecture seule pour l'analyse et l'exploration du code
-  - Refuse les modifications de fichiers par défaut
-  - Demande l'autorisation avant d'exécuter des commandes bash
-  - Idéal pour explorer une base de code inconnue ou planifier des changements
+Pour démarrer séparément :
 
-Un sous-agent **general** est aussi inclus pour les recherches complexes et les tâches en plusieurs étapes.
-Il est utilisé en interne et peut être invoqué via `@general` dans les messages.
+```bash
+bun run --cwd packages/opencode dev
+bun run --cwd packages/app dev
+```
 
-En savoir plus sur les [agents](https://opencode.ai/docs/agents).
+## Documentation associée
 
-### Documentation
+- `docs/internal-web-user-manual.md`
+  - Guide utilisateur pour administrateurs et utilisateurs normaux
+- `docs/internal-ai-platform-vision.md`
+  - Vision produit et orientation future pour l’équipe
 
-Pour plus d'informations sur la configuration d'OpenCode, [**consultez notre documentation**](https://opencode.ai/docs).
-
-### Contribuer
-
-Si vous souhaitez contribuer à OpenCode, lisez nos [docs de contribution](./CONTRIBUTING.md) avant de soumettre une pull request.
-
-### Construire avec OpenCode
-
-Si vous travaillez sur un projet lié à OpenCode et que vous utilisez "opencode" dans le nom du projet (par exemple, "opencode-dashboard" ou "opencode-mobile"), ajoutez une note dans votre README pour préciser qu'il n'est pas construit par l'équipe OpenCode et qu'il n'est pas affilié à nous.
-
-### FAQ
-
-#### En quoi est-ce différent de Claude Code ?
-
-C'est très similaire à Claude Code en termes de capacités. Voici les principales différences :
-
-- 100% open source
-- Pas couplé à un fournisseur. Nous recommandons les modèles proposés via [OpenCode Zen](https://opencode.ai/zen) ; OpenCode peut être utilisé avec Claude, OpenAI, Google ou même des modèles locaux. Au fur et à mesure que les modèles évoluent, les écarts se réduiront et les prix baisseront, donc être agnostique au fournisseur est important.
-- Support LSP prêt à l'emploi
-- Un focus sur la TUI. OpenCode est construit par des utilisateurs de neovim et les créateurs de [terminal.shop](https://terminal.shop) ; nous allons repousser les limites de ce qui est possible dans le terminal.
-- Architecture client/serveur. Cela permet par exemple de faire tourner OpenCode sur votre ordinateur tout en le pilotant à distance depuis une application mobile. Cela signifie que la TUI n'est qu'un des clients possibles.
+Ces documents sont plus détaillés et plus proches des objectifs réels de ce produit personnalisé.
 
 ---
 
-**Rejoignez notre communauté** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Focus actuel** : application web, multi-utilisateurs, plateforme IA unifiée, collaboration en projets contrôlés.

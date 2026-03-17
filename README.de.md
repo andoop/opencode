@@ -7,7 +7,7 @@
     </picture>
   </a>
 </p>
-<p align="center">Der Open-Source KI-Coding-Agent.</p>
+<p align="center">Auf OpenCode basierende, angepasste interne AI R&D-Webplattform für Zusammenarbeit.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
@@ -38,98 +38,169 @@
 
 ---
 
-### Installation
+## Projektpositionierung
+
+Dieses Repository beschreibt kein generisches Desktop-AI-Coding-Tool, sondern eine interne Web-AI-R&D-Plattform, die auf OpenCode angepasst wurde.
+
+- Es ist ein **Web-first** internes Produkt; der aktuelle Anpassungsschwerpunkt ist die Web-App
+- Es dient der **Multi-User-Zusammenarbeit** im Unternehmen, nicht dem lokalen Einzelentwickler-Einsatz
+- Es geht nicht darum, Nutzer beliebig mit Serververzeichnissen zu verbinden, sondern darum, dass Nutzer AI innerhalb **vom Admin vordefinierter Projektgrenzen** nutzen
+- Es bietet **einheitliche AI-Plattform-Funktionen**, nicht nur eine „Chat mit AI zum Codebearbeiten“-Seite
+
+Man kann es verstehen als:
+
+> Eine kontrollierte, steuerbare, multi-user-fähige AI-R&D-Workbench für den internen Einsatz.
+
+## Unsere Philosophie
+
+Die Plattform will nicht nur eine AI-Coding-Seite sein, sondern schrittweise zu einer einheitlichen internen AI-R&D-Kollaborationsplattform werden.
+
+Kernprinzipien:
+
+- **Kein Remote-Desktop, sondern eine AI-Workbench innerhalb kontrollierter Projekte**
+- **Nicht wenige Entwickler sollen AI exklusiv nutzen, sondern mehr Rollen sollen innerhalb ihrer Berechtigungen an der Softwareproduktion teilnehmen**
+- **AI soll nicht nur Fragen beantworten, sondern schrittweise zur Ausführungsschicht im R&D-Workflow werden**
+- **Keine offenen Grenzen, sondern Effizienzsteigerung unter Governance von Berechtigungen, Projekten, Sessions und Modellen**
+
+In der Produktgestaltung sind die drei wichtigsten Grenzen:
+
+- **Projektgrenze**: Normale Nutzer können nur von Admins vorregistrierte Projekte betreten
+- **Sessiongrenze**: Eine Aufgabe entspricht einer eigenständigen Session und einem eigenständigen Workspace
+- **Berechtigungsgrenze**: Was Nutzer sehen, tun und welche Modelle sie nutzen können, steuert die Plattform
+
+## Aktuelle Kernfunktionen
+
+Die Anpassung konzentriert sich auf die Web-App:
+
+- Multi-User-Registrierung, Login und Kontoverwaltung
+- Admin-sichtbare Nutzer-, Projekt-, Modell- und Audit-Funktionen
+- Projektregistrierung, sodass nur genehmigte Code-Repositories freigegeben werden
+- Session-basierte isolierte Workspaces, typischerweise über Git-Worktrees
+- Einheitliche Steuerung von Modellen, Providern, Berechtigungen und Modi
+- Einheitlicher AI-Plattform-Einstiegspunkt für Teams
+
+Der Fokus liegt nicht auf Desktop oder TUI, sondern auf:
+
+> Internen Nutzern ermöglichen, per Web Q&A, Analyse, Bearbeitung, Ausführung und Zusammenarbeit in kontrollierten Projekten durchzuführen.
+
+## Multi-User und einheitliche AI-Plattform
+
+Die Plattform gewährt nicht jedem, der sich einloggt, vollen Zugriff. Stattdessen:
+
+1. Admins bereiten Projektcode auf dem Server vor
+2. Admins registrieren erlaubte Verzeichnisse als Projekte
+3. Nutzer registrieren sich und loggen sich per Web ein
+4. Normale Nutzer sehen nur für sie freigegebene Projekte
+5. Nutzer starten die Arbeit in Sessions nach dem Betreten eines Projekts
+
+Die einheitliche AI-Plattform bietet:
+
+- Einheitlichen Modell-Einstiegspunkt
+- Einheitliche Provider-Verwaltung
+- Einheitliche Berechtigungssteuerung
+- Einheitlichen Session-Workflow
+- Einheitliche Audit- und Governance-Grenzen
+
+Dieses Design unterstützt schrittweise interne Einführung: zuerst mit geringem Risiko, dann schrittweise Erweiterung nach Rolle und Szenario.
+
+## Cursor CLI-Unterstützung
+
+Die Plattform unterstützt **Cursor CLI** als Modell-/Provider-Quelle in der einheitlichen AI-Plattform.
+
+### Anbindung
+
+Auf dem Server muss Cursor CLI installiert sein und der Befehl `agent` in der Shell verfügbar sein:
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Paketmanager
-npm i -g opencode-ai@latest        # oder bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS und Linux (empfohlen, immer aktuell)
-brew install opencode              # macOS und Linux (offizielle Brew-Formula, seltener aktualisiert)
-paru -S opencode-bin               # Arch Linux
-mise use -g opencode               # jedes Betriebssystem
-nix run nixpkgs#opencode           # oder github:anomalyco/opencode für den neuesten dev-Branch
+agent login
 ```
 
-> [!TIP]
-> Entferne Versionen älter als 0.1.x vor der Installation.
+Nach dem Login nutzt die Plattform den bestehenden lokalen Cursor-Login-Status.
 
-### Desktop-App (BETA)
+### Nutzung in der Plattform
 
-OpenCode ist auch als Desktop-Anwendung verfügbar. Lade sie direkt von der [Releases-Seite](https://github.com/anomalyco/opencode/releases) oder [opencode.ai/download](https://opencode.ai/download) herunter.
+- Admins steuern, ob Nutzer Modell- und Provider-Einstellungen nutzen können
+- Standardmäßig eingeschränkte Nutzer haben typischerweise nur den `ask`-Modus
+- Die Standard-Modell-Whitelist umfasst meist:
+  - `cursor-cli/auto`
+  - `cursor-cli/composer-1`
+  - `cursor-cli/composer-1.5`
 
-| Plattform             | Download                              |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm` oder AppImage          |
+Wenn Cursor CLI nicht installiert ist oder `agent` nicht verfügbar ist, erscheinen Cursor-CLI-Modelle und -Provider nicht in der Plattform.
+
+### Konfigurationsempfehlungen
+
+Für die erste interne Einführung:
+
+- Standard eingeschränkte Nutzer: nur `ask`-Modus
+- Standard-Modell-Whitelist: bevorzugt `cursor-cli`-Modelle
+- Provider, Server, MCP und andere risikoreiche Verwaltung standardmäßig nicht freigeben
+- Admins erweitern Berechtigungen pro Nutzer oder Rolle nach Bedarf
+
+Vorteile:
+
+- Geringe Einführungskosten
+- Klare Risikogrenzen
+- Einheitliche Modellquelle
+- Einfache UX für interne Nutzung
+
+### Rolle im System
+
+Mit angeschlossenem Cursor CLI ruft die Plattform nicht einfach eine externe Modell-API auf. Sie bündelt Session-Kontext, Projektgrenzen und Plattform-Tools und übergibt sie an Cursor CLI zur Ausführung.
+
+`cursor-cli` ist hier also kein isoliertes Tool, sondern Teil der einheitlichen AI-Plattform.
+
+## Admin-Empfehlungen zur Einführung
+
+Empfohlener Ansatz:
+
+1. Kontrollierte Projektverzeichnisse vorbereiten
+2. Nur explizit genehmigte Repositories registrieren
+3. Normale Nutzer standardmäßig eingeschränkte Berechtigungen geben
+4. Web-Q&A und risikoarme Funktionen priorisieren
+5. Schrittweise weitere Modelle, Modi und Workflow-Funktionen hinzufügen
+
+Kurz: Nicht alles auf einmal freischalten. Stattdessen:
+
+> Zuerst Projekt-, Berechtigungs-, Modell- und Session-Grenzen etablieren, dann die Plattform-Funktionen schrittweise erweitern.
+
+## Lokale Entwicklung
+
+Der Anpassungsschwerpunkt liegt auf der Web-App, daher sollte die lokale Entwicklung mit dem Web-Stack starten.
+
+Abhängigkeiten installieren:
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
 ```
 
-#### Installationsverzeichnis
-
-Das Installationsskript beachtet die folgende Prioritätsreihenfolge für den Installationspfad:
-
-1. `$OPENCODE_INSTALL_DIR` - Benutzerdefiniertes Installationsverzeichnis
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification-konformer Pfad
-3. `$HOME/bin` - Standard-Binärverzeichnis des Users (falls vorhanden oder erstellbar)
-4. `$HOME/.opencode/bin` - Standard-Fallback
+Ein-Klick-Start:
 
 ```bash
-# Beispiele
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+sh restart-services.sh
 ```
 
-### Agents
+Standard-URLs:
 
-OpenCode enthält zwei eingebaute Agents, zwischen denen du mit der `Tab`-Taste wechseln kannst.
+- Backend: `http://localhost:4096`
+- Frontend: `http://localhost:3000`
 
-- **build** - Standard-Agent mit vollem Zugriff für Entwicklungsarbeit
-- **plan** - Nur-Lese-Agent für Analyse und Code-Exploration
-  - Verweigert Datei-Edits standardmäßig
-  - Fragt vor dem Ausführen von bash-Befehlen nach
-  - Ideal zum Erkunden unbekannter Codebases oder zum Planen von Änderungen
+Getrennt starten:
 
-Außerdem ist ein **general**-Subagent für komplexe Suchen und mehrstufige Aufgaben enthalten.
-Dieser wird intern genutzt und kann in Nachrichten mit `@general` aufgerufen werden.
+```bash
+bun run --cwd packages/opencode dev
+bun run --cwd packages/app dev
+```
 
-Mehr dazu unter [Agents](https://opencode.ai/docs/agents).
+## Verwandte Dokumentation
 
-### Dokumentation
+- `docs/internal-web-user-manual.md`
+  - Benutzerhandbuch für Admins und normale Nutzer
+- `docs/internal-ai-platform-vision.md`
+  - Produktvision und zukünftige Richtung für das Team
 
-Mehr Infos zur Konfiguration von OpenCode findest du in unseren [**Docs**](https://opencode.ai/docs).
-
-### Beitragen
-
-Wenn du zu OpenCode beitragen möchtest, lies bitte unsere [Contributing Docs](./CONTRIBUTING.md), bevor du einen Pull Request einreichst.
-
-### Auf OpenCode aufbauen
-
-Wenn du an einem Projekt arbeitest, das mit OpenCode zusammenhängt und "opencode" als Teil seines Namens verwendet (z.B. "opencode-dashboard" oder "opencode-mobile"), füge bitte einen Hinweis in deine README ein, dass es nicht vom OpenCode-Team gebaut wird und nicht in irgendeiner Weise mit uns verbunden ist.
-
-### FAQ
-
-#### Worin unterscheidet sich das von Claude Code?
-
-In Bezug auf die Fähigkeiten ist es Claude Code sehr ähnlich. Hier sind die wichtigsten Unterschiede:
-
-- 100% open source
-- Nicht an einen Anbieter gekoppelt. Wir empfehlen die Modelle aus [OpenCode Zen](https://opencode.ai/zen); OpenCode kann aber auch mit Claude, OpenAI, Google oder sogar lokalen Modellen genutzt werden. Mit der Weiterentwicklung der Modelle werden die Unterschiede kleiner und die Preise sinken, deshalb ist Provider-Unabhängigkeit wichtig.
-- LSP-Unterstützung direkt nach dem Start
-- Fokus auf TUI. OpenCode wird von Neovim-Nutzern und den Machern von [terminal.shop](https://terminal.shop) gebaut; wir treiben die Grenzen dessen, was im Terminal möglich ist.
-- Client/Server-Architektur. Das ermöglicht z.B., OpenCode auf deinem Computer laufen zu lassen, während du es von einer mobilen App aus fernsteuerst. Das TUI-Frontend ist nur einer der möglichen Clients.
+Diese Dokumente sind detaillierter und näher an den tatsächlichen Zielen dieses angepassten Produkts.
 
 ---
 
-**Tritt unserer Community bei** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Aktueller Fokus**: Web App, Multi-User, einheitliche AI-Plattform, kontrollierte Projektzusammenarbeit.

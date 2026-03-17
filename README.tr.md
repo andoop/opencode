@@ -7,7 +7,7 @@
     </picture>
   </a>
 </p>
-<p align="center">Açık kaynaklı yapay zeka kodlama asistanı.</p>
+<p align="center">OpenCode tabanlı özelleştirilmiş kurumsal AI R&D web işbirliği platformu.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
@@ -38,98 +38,169 @@
 
 ---
 
-### Kurulum
+## Proje Konumlandırması
+
+Bu depo genel bir masaüstü AI kodlama aracı değil, OpenCode tabanlı özelleştirilmiş kurumsal web AI R&D platformunu tanımlar.
+
+- **Web-first** kurumsal bir üründür; mevcut özelleştirme odağı Web App'tir
+- Tek geliştirici yerel kullanımı değil, kurum içi **çok kullanıcılı işbirliği** için tasarlanmıştır
+- Kullanıcılar sunucu dizinlerine serbestçe bağlanamaz; **yönetici tarafından kontrol edilen proje sınırları** içinde çalışırlar
+- Sadece "AI ile sohbet ederek kod düzenleme" sayfası değil, **birleşik AI platformu yetenekleri** sunar
+
+Şöyle anlaşılabilir:
+
+> Kurum içi kullanım için kontrollü, yönetilebilir, çok kullanıcılı AI R&D çalışma tezgahı.
+
+## Felsefemiz
+
+Platform sadece bir AI kodlama sayfası değil, adım adım kurum içi birleşik AI R&D işbirliği platformu olmayı hedefler.
+
+Temel ilkeler:
+
+- **Uzak masaüstü değil, kontrollü projeler içinde AI çalışma tezgahı**
+- **Az sayıda geliştiricinin AI'yı monopolize etmesi değil, daha fazla rolün yetkili kapsamda yazılım üretimine katılması**
+- **AI'nın sadece sorulara cevap vermesi değil, AI'nın R&D akışında adım adım yürütme katmanı haline gelmesi**
+- **Sınırları kaldırmak değil, izin, proje, oturum ve model yönetiminde verimliliği artırmak**
+
+Ürün tasarımında en önemli üç sınır:
+
+- **Proje sınırı**: Normal kullanıcılar sadece yöneticilerin önceden kaydettiği projelere erişebilir
+- **Oturum sınırı**: Bir görev birden fazla bağımsız oturum ve çalışma alanına karşılık gelir
+- **İzin sınırı**: Kullanıcıların ne gördüğü, ne yapabildiği ve hangi modelleri kullanabildiği platform tarafından kontrol edilir
+
+## Mevcut Temel Yetenekler
+
+Özelleştirme Web App odaklıdır:
+
+- Çok kullanıcılı kayıt, giriş ve hesap yönetimi
+- Yöneticilerin görebildiği kullanıcı, proje, model ve denetim yetenekleri
+- Sadece onaylı kod depolarını açmak için proje kaydı
+- Oturum bazlı izole çalışma alanları, genellikle Git worktrees kullanarak
+- Model, provider, izin ve modun birleşik yönetimi
+- Ekipler için birleşik AI platformu giriş noktası
+
+Odak masaüstü veya TUI değil, şunlardır:
+
+> Kurum içi kullanıcıların web üzerinden kontrollü projelerde Q&A, analiz, düzenleme, yürütme ve işbirliği yapmasını sağlamak.
+
+## Çok Kullanıcılar ve Birleşik AI Platformu
+
+Platform giriş yapan herkese tam erişim vermez. Bunun yerine:
+
+1. Yöneticiler sunucuda proje kodunu hazırlar
+2. Yöneticiler izin verilen dizinleri proje olarak kaydeder
+3. Kullanıcılar web üzerinden kayıt olur ve giriş yapar
+4. Normal kullanıcılar sadece kendilerine açılan projeleri görür
+5. Kullanıcılar projeye girdikten sonra oturumlarda çalışmaya başlar
+
+Birleşik AI platformu şunları sağlar:
+
+- Birleşik model giriş noktası
+- Birleşik provider yönetimi
+- Birleşik izin kontrolü
+- Birleşik oturum iş akışı
+- Birleşik denetim ve yönetim sınırları
+
+Bu tasarım kademeli kurum içi yayılımı destekler: önce düşük riskli izinlerle başlayın, sonra rol ve senaryoya göre genişletin.
+
+## Cursor CLI Desteği
+
+Platform, birleşik AI platformunda **Cursor CLI**'yi model/provider kaynağı olarak destekler.
+
+### Nasıl bağlanır
+
+Sunucu makinesinde Cursor CLI kurulu olmalı ve shell'de `agent` komutu kullanılabilir olmalıdır:
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Paket yöneticileri
-npm i -g opencode-ai@latest        # veya bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS ve Linux (önerilir, her zaman güncel)
-brew install opencode              # macOS ve Linux (resmi brew formülü, daha az güncellenir)
-paru -S opencode-bin               # Arch Linux
-mise use -g opencode               # Tüm işletim sistemleri
-nix run nixpkgs#opencode           # veya en güncel geliştirme dalı için github:anomalyco/opencode
+agent login
 ```
 
-> [!TIP]
-> Kurulumdan önce 0.1.x'ten eski sürümleri kaldırın.
+Giriş sonrası platform mevcut yerel Cursor giriş durumunu yeniden kullanır.
 
-### Masaüstü Uygulaması (BETA)
+### Platformda kullanım
 
-OpenCode ayrıca masaüstü uygulaması olarak da mevcuttur. Doğrudan [sürüm sayfasından](https://github.com/anomalyco/opencode/releases) veya [opencode.ai/download](https://opencode.ai/download) adresinden indirebilirsiniz.
+- Yöneticiler kullanıcıların modele ve provider'a erişip erişemeyeceğini kontrol eder
+- Varsayılan kısıtlı kullanıcılar genellikle sadece `ask` moduna sahiptir
+- Varsayılan model beyaz listesi genellikle şunları içerir:
+  - `cursor-cli/auto`
+  - `cursor-cli/composer-1`
+  - `cursor-cli/composer-1.5`
 
-| Platform              | İndirme                               |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm` veya AppImage          |
+Cursor CLI kurulu değilse veya `agent` kullanılamıyorsa, platformda Cursor CLI ile ilgili modeller ve provider'lar görünmez.
+
+### Yapılandırma önerileri
+
+İlk kurum içi yayılım için:
+
+- Varsayılan kısıtlı kullanıcılar: sadece `ask` modu
+- Varsayılan model beyaz listesi: `cursor-cli` modellerini tercih edin
+- Provider, Server, MCP veya diğer yüksek riskli yönetimi varsayılan olarak açmayın
+- Yöneticilerin gerektiğinde kullanıcı veya role göre yetenekleri genişletmesine izin verin
+
+Faydalar:
+
+- Düşük entegrasyon maliyeti
+- Net risk sınırları
+- Birleşik model kaynağı
+- Kurum içi benimseme için basit UX
+
+### Sistemdeki rolü
+
+Cursor CLI bağlandığında platform sadece harici bir model API çağrısı yapmaz. Oturum bağlamını, proje sınırlarını ve platform araçlarını bir araya getirir ve Cursor CLI'ye yürütme için iletir.
+
+Bu nedenle `cursor-cli` burada izole bir araç değil, birleşik AI platformunun bir parçasıdır.
+
+## Yönetici yayılım önerileri
+
+Önerilen yaklaşım:
+
+1. Kontrollü proje dizinlerini hazırlayın
+2. Sadece açıkça onaylanmış depoları kaydedin
+3. Normal kullanıcılara varsayılan olarak kısıtlı izinler verin
+4. Web Q&A ve düşük riskli yeteneklere öncelik verin
+5. Kademeli olarak daha fazla model, mod ve iş akışı işlevi ekleyin
+
+Kısaca: her şeyi bir anda açarak değil. Bunun yerine:
+
+> Önce proje, izin, model ve oturum sınırlarını oluşturun, ardından platform yeteneklerini adım adım genişletin.
+
+## Yerel geliştirme
+
+Özelleştirme odağı Web App olduğundan, yerel geliştirme web yığınını başlatmalıdır.
+
+Bağımlılıkları yükleyin:
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
 ```
 
-#### Kurulum Dizini (Installation Directory)
-
-Kurulum betiği (install script), kurulum yolu (installation path) için aşağıdaki öncelik sırasını takip eder:
-
-1. `$OPENCODE_INSTALL_DIR` - Özel kurulum dizini
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification uyumlu yol
-3. `$HOME/bin` - Standart kullanıcı binary dizini (varsa veya oluşturulabiliyorsa)
-4. `$HOME/.opencode/bin` - Varsayılan yedek konum
+Tek komutla başlatma:
 
 ```bash
-# Örnekler
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+sh restart-services.sh
 ```
 
-### Ajanlar
+Varsayılan adresler:
 
-OpenCode, `Tab` tuşuyla aralarında geçiş yapabileceğiniz iki yerleşik (built-in) ajan içerir.
+- Backend: `http://localhost:4096`
+- Frontend: `http://localhost:3000`
 
-- **build** - Varsayılan, geliştirme çalışmaları için tam erişimli ajan
-- **plan** - Analiz ve kod keşfi için salt okunur ajan
-  - Varsayılan olarak dosya düzenlemelerini reddeder
-  - Bash komutlarını çalıştırmadan önce izin ister
-  - Tanımadığınız kod tabanlarını keşfetmek veya değişiklikleri planlamak için ideal
+Ayrı ayrı başlatmak için:
 
-Ayrıca, karmaşık aramalar ve çok adımlı görevler için bir **genel** alt ajan bulunmaktadır.
-Bu dahili olarak kullanılır ve mesajlarda `@general` ile çağrılabilir.
+```bash
+bun run --cwd packages/opencode dev
+bun run --cwd packages/app dev
+```
 
-[Ajanlar](https://opencode.ai/docs/agents) hakkında daha fazla bilgi edinin.
+## İlgili dokümantasyon
 
-### Dokümantasyon
+- `docs/internal-web-user-manual.md`
+  - Yöneticiler ve normal kullanıcılar için kullanıcı kılavuzu
+- `docs/internal-ai-platform-vision.md`
+  - Ekip için ürün vizyonu ve gelecek yönü
 
-OpenCode'u nasıl yapılandıracağınız hakkında daha fazla bilgi için [**dokümantasyonumuza göz atın**](https://opencode.ai/docs).
-
-### Katkıda Bulunma
-
-OpenCode'a katkıda bulunmak istiyorsanız, lütfen bir pull request göndermeden önce [katkıda bulunma dokümanlarımızı](./CONTRIBUTING.md) okuyun.
-
-### OpenCode Üzerine Geliştirme
-
-OpenCode ile ilgili bir proje üzerinde çalışıyorsanız ve projenizin adının bir parçası olarak "opencode" kullanıyorsanız (örneğin, "opencode-dashboard" veya "opencode-mobile"), lütfen README dosyanıza projenin OpenCode ekibi tarafından geliştirilmediğini ve bizimle hiçbir şekilde bağlantılı olmadığını belirten bir not ekleyin.
-
-### SSS
-
-#### Bu Claude Code'dan nasıl farklı?
-
-Yetenekler açısından Claude Code'a çok benzer. İşte temel farklar:
-
-- %100 açık kaynak
-- Herhangi bir sağlayıcıya bağlı değil. [OpenCode Zen](https://opencode.ai/zen) üzerinden sunduğumuz modelleri önermekle birlikte; OpenCode, Claude, OpenAI, Google veya hatta yerel modellerle kullanılabilir. Modeller geliştikçe aralarındaki farklar kapanacak ve fiyatlar düşecek, bu nedenle sağlayıcıdan bağımsız olmak önemlidir.
-- Kurulum gerektirmeyen hazır LSP desteği
-- TUI odaklı yaklaşım. OpenCode, neovim kullanıcıları ve [terminal.shop](https://terminal.shop)'un geliştiricileri tarafından geliştirilmektedir; terminalde olabileceklerin sınırlarını zorlayacağız.
-- İstemci/sunucu (client/server) mimarisi. Bu, örneğin OpenCode'un bilgisayarınızda çalışması ve siz onu bir mobil uygulamadan uzaktan yönetmenizi sağlar. TUI arayüzü olası istemcilerden sadece biridir.
+Bu belgeler daha ayrıntılıdır ve bu özelleştirilmiş ürünün gerçek hedeflerine daha yakındır.
 
 ---
 
-**Topluluğumuza katılın** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Mevcut odak**: Web App, çok kullanıcılı, birleşik AI platformu, kontrollü proje işbirliği.
