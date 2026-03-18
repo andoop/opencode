@@ -111,9 +111,15 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     setLoadingPaths((prev) => new Set(prev).add(key))
 
     try {
-      const nodes = await sdk.client.file.list({ directory: key, path: "" }).then((x) => x.data ?? [])
+      const nodes = await sdk.client.browse
+        .list({
+          directory: key,
+          path: "",
+          type: "directory",
+          limit: 200,
+        })
+        .then((x) => x.data ?? [])
       const dirs = nodes
-        .filter((n) => n.type === "directory")
         .map((n) => ({
           path: trimTrailing(normalize(n.absolute)),
           name: n.name,

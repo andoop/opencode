@@ -692,6 +692,7 @@ export default function Layout(props: ParentProps) {
   )
 
   const workspaceKey = (directory: string) => directory.replace(/[\\/]+$/, "")
+  const sessionInDirectory = (session: Session, directory: string) => workspaceKey(session.directory) === workspaceKey(directory)
   const currentDirectory = createMemo(() => decode64(params.dir))
   const currentDirectoryKey = createMemo(() => {
     const directory = currentDirectory()
@@ -778,18 +779,18 @@ export default function Layout(props: ParentProps) {
         const expanded = store.workspaceExpanded[dir] ?? dir === project.worktree
         const active = dir === activeDir
         if (!expanded && !active) continue
-        const [dirStore] = globalSync.child(dir, { bootstrap: true })
+        const [dirStore] = globalSync.child(dir, { bootstrap: false })
         const dirSessions = dirStore.session
-          .filter((session) => session.directory === dirStore.path.directory)
+          .filter((session) => sessionInDirectory(session, dir))
           .filter((session) => !session.parentID && !session.time?.archived)
           .toSorted(compare)
         result.push(...dirSessions)
       }
       return result
     }
-    const [projectStore] = globalSync.child(project.worktree)
+    const [projectStore] = globalSync.child(project.worktree, { bootstrap: false })
     return projectStore.session
-      .filter((session) => session.directory === projectStore.path.directory)
+      .filter((session) => sessionInDirectory(session, project.worktree))
       .filter((session) => !session.parentID && !session.time?.archived)
       .toSorted(compare)
   })
@@ -1076,7 +1077,7 @@ export default function Layout(props: ParentProps) {
   }
 
   async function archiveSession(session: Session) {
-    const [store, setStore] = globalSync.child(session.directory)
+    const [store, setStore] = globalSync.child(session.directory, { bootstrap: false })
     const sessions = store.session ?? []
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
@@ -1102,7 +1103,7 @@ export default function Layout(props: ParentProps) {
   }
 
   async function deleteSession(session: Session) {
-    const [store, setStore] = globalSync.child(session.directory)
+    const [store, setStore] = globalSync.child(session.directory, { bootstrap: false })
     const sessions = (store.session ?? []).filter((s) => !s.parentID && !s.time?.archived)
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
@@ -1359,6 +1360,14 @@ export default function Layout(props: ParentProps) {
     }
     navigate(`/${base64Encode(session.directory)}/session/${session.id}`)
     layout.mobileSidebar.hide()
+  }
+
+  function preloadProjectSessions(project: LocalProject) {
+    const dirs = workspaceIds(project)
+    for (const dir of dirs) {
+      globalSync.child(dir, { bootstrap: false })
+      void globalSync.project.loadSessions(dir)
+    }
   }
 
   function openProject(directory: string, navigate = true) {
@@ -1931,7 +1940,7 @@ export default function Layout(props: ParentProps) {
     const notification = useNotification()
     const notifications = createMemo(() => notification.session.unseen(props.session.id))
     const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
-    const [sessionStore] = globalSync.child(props.session.directory)
+    const [sessionStore] = globalSync.child(props.session.directory, { bootstrap: false })
     const hasPermissions = createMemo(() => {
       const permissions = sessionStore.permission?.[props.session.id] ?? []
       if (permissions.length > 0) return true
@@ -2264,7 +2273,7 @@ export default function Layout(props: ParentProps) {
     const slug = createMemo(() => base64Encode(props.directory))
     const sessions = createMemo(() =>
       workspaceStore.session
-        .filter((session) => session.directory === workspaceStore.path.directory)
+        .filter((session) => sessionInDirectory(session, props.directory))
         .filter((session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now())),
     )
@@ -2293,7 +2302,7 @@ export default function Layout(props: ParentProps) {
     })
     const open = createMemo(() => store.workspaceExpanded[props.directory] ?? local())
     const boot = createMemo(() => open() || active())
-    const booted = createMemo((prev) => prev || workspaceStore.status === "complete", false)
+    const booted = createMemo((prev) => prev || workspaceStore.sessionsReady || workspaceStore.status === "complete", false)
     const loading = createMemo(() => open() && !booted() && sessions().length === 0)
     const hasMore = createMemo(() => workspaceStore.sessionTotal > sessions().length)
     const busy = createMemo(() => isBusy(props.directory))
@@ -2312,7 +2321,7 @@ export default function Layout(props: ParentProps) {
 
     createEffect(() => {
       if (!boot()) return
-      globalSync.child(props.directory, { bootstrap: true })
+      void globalSync.project.loadSessions(props.directory)
     })
 
     const header = () => (
@@ -2534,34 +2543,24 @@ export default function Layout(props: ParentProps) {
     }
 
     const sessions = (directory: string) => {
-      // Bootstrap to ensure sessions are loaded
-      const [data] = globalSync.child(directory)
-      // Sessions are stored in the sync store for the directory, but their directory field
-      // may point to worktree directories. We need to match sessions that belong to this directory.
-      const normalizedDir = workspaceKey(directory)
+      const [data] = globalSync.child(directory, { bootstrap: false })
       return data.session
-        .filter((session) => {
-          const sessionDir = session.directory
-          const normalizedSessionDir = workspaceKey(sessionDir)
-          // Match if session directory matches the workspace directory
-          return normalizedSessionDir === normalizedDir
-        })
+        .filter((session) => sessionInDirectory(session, directory))
         .filter((session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now()))
         .slice(0, 2)
     }
 
+    const projectDirs = createMemo(() => workspaceIds(props.project))
     const projectSessions = () => {
-      const directory = props.project.worktree
-      // Collect sessions from project directory and all sandboxes (including session worktrees)
-      const projectDirs = [directory, ...(props.project.sandboxes ?? [])]
-      const [projectData] = globalSync.child(directory, { bootstrap: false })
+      const dirs = projectDirs()
+      const [projectData] = globalSync.child(props.project.worktree, { bootstrap: false })
       type Session = typeof projectData.session[number]
       const allSessions: Session[] = []
       const seenIds = new Set<string>()
       
       // Load sessions from each directory (use bootstrap: false to avoid repeated git operations)
-      for (const dir of projectDirs) {
+      for (const dir of dirs) {
         const [dirData] = globalSync.child(dir, { bootstrap: false })
         for (const session of dirData.session) {
           // Deduplicate by session ID
@@ -2577,7 +2576,7 @@ export default function Layout(props: ParentProps) {
         .filter((session: Session) => {
           const sessionDir = session.directory
           // Check if session directory matches any project directory
-          return projectDirs.some((dir) => {
+          return dirs.some((dir) => {
             const normalizedDir = workspaceKey(dir)
             const normalizedSessionDir = workspaceKey(sessionDir)
             return normalizedSessionDir === normalizedDir
@@ -2587,6 +2586,13 @@ export default function Layout(props: ParentProps) {
         .toSorted(sortSessions(Date.now()))
         .slice(0, 2)
     }
+    const projectSessionsReady = createMemo(() =>
+      projectDirs().every((dir) => {
+        const [data] = globalSync.child(dir, { bootstrap: false })
+        return data.sessionsReady || data.status === "complete"
+      }),
+    )
+    const projectSessionsLoading = createMemo(() => !projectSessionsReady() && projectSessions().length === 0)
 
     const projectName = () => props.project.name || getFilename(props.project.worktree)
     const Trigger = () => (
@@ -2612,13 +2618,13 @@ export default function Layout(props: ParentProps) {
           }}
           onMouseEnter={() => {
             if (!overlay()) return
-            globalSync.child(props.project.worktree)
+            preloadProjectSessions(props.project)
             setState("hoverProject", props.project.worktree)
             setState("hoverSession", undefined)
           }}
           onFocus={() => {
             if (!overlay()) return
-            globalSync.child(props.project.worktree)
+            preloadProjectSessions(props.project)
             setState("hoverProject", props.project.worktree)
             setState("hoverSession", undefined)
           }}
@@ -2670,7 +2676,7 @@ export default function Layout(props: ParentProps) {
       <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Show when={preview()} fallback={<Trigger />}>
           <HoverCard
-            open={open() && !menu()}
+            open={!menu() && (preview() ? open() : overlay() && state.hoverProject === props.project.worktree)}
             openDelay={0}
             closeDelay={0}
             placement="right-start"
@@ -2678,7 +2684,12 @@ export default function Layout(props: ParentProps) {
             trigger={<Trigger />}
             onOpenChange={(value) => {
               if (menu()) return
-              setOpen(value)
+              if (preview()) {
+                setOpen(value)
+              } else if (overlay()) {
+                if (value) setState("hoverProject", props.project.worktree)
+                else if (state.hoverProject === props.project.worktree) setState("hoverProject", undefined)
+              }
               if (value) setState("hoverSession", undefined)
             }}
           >
@@ -2725,7 +2736,7 @@ export default function Layout(props: ParentProps) {
                 <Show
                   when={workspaceEnabled()}
                   fallback={
-                    <For each={projectSessions()}>
+                    <Show when={projectSessionsLoading()} fallback={<For each={projectSessions()}>
                       {(session) => (
                         <SessionItem
                           session={session}
@@ -2735,7 +2746,9 @@ export default function Layout(props: ParentProps) {
                           popover={false}
                         />
                       )}
-                    </For>
+                    </For>}>
+                      <SessionSkeleton count={2} />
+                    </Show>
                   }
                 >
                   <For each={workspaces()}>
@@ -2844,7 +2857,10 @@ export default function Layout(props: ParentProps) {
       if (prev) return true
       const dirs = projectDirs()
       if (dirs.length === 0) return false
-      return dirs.every((dir) => globalSync.child(dir, { bootstrap: false })[0].status === "complete")
+      return dirs.every((dir) => {
+        const [data] = globalSync.child(dir, { bootstrap: false })
+        return data.sessionsReady || data.status === "complete"
+      })
     }, false)
     const loading = createMemo(() => !booted() && sessions().length === 0)
     const hasMore = createMemo(() => {
@@ -2857,7 +2873,7 @@ export default function Layout(props: ParentProps) {
         const [, setDirStore] = globalSync.child(dir, { bootstrap: false })
         setDirStore("limit", (limit) => limit + 5)
       }
-      await Promise.all(dirs.map((dir) => globalSync.project.loadSessions(dir)))
+      await Promise.all(dirs.map((dir) => globalSync.project.loadSessions(dir, { force: true })))
     }
 
     return (
@@ -3018,7 +3034,7 @@ export default function Layout(props: ParentProps) {
       for (const dir of dirs) {
         globalSync.child(dir, { bootstrap: false })
       }
-      await Promise.all(dirs.map((dir) => globalSync.project.loadSessions(dir)))
+      await Promise.all(dirs.map((dir) => globalSync.project.loadSessions(dir, { force: true })))
     } catch (err) {
       showToast({
         title: language.t("common.requestFailed"),

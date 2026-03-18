@@ -15,6 +15,7 @@ import { Global } from "../global"
 
 export namespace File {
   const log = Log.create({ service: "file" })
+  const exclude = new Set([".git", ".DS_Store"])
 
   export const Info = z
     .object({
@@ -267,19 +268,90 @@ export namespace File {
     ),
   }
 
+  type Entry = { files: string[]; dirs: string[] }
+
+  function sortNodes(a: Node, b: Node) {
+    if (a.type !== b.type) {
+      return a.type === "directory" ? -1 : 1
+    }
+    return a.name.localeCompare(b.name)
+  }
+
+  async function listNodes(input: {
+    directory: string
+    root: string
+    path?: string
+    type?: Node["type"]
+    limit?: number
+    ignored?: (path: string) => boolean
+    contains?: (resolved: string) => boolean
+  }) {
+    const ignored = input.ignored ?? (() => false)
+    const resolved = input.path ? path.join(input.directory, input.path) : input.directory
+
+    const contains = input.contains ?? ((candidate: string) => Filesystem.contains(input.root, candidate))
+    if (!contains(resolved)) {
+      throw new Error(`Access denied: path escapes project directory`)
+    }
+
+    const readdirTimer = log.time("readdir", {
+      directory: input.directory,
+      path: input.path ?? "",
+      type: input.type,
+      limit: input.limit,
+    })
+    const entries = await fs.promises
+      .readdir(resolved, {
+        withFileTypes: true,
+      })
+      .catch(() => [] as fs.Dirent[])
+    readdirTimer.stop()
+
+    const nodes: Node[] = []
+    for (const entry of entries) {
+      if (exclude.has(entry.name)) continue
+      const fullPath = path.join(resolved, entry.name)
+      const relativePath = path.relative(input.root, fullPath)
+      const type = entry.isDirectory() ? "directory" : "file"
+      if (input.type && input.type !== type) continue
+      nodes.push({
+        name: entry.name,
+        path: relativePath,
+        absolute: fullPath,
+        type,
+        ignored: ignored(type === "directory" ? relativePath + "/" : relativePath),
+      })
+    }
+
+    const sorted = nodes.sort(sortNodes)
+    const result = input.limit === undefined ? sorted : sorted.slice(0, input.limit)
+    log.info("readdir.result", {
+      directory: input.directory,
+      path: input.path ?? "",
+      entries: entries.length,
+      matched: nodes.length,
+      returned: result.length,
+      type: input.type,
+      limit: input.limit,
+    })
+    return result
+  }
+
   const state = Instance.state(async () => {
-    type Entry = { files: string[]; dirs: string[] }
     let cache: Entry = { files: [], dirs: [] }
-    let fetching = false
+    let initialized = false
+    let fetching: Promise<Entry> | undefined
 
     const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
 
-    const fn = async (result: Entry) => {
+    const scan = async () => {
+      const result: Entry = { files: [], dirs: [] }
+
       // Disable scanning if in root of file system
-      if (Instance.directory === path.parse(Instance.directory).root) return
-      fetching = true
+      if (Instance.directory === path.parse(Instance.directory).root) return result
 
       if (isGlobalHome) {
+        using _ = log.time("home-scan", { directory: Instance.directory })
         const dirs = new Set<string>()
         const ignore = new Set<string>()
 
@@ -309,9 +381,7 @@ export namespace File {
         }
 
         result.dirs = Array.from(dirs).toSorted()
-        cache = result
-        fetching = false
-        return
+        return result
       }
 
       const set = new Set<string>()
@@ -328,19 +398,27 @@ export namespace File {
           result.dirs.push(dir + "/")
         }
       }
-      cache = result
-      fetching = false
+      return result
     }
-    fn(cache)
+
+    const refresh = () => {
+      if (fetching) return fetching
+      fetching = scan()
+        .then((result) => {
+          cache = result
+          initialized = true
+          return result
+        })
+        .finally(() => {
+          fetching = undefined
+        })
+      return fetching
+    }
 
     return {
       async files() {
-        if (!fetching) {
-          fn({
-            files: [],
-            dirs: [],
-          })
-        }
+        if (!initialized) await refresh()
+        else if (!fetching) void refresh()
         return cache
       },
     }
@@ -525,7 +603,7 @@ export namespace File {
   }
 
   export async function list(dir?: string) {
-    const exclude = [".git", ".DS_Store"]
+    using _ = log.time("list", { dir })
     const project = Instance.project
     let ignored = (_: string) => false
     if (project.vcs === "git") {
@@ -548,29 +626,28 @@ export namespace File {
       throw new Error(`Access denied: path escapes project directory`)
     }
 
-    const nodes: Node[] = []
-    for (const entry of await fs.promises
-      .readdir(resolved, {
-        withFileTypes: true,
-      })
-      .catch(() => [])) {
-      if (exclude.includes(entry.name)) continue
-      const fullPath = path.join(resolved, entry.name)
-      const relativePath = path.relative(Instance.directory, fullPath)
-      const type = entry.isDirectory() ? "directory" : "file"
-      nodes.push({
-        name: entry.name,
-        path: relativePath,
-        absolute: fullPath,
-        type,
-        ignored: ignored(type === "directory" ? relativePath + "/" : relativePath),
-      })
-    }
-    return nodes.sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === "directory" ? -1 : 1
-      }
-      return a.name.localeCompare(b.name)
+    return listNodes({
+      directory: Instance.directory,
+      root: Instance.directory,
+      path: dir,
+      ignored,
+      contains: Instance.containsPath,
+    })
+  }
+
+  export async function browse(input: {
+    directory: string
+    path?: string
+    type?: Node["type"]
+    limit?: number
+  }) {
+    using _ = log.time("browse", input)
+    return listNodes({
+      directory: input.directory,
+      root: input.directory,
+      path: input.path,
+      type: input.type,
+      limit: input.limit,
     })
   }
 

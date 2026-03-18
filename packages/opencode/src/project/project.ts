@@ -147,6 +147,7 @@ export namespace Project {
   }
 
   export async function assertDirectoryAccess(directory: string) {
+    using _ = log.time("assertDirectoryAccess", { directory })
     if (!isMultiUserMode()) return
     const userID = currentUserID()
     if (!userID) throw new DirectoryAccessError({ directory })
@@ -168,6 +169,7 @@ export namespace Project {
   }
 
   export async function fromDirectory(directory: string) {
+    using _ = log.time("fromDirectory", { directory })
     log.info("fromDirectory", { directory })
     await assertDirectoryAccess(directory)
     const { id, sandbox, worktree, vcs } = await resolveDirectory(directory)
@@ -223,6 +225,13 @@ export namespace Project {
         type: Event.Updated.type,
         properties: result,
       },
+    })
+    log.info("fromDirectory.resolved", {
+      directory,
+      id,
+      sandbox,
+      worktree: canonicalWorktree,
+      vcs,
     })
     return { project: result, sandbox }
   }

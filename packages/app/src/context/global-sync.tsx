@@ -70,6 +70,7 @@ type State = {
   path: Path
   session: Session[]
   sessionTotal: number
+  sessionsReady: boolean
   session_status: {
     [sessionID: string]: SessionStatus
   }
@@ -459,6 +460,7 @@ function createGlobalSync() {
           command: [],
           session: [],
           sessionTotal: 0,
+          sessionsReady: false,
           session_status: {},
           session_diff: {},
           todo: {},
@@ -506,13 +508,13 @@ function createGlobalSync() {
     return childStore
   }
 
-  async function loadSessions(directory: string) {
+  async function loadSessions(directory: string, options?: { force?: boolean }) {
     const pending = sessionLoads.get(directory)
     if (pending) return pending
 
     const [store, setStore] = child(directory, { bootstrap: false })
     const meta = sessionMeta.get(directory)
-    if (meta && meta.limit >= store.limit) {
+    if (!options?.force && meta && meta.limit >= store.limit) {
       const next = trimSessions(store.session, { limit: store.limit, permission: store.permission })
       if (next.length !== store.session.length) {
         setStore("session", reconcile(next, { key: "id" }))
@@ -520,7 +522,7 @@ function createGlobalSync() {
       return
     }
 
-    const promise = globalSDK.client.session
+    const promise = sdkFor(directory).session
       .list({ directory, roots: true })
       .then((x) => {
         const nonArchived = (x.data ?? [])
@@ -537,11 +539,13 @@ function createGlobalSync() {
 
         // Store total session count (used for "load more" pagination)
         setStore("sessionTotal", nonArchived.length)
+        setStore("sessionsReady", true)
         setStore("session", reconcile(sessions, { key: "id" }))
         sessionMeta.set(directory, { limit })
       })
       .catch((err) => {
         console.error("Failed to load sessions", err)
+        setStore("sessionsReady", true)
         const project = getFilename(directory)
         showToast({ title: language.t("toast.session.listFailed.title", { project }), description: err.message })
       })

@@ -16,6 +16,7 @@ import { Truncate } from "../tool/truncation"
 import { init as TaskRecoveryInit } from "../task/recovery"
 
 export async function InstanceBootstrap() {
+  using _ = Log.Default.time("bootstrapping", { directory: Instance.directory })
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   await Plugin.init()
   Share.init()

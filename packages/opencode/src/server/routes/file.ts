@@ -5,9 +5,21 @@ import { File } from "../../file"
 import { Ripgrep } from "../../file/ripgrep"
 import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { Snapshot } from "../../snapshot"
 import { lazy } from "../../util/lazy"
 import { User } from "@/user"
+import { Log } from "@/util/log"
+
+function decode(input: string) {
+  try {
+    return decodeURIComponent(input)
+  } catch {
+    return input
+  }
+}
+
+const log = Log.create({ service: "server.file" })
 
 export const FileRoutes = lazy(() =>
   new Hono()
@@ -145,7 +157,15 @@ export const FileRoutes = lazy(() =>
       ),
       async (c) => {
         const path = c.req.valid("query").path
-        const content = await File.list(path)
+        const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
+        const directory = decode(raw)
+        using _ = log.time("list", { directory, path })
+        await Project.assertDirectoryAccess(directory)
+        const content = await File.browse({
+          directory,
+          path,
+        })
+        log.info("list.result", { directory, path, count: content.length })
         return c.json(content)
       },
     )

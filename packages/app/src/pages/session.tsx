@@ -520,6 +520,21 @@ export default function Page() {
           close: "Back to current page",
         },
   )
+  const workspaceCopy = createMemo(() =>
+    language.locale().startsWith("zh")
+      ? {
+          title: "正在准备工作区",
+          description: "首次进入需要工作区能力的页面时，正在初始化项目实例并等待相关数据就绪。",
+          project: "项目",
+          workspace: "工作区",
+        }
+      : {
+          title: "Preparing workspace",
+          description: "Initializing the project instance and loading workspace data for this view.",
+          project: "Project",
+          workspace: "Workspace",
+        },
+  )
 
   const resetSessionCreation = () => {
     setUi("creating", createSessionState())
@@ -3626,6 +3641,35 @@ export default function Page() {
               </DragOverlay>
             </DragDropProvider>
           </Show>
+        </div>
+      </Show>
+      <Show when={!ui.creating.open && sessionSyncData().status === "loading"}>
+        <div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 backdrop-blur-sm">
+          <div class="w-full max-w-lg mx-6 rounded-xl border border-border-weak-base bg-background-base shadow-lg">
+            <div class="px-6 py-6">
+              <div class="flex items-center gap-3">
+                <div class="flex size-10 items-center justify-center rounded-full bg-surface-base">
+                  <Spinner class="size-5" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="text-18-medium text-text-strong">{workspaceCopy().title}</div>
+                  <div class="mt-1 text-13-regular text-text-weak">{workspaceCopy().description}</div>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-2 rounded-lg bg-background-stronger p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-12-medium text-text-weak">{workspaceCopy().project}</div>
+                  <div class="min-w-0 text-right text-12-regular text-text-strong break-all">
+                    {currentProject()?.worktree ?? decode64(params.dir) ?? ""}
+                  </div>
+                </div>
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-12-medium text-text-weak">{workspaceCopy().workspace}</div>
+                  <div class="min-w-0 text-right text-12-regular text-text-strong break-all">{actualSessionDir()}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </Show>
       <Show when={ui.creating.open}>

@@ -132,6 +132,8 @@ import type {
   FindFilesResponses,
   FindSymbolsData,
   FindSymbolsResponses,
+  BrowseListData,
+  BrowseListResponses,
   FileListData,
   FileListResponses,
   FileReadData,
@@ -837,6 +839,18 @@ class File extends _HeyApiClient {
   }
 }
 
+class Browse extends _HeyApiClient {
+  /**
+   * Browse files and directories
+   */
+  public list<ThrowOnError extends boolean = false>(options: Options<BrowseListData, ThrowOnError>) {
+    return (options.client ?? this._client).get<BrowseListResponses, unknown, ThrowOnError>({
+      url: "/browse/file",
+      ...options,
+    })
+  }
+}
+
 class App extends _HeyApiClient {
   /**
    * Write a log entry to the server logs
@@ -1186,6 +1200,7 @@ export class OpencodeClient extends _HeyApiClient {
   command = new Command({ client: this._client })
   provider = new Provider({ client: this._client })
   find = new Find({ client: this._client })
+  browse = new Browse({ client: this._client })
   file = new File({ client: this._client })
   app = new App({ client: this._client })
   mcp = new Mcp({ client: this._client })

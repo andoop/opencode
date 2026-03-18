@@ -9,6 +9,7 @@ import type {
   AppLogResponses,
   AppSkillsResponses,
   Auth as Auth3,
+  BrowseListResponses,
   AuthRemoveErrors,
   AuthRemoveResponses,
   AuthSetErrors,
@@ -2471,6 +2472,42 @@ export class Auth2 extends HeyApiClient {
   }
 }
 
+export class Browse extends HeyApiClient {
+  /**
+   * Browse files
+   *
+   * Browse files and directories without initializing a project instance.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory: string
+      path: string
+      type?: "file" | "directory"
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "path" },
+            { in: "query", key: "type" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<BrowseListResponses, unknown, ThrowOnError>({
+      url: "/browse/file",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Mcp extends HeyApiClient {
   /**
    * Get MCP status
@@ -3254,6 +3291,11 @@ export class OpencodeClient extends HeyApiClient {
   private _find?: Find
   get find(): Find {
     return (this._find ??= new Find({ client: this.client }))
+  }
+
+  private _browse?: Browse
+  get browse(): Browse {
+    return (this._browse ??= new Browse({ client: this.client }))
   }
 
   private _file?: File

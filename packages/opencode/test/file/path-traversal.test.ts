@@ -115,6 +115,39 @@ describe("File.list path traversal protection", () => {
   })
 })
 
+describe("File.browse path traversal protection", () => {
+  test("rejects ../ traversal attempting to list /etc", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(
+      File.browse({
+        directory: tmp.path,
+        path: "../../../etc",
+      }),
+    ).rejects.toThrow("Access denied: path escapes project directory")
+  })
+
+  test("supports directory-only browse results", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "subdir", "file.txt"), "content")
+        await Bun.write(path.join(dir, "top.txt"), "content")
+      },
+    })
+
+    const result = await File.browse({
+      directory: tmp.path,
+      path: "",
+      type: "directory",
+      limit: 10,
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe("subdir")
+    expect(result[0].type).toBe("directory")
+  })
+})
+
 describe("Instance.containsPath", () => {
   test("returns true for path inside directory", async () => {
     await using tmp = await tmpdir({ git: true })

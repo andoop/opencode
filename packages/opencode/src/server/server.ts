@@ -46,6 +46,7 @@ import { User } from "../user"
 import { UserAuth } from "../user/auth"
 import { UserAuthRoutes } from "./routes/user-auth"
 import { UserRoutes } from "./routes/user"
+import { BrowseRoutes } from "./routes/browse"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -58,6 +59,15 @@ export namespace Server {
 
   export function url(): URL {
     return _url ?? new URL("http://localhost:4096")
+  }
+
+  function isReadonlyDirectoryRequest(method: string, path: string) {
+    if (method !== "GET") return false
+    if (path === "/file") return true
+    if (path === "/project") return true
+    if (path === "/project/current") return true
+    if (path.startsWith("/project/registry")) return true
+    return false
   }
 
   const app = new Hono()
@@ -318,10 +328,11 @@ export namespace Server {
             return c.json(true)
           },
         )
+        .route("/browse", BrowseRoutes())
         .use(async (c, next) => {
           if (c.req.path === "/log") return next()
-          if (c.req.path === "/project" && c.req.method === "GET") return next()
-          if (c.req.path.startsWith("/project/registry")) return next()
+          if (c.req.path === "/session" && c.req.method === "GET" && c.req.query("directory")) return next()
+          if (isReadonlyDirectoryRequest(c.req.method, c.req.path)) return next()
           const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
           const directory = (() => {
             try {

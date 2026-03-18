@@ -3206,6 +3206,27 @@ export type FindSymbolsResponses = {
 
 export type FindSymbolsResponse = FindSymbolsResponses[keyof FindSymbolsResponses]
 
+export type BrowseListData = {
+  body?: never
+  path?: never
+  query: {
+    directory: string
+    path: string
+    type?: "file" | "directory"
+    limit?: number
+  }
+  url: "/browse/file"
+}
+
+export type BrowseListResponses = {
+  /**
+   * Files and directories
+   */
+  200: Array<FileNode>
+}
+
+export type BrowseListResponse = BrowseListResponses[keyof BrowseListResponses]
+
 export type FileListData = {
   body?: never
   path?: never

@@ -3,14 +3,18 @@ import path from "path"
 import { $ } from "bun"
 import { Flag } from "@/flag/flag"
 import z from "zod"
+import { Log } from "@/util/log"
 
 const Vcs = z.literal("git").optional()
+const log = Log.create({ service: "project.resolve" })
 
 export async function resolveDirectory(directory: string) {
+  using resolveTimer = log.time("resolveDirectory", { directory })
   const matches = Filesystem.up({ targets: [".git"], start: directory })
   const git = await matches.next().then((x) => x.value)
   await matches.return()
   if (!git) {
+    log.info("resolveDirectory.global", { directory })
     return {
       id: "global",
       worktree: "/",
@@ -36,6 +40,7 @@ export async function resolveDirectory(directory: string) {
   }
 
   if (!id) {
+    using rootsTimer = log.time("resolveDirectory.roots", { sandbox })
     const roots = await $`git rev-list --max-parents=0 --all`
       .quiet()
       .nothrow()
@@ -76,6 +81,7 @@ export async function resolveDirectory(directory: string) {
     }
   }
 
+  using topTimer = log.time("resolveDirectory.top", { sandbox })
   const top = await $`git rev-parse --show-toplevel`
     .quiet()
     .nothrow()
@@ -95,6 +101,7 @@ export async function resolveDirectory(directory: string) {
 
   sandbox = top
 
+  using worktreeTimer = log.time("resolveDirectory.worktree", { sandbox })
   const worktree = await $`git rev-parse --git-common-dir`
     .quiet()
     .nothrow()
@@ -116,6 +123,12 @@ export async function resolveDirectory(directory: string) {
     }
   }
 
+  log.info("resolveDirectory.git", {
+    directory,
+    sandbox,
+    worktree,
+    id,
+  })
   return {
     id,
     sandbox,

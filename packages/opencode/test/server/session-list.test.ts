@@ -4,6 +4,7 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
+import { tmpdir } from "../fixture/fixture"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -35,5 +36,32 @@ describe("session.list", () => {
         expect(ids).not.toContain(second.id)
       },
     })
+  })
+
+  test("supports directory-scoped listing without an active instance", async () => {
+    await using firstDir = await tmpdir({ git: true })
+    await using secondDir = await tmpdir({ git: true })
+
+    const first = await Instance.provide({
+      directory: firstDir.path,
+      fn: async () => Session.create({}),
+    })
+
+    const second = await Instance.provide({
+      directory: secondDir.path,
+      fn: async () => Session.create({}),
+    })
+
+    const app = Server.App()
+    const response = await app.request(`/session?directory=${encodeURIComponent(firstDir.path)}&roots=true`)
+    expect(response.status).toBe(200)
+
+    const body = (await response.json()) as unknown[]
+    const ids = body
+      .map((s) => (typeof s === "object" && s && "id" in s ? (s as { id: string }).id : undefined))
+      .filter((x): x is string => typeof x === "string")
+
+    expect(ids).toContain(first.id)
+    expect(ids).not.toContain(second.id)
   })
 })

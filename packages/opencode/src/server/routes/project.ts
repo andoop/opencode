@@ -1,13 +1,20 @@
 import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
-import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { ProjectRegistry } from "../../project/registry"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { User } from "../../user"
+
+function decode(input: string) {
+  try {
+    return decodeURIComponent(input)
+  } catch {
+    return input
+  }
+}
 
 function requireAdmin() {
   return async (c: any, next: any) => {
@@ -183,7 +190,10 @@ export const ProjectRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(Instance.project)
+        const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
+        const directory = decode(raw)
+        const result = await Project.fromDirectory(directory)
+        return c.json(result.project)
       },
     )
     .patch(

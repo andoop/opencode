@@ -742,8 +742,8 @@ export namespace Session {
     },
   )
 
-  export async function* list() {
-    const project = Instance.project
+  export async function* list(input?: { directory?: string }) {
+    const project = input?.directory ? (await Project.fromDirectory(input.directory)).project : Instance.project
     const userID = currentUserID()
     const prefix = sessionListPrefix(project.id, userID)
     
