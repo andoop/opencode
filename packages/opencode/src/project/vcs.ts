@@ -44,6 +44,16 @@ export namespace Vcs {
   export type Info = z.infer<typeof Info>
 
   async function currentBranch() {
+    const primary = Instance.roots?.find((item) => item.primary) ?? Instance.roots?.[0]
+    if (primary) {
+      return $`git rev-parse --abbrev-ref HEAD`
+        .quiet()
+        .nothrow()
+        .cwd(primary.sessionWorktreeDirectory)
+        .text()
+        .then((x) => x.trim())
+        .catch(() => undefined)
+    }
     return $`git rev-parse --abbrev-ref HEAD`
       .quiet()
       .nothrow()
@@ -169,6 +179,7 @@ export namespace Vcs {
   }
 
   export async function getSubmodules(): Promise<SubmoduleInfo[]> {
+    if (Instance.roots?.length) return []
     const result = await withGitTimeout(
       $`git submodule status`
         .quiet()
@@ -193,6 +204,22 @@ export namespace Vcs {
   }
 
   export async function getBranches() {
+    if (Instance.roots?.length) {
+      const items = await Promise.all(
+        Instance.roots.map(async (root) => {
+          if (root.vcs !== "git") return [] as string[]
+          const current = await $`git branch --show-current`
+            .quiet()
+            .nothrow()
+            .cwd(root.sessionWorktreeDirectory)
+            .text()
+            .then((x) => x.trim())
+            .catch(() => "")
+          return current ? [`${root.slug}: ${current}`] : []
+        }),
+      )
+      return items.flat()
+    }
     const result = await withGitTimeout(
       $`git branch --list --format="%(refname:short)"`
         .quiet()

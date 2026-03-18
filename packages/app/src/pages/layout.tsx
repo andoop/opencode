@@ -37,7 +37,7 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { getFilename } from "@opencode-ai/util/path"
-import { Session, type Message, type TextPart } from "@opencode-ai/sdk/v2/client"
+import { Session, type Message, type TextPart, createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -75,8 +75,9 @@ import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
-import { useAuth } from "@/context/auth"
+import { useAuth, addAuthInterceptor } from "@/context/auth"
 import { Popover } from "@opencode-ai/ui/popover"
+import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
 
 type SessionCreateStep = "create" | "worktree" | "open"
 
@@ -1077,13 +1078,13 @@ export default function Layout(props: ParentProps) {
   }
 
   async function archiveSession(session: Session) {
-    const [store, setStore] = globalSync.child(session.directory, { bootstrap: false })
-    const sessions = store.session ?? []
+    const directory = workspaceDirectoryForSession(session.directory)
+    const [store, setStore] = globalSync.child(directory, { bootstrap: false })
+    const sessions = (store.session ?? []).filter((s) => !s.parentID && !s.time?.archived)
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
 
-    await globalSDK.client.session.update({
-      directory: session.directory,
+    await clientForDirectory(directory).session.update({
       sessionID: session.id,
       time: { archived: Date.now() },
     })
@@ -1103,13 +1104,14 @@ export default function Layout(props: ParentProps) {
   }
 
   async function deleteSession(session: Session) {
-    const [store, setStore] = globalSync.child(session.directory, { bootstrap: false })
+    const directory = workspaceDirectoryForSession(session.directory)
+    const [store, setStore] = globalSync.child(directory, { bootstrap: false })
     const sessions = (store.session ?? []).filter((s) => !s.parentID && !s.time?.archived)
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
 
-    const result = await globalSDK.client.session
-      .delete({ directory: session.directory, sessionID: session.id })
+    const result = await clientForDirectory(directory).session
+      .delete({ sessionID: session.id })
       .then((x) => x.data)
       .catch((err) => {
         showToast({
@@ -1176,7 +1178,7 @@ export default function Layout(props: ParentProps) {
       },
       {
         id: "project.open",
-        title: language.t("command.project.open"),
+        title: language.t("workspace.new"),
         category: language.t("command.category.project"),
         keybind: "mod+o",
         onSelect: () => chooseProject(),
@@ -1465,24 +1467,54 @@ export default function Layout(props: ParentProps) {
 
   async function chooseProject() {
     if (!auth.isAdmin) {
-      dialog.show(() => <DialogSelectProject onSelect={(result) => result && openProject(result)} />)
+      dialog.show(
+        () => (
+          <DialogSelectProject
+            onSelect={(result) => {
+              if (!result?.length) return
+              workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
+                method: "POST",
+                token: auth.token ?? undefined,
+                fetchFn: platform.fetch ?? fetch,
+                body: JSON.stringify({ directories: result }),
+              })
+                .then((workspace) => {
+                  globalSync.set("project", (prev) => [
+                    workspaceAsProject(workspace),
+                    ...prev.filter((item) => item.id !== workspace.id),
+                  ])
+                  openProject(workspace.directory)
+                })
+                .catch(() => undefined)
+            }}
+          />
+        ),
+      )
       return
     }
 
     function resolve(result: string | string[] | null) {
-      if (Array.isArray(result)) {
-        for (const directory of result) {
-          openProject(directory, false)
-        }
-        navigateToProject(result[0])
-      } else if (result) {
-        openProject(result)
-      }
+      const directories = Array.isArray(result) ? result : result ? [result] : []
+      if (directories.length === 0) return
+      workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
+        method: "POST",
+        token: auth.token ?? undefined,
+        fetchFn: platform.fetch ?? fetch,
+        body: JSON.stringify({ directories }),
+      })
+        .then((workspace) => {
+          globalSync.set("project", (prev) => [
+            workspaceAsProject(workspace),
+            ...prev.filter((item) => item.id !== workspace.id),
+          ])
+          openProject(workspace.directory)
+        })
+        .catch(() => undefined)
     }
 
     if (platform.openDirectoryPickerDialog && server.isLocal()) {
       const result = await platform.openDirectoryPickerDialog?.({
-        title: language.t("command.project.open"),
+        title: language.t("workspace.new"),
         multiple: true,
       })
       resolve(result)
@@ -1502,6 +1534,17 @@ export default function Layout(props: ParentProps) {
     if (err instanceof Error) return err.message
     return language.t("common.requestFailed")
   }
+
+  const clientForDirectory = (directory: string) =>
+    createOpencodeClient({
+      baseUrl: globalSDK.url,
+      fetch: platform.fetch,
+      directory,
+      throwOnError: true,
+      onClient: (client) => addAuthInterceptor(client, () => auth.token),
+    })
+
+  const workspaceDirectoryForSession = (directory: string) => directory.replace(/[\\/]+sessions[\\/]+[^\\/]+$/, "")
 
   const deleteWorkspace = async (root: string, directory: string) => {
     if (directory === root) return
@@ -1846,7 +1889,8 @@ export default function Layout(props: ParentProps) {
     const local = project.worktree
     const dirs = [local, ...(project.sandboxes ?? [])]
     const active = currentProject()
-    const directory = active?.worktree === project.worktree ? decode64(params.dir) : undefined
+    const raw = active?.worktree === project.worktree ? decode64(params.dir) : undefined
+    const directory = raw ? workspaceDirectoryForSession(raw) : undefined
     const extra = directory && directory !== local && !dirs.includes(directory) ? directory : undefined
     const pending = extra ? WorktreeState.get(extra)?.status === "pending" : false
 
@@ -2277,6 +2321,10 @@ export default function Layout(props: ParentProps) {
         .filter((session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now())),
     )
+    createEffect(() => {
+      const value = sessions()
+      if (value.length === 0 && !workspaceStore.sessionsReady) return
+    })
     const children = createMemo(() => {
       const map = new Map<string, string[]>()
       for (const session of workspaceStore.session) {
@@ -2572,19 +2620,10 @@ export default function Layout(props: ParentProps) {
       
       // Filter sessions that belong to this project
       // Sessions created with worktrees will have directory pointing to worktree directory
-      return allSessions
-        .filter((session: Session) => {
-          const sessionDir = session.directory
-          // Check if session directory matches any project directory
-          return dirs.some((dir) => {
-            const normalizedDir = workspaceKey(dir)
-            const normalizedSessionDir = workspaceKey(sessionDir)
-            return normalizedSessionDir === normalizedDir
-          })
-        })
+      const filtered = allSessions
         .filter((session: Session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now()))
-        .slice(0, 2)
+      return filtered.slice(0, 2)
     }
     const projectSessionsReady = createMemo(() =>
       projectDirs().every((dir) => {
@@ -2825,17 +2864,10 @@ export default function Layout(props: ParentProps) {
         }
       }
 
-      return allSessions
-        .filter((session) => {
-          const sessionDir = session.directory
-          const normalizedSessionDir = workspaceKey(sessionDir)
-          return dirs.some((dir) => {
-            const normalizedDir = workspaceKey(dir)
-            return normalizedSessionDir === normalizedDir
-          })
-        })
+      const filtered = allSessions
         .filter((session) => !session.parentID && !session.time?.archived)
         .toSorted(sortSessions(Date.now()))
+      return filtered
     })
     const children = createMemo(() => {
       const map = new Map<string, string[]>()
@@ -2915,8 +2947,8 @@ export default function Layout(props: ParentProps) {
       setState("hoverSession", undefined)
       setState("hoverProject", undefined)
     }
-    const created = await globalSDK.client.worktree
-      .create({ directory: project.worktree })
+    const created = await clientForDirectory(project.worktree).worktree
+      .create({})
       .then((x) => x.data)
       .catch((err) => {
         showToast({
@@ -2973,8 +3005,8 @@ export default function Layout(props: ParentProps) {
       setState("creatingSession", "error", message)
     }
 
-    const created = await globalSDK.client.session
-      .create({ directory: project.worktree })
+    const created = await clientForDirectory(project.worktree).session
+      .create({})
       .then((x) => x.data)
       .catch((err) => {
         fail(errorMessage(err), "create")
@@ -3300,7 +3332,7 @@ export default function Layout(props: ParentProps) {
                   placement={sidebarProps.mobile ? "bottom" : "right"}
                   value={
                     <div class="flex items-center gap-2">
-                      <span>{language.t("command.project.open")}</span>
+                      <span>{language.t("workspace.new")}</span>
                       <Show when={!sidebarProps.mobile}>
                         <span class="text-icon-base text-12-medium">{command.keybind("project.open")}</span>
                       </Show>
@@ -3312,7 +3344,7 @@ export default function Layout(props: ParentProps) {
                     variant="ghost"
                     size="large"
                     onClick={chooseProject}
-                    aria-label={language.t("command.project.open")}
+                    aria-label={language.t("workspace.new")}
                   />
                 </Tooltip>
               </div>

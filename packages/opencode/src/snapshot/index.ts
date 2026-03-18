@@ -12,6 +12,172 @@ export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
   const hour = 60 * 60 * 1000
   const prune = "7.days"
+  const multiPrefix = "multi:"
+
+  type RootEntry = {
+    projectID: string
+    slug?: string
+    worktree: string
+    cwd: string
+  }
+
+  function rootEntries() {
+    if (!Instance.roots?.length) {
+      return [
+        {
+          projectID: Instance.project.id,
+          slug: undefined,
+          worktree: Instance.worktree,
+          cwd: Instance.directory,
+        },
+      ] satisfies RootEntry[]
+    }
+    return Instance.roots.map((item) => ({
+      projectID: item.projectID,
+      slug: item.slug,
+      worktree: item.sessionWorktreeDirectory,
+      cwd: item.sessionWorktreeDirectory,
+    }))
+  }
+
+  function scope() {
+    return Instance.session?.id ?? Instance.workspace?.id ?? Instance.project.id
+  }
+
+  function gitdir(projectID?: string) {
+    if (projectID) {
+      return path.join(Global.Path.data, "snapshot", scope(), projectID)
+    }
+    const project = Instance.project
+    return path.join(Global.Path.data, "snapshot", project.id)
+  }
+
+  function encodeMulti(input: Record<string, string>) {
+    return multiPrefix + Buffer.from(JSON.stringify(input)).toString("base64url")
+  }
+
+  function decodeMulti(input: string) {
+    if (!input.startsWith(multiPrefix)) return
+    return JSON.parse(Buffer.from(input.slice(multiPrefix.length), "base64url").toString()) as Record<string, string>
+  }
+
+  async function trackRoot(root: RootEntry) {
+    const cfg = await Config.get()
+    if (cfg.snapshot === false) return ""
+    const git = gitdir(root.projectID)
+    if (await fs.mkdir(git, { recursive: true })) {
+      await $`git init`
+        .env({
+          ...process.env,
+          GIT_DIR: git,
+          GIT_WORK_TREE: root.worktree,
+        })
+        .quiet()
+        .nothrow()
+      await $`git --git-dir ${git} config core.autocrlf false`.quiet().nothrow()
+    }
+    await $`git --git-dir ${git} --work-tree ${root.worktree} add .`.quiet().cwd(root.cwd).nothrow()
+    return $`git --git-dir ${git} --work-tree ${root.worktree} write-tree`
+      .quiet()
+      .cwd(root.cwd)
+      .nothrow()
+      .text()
+      .then((x) => x.trim())
+  }
+
+  async function patchRoot(hash: string, root: RootEntry): Promise<Patch> {
+    const git = gitdir(root.projectID)
+    await $`git --git-dir ${git} --work-tree ${root.worktree} add .`.quiet().cwd(root.cwd).nothrow()
+    const result =
+      await $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${root.worktree} diff --no-ext-diff --name-only ${hash} -- .`
+        .quiet()
+        .cwd(root.cwd)
+        .nothrow()
+    if (result.exitCode !== 0) {
+      return { hash, files: [] }
+    }
+    const files = result.text()
+    return {
+      hash,
+      files: files
+        .trim()
+        .split("\n")
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .map((x) => path.join(root.worktree, x)),
+    }
+  }
+
+  async function restoreRoot(snapshot: string, root: RootEntry) {
+    const git = gitdir(root.projectID)
+    await $`git --git-dir ${git} --work-tree ${root.worktree} read-tree ${snapshot} && git --git-dir ${git} --work-tree ${root.worktree} checkout-index -a -f`
+      .quiet()
+      .cwd(root.worktree)
+      .nothrow()
+  }
+
+  async function diffRoot(hash: string, root: RootEntry) {
+    const git = gitdir(root.projectID)
+    await $`git --git-dir ${git} --work-tree ${root.worktree} add .`.quiet().cwd(root.cwd).nothrow()
+    const result =
+      await $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${root.worktree} diff --no-ext-diff ${hash} -- .`
+        .quiet()
+        .cwd(root.worktree)
+        .nothrow()
+    if (result.exitCode !== 0) return ""
+    return result.text().trim()
+  }
+
+  async function diffFullRoot(from: string, to: string, root: RootEntry): Promise<FileDiff[]> {
+    const git = gitdir(root.projectID)
+    const result: FileDiff[] = []
+    const status = new Map<string, "added" | "deleted" | "modified">()
+    const statuses =
+      await $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${root.worktree} diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
+        .quiet()
+        .cwd(root.cwd)
+        .nothrow()
+        .text()
+    for (const line of statuses.trim().split("\n")) {
+      if (!line) continue
+      const [code, file] = line.split("\t")
+      if (!code || !file) continue
+      const kind = code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified"
+      status.set(file, kind)
+    }
+    for await (const line of $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${root.worktree} diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
+      .quiet()
+      .cwd(root.cwd)
+      .nothrow()
+      .lines()) {
+      if (!line) continue
+      const [additions, deletions, file] = line.split("\t")
+      const isBinaryFile = additions === "-" && deletions === "-"
+      const before = isBinaryFile
+        ? ""
+        : await $`git -c core.autocrlf=false --git-dir ${git} --work-tree ${root.worktree} show ${from}:${file}`
+            .quiet()
+            .nothrow()
+            .text()
+      const after = isBinaryFile
+        ? ""
+        : await $`git -c core.autocrlf=false --git-dir ${git} --work-tree ${root.worktree} show ${to}:${file}`
+            .quiet()
+            .nothrow()
+            .text()
+      const added = isBinaryFile ? 0 : parseInt(additions)
+      const deleted = isBinaryFile ? 0 : parseInt(deletions)
+      result.push({
+        file: root.slug ? path.join("roots", root.slug, file) : file,
+        before,
+        after,
+        additions: Number.isFinite(added) ? added : 0,
+        deletions: Number.isFinite(deleted) ? deleted : 0,
+        status: status.get(file) ?? "modified",
+      })
+    }
+    return result
+  }
 
   export function init() {
     Scheduler.register({
@@ -23,56 +189,42 @@ export namespace Snapshot {
   }
 
   export async function cleanup() {
-    if (Instance.project.vcs !== "git") return
+    if (Instance.project.vcs !== "git" && !Instance.roots?.length) return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
-    const git = gitdir()
-    const exists = await fs
-      .stat(git)
-      .then(() => true)
-      .catch(() => false)
-    if (!exists) return
-    const result = await $`git --git-dir ${git} --work-tree ${Instance.worktree} gc --prune=${prune}`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-    if (result.exitCode !== 0) {
-      log.warn("cleanup failed", {
-        exitCode: result.exitCode,
-        stderr: result.stderr.toString(),
-        stdout: result.stdout.toString(),
-      })
-      return
+    for (const root of rootEntries()) {
+      const git = gitdir(root.projectID)
+      const exists = await fs
+        .stat(git)
+        .then(() => true)
+        .catch(() => false)
+      if (!exists) continue
+      const result = await $`git --git-dir ${git} --work-tree ${root.worktree} gc --prune=${prune}`
+        .quiet()
+        .cwd(root.cwd)
+        .nothrow()
+      if (result.exitCode !== 0) {
+        log.warn("cleanup failed", {
+          exitCode: result.exitCode,
+          stderr: result.stderr.toString(),
+          stdout: result.stdout.toString(),
+        })
+      }
     }
-    log.info("cleanup", { prune })
+    log.info("cleanup", { prune, scope: scope() })
   }
 
   export async function track() {
-    if (Instance.project.vcs !== "git") return
-    const cfg = await Config.get()
-    if (cfg.snapshot === false) return
-    const git = gitdir()
-    if (await fs.mkdir(git, { recursive: true })) {
-      await $`git init`
-        .env({
-          ...process.env,
-          GIT_DIR: git,
-          GIT_WORK_TREE: Instance.worktree,
-        })
-        .quiet()
-        .nothrow()
-      // Configure git to not convert line endings on Windows
-      await $`git --git-dir ${git} config core.autocrlf false`.quiet().nothrow()
-      log.info("initialized")
+    const roots = rootEntries()
+    if (roots.length === 1 && !Instance.roots?.length) {
+      const hash = await trackRoot(roots[0]!)
+      log.info("tracking", { hash, cwd: Instance.directory, git: gitdir() })
+      return hash.trim()
     }
-    await $`git --git-dir ${git} --work-tree ${Instance.worktree} add .`.quiet().cwd(Instance.directory).nothrow()
-    const hash = await $`git --git-dir ${git} --work-tree ${Instance.worktree} write-tree`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-      .text()
-    log.info("tracking", { hash, cwd: Instance.directory, git })
-    return hash.trim()
+    const entries = await Promise.all(
+      roots.map(async (root) => [root.projectID, await trackRoot(root)] as const),
+    )
+    return encodeMulti(Object.fromEntries(entries))
   }
 
   export const Patch = z.object({
@@ -82,52 +234,63 @@ export namespace Snapshot {
   export type Patch = z.infer<typeof Patch>
 
   export async function patch(hash: string): Promise<Patch> {
-    const git = gitdir()
-    await $`git --git-dir ${git} --work-tree ${Instance.worktree} add .`.quiet().cwd(Instance.directory).nothrow()
-    const result =
-      await $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-only ${hash} -- .`
-        .quiet()
-        .cwd(Instance.directory)
-        .nothrow()
-
-    // If git diff fails, return empty patch
-    if (result.exitCode !== 0) {
-      log.warn("failed to get diff", { hash, exitCode: result.exitCode })
-      return { hash, files: [] }
+    const multi = decodeMulti(hash)
+    if (multi) {
+      const result = await Promise.all(
+        rootEntries().map(async (root) => {
+          const value = multi[root.projectID]
+          if (!value) return { hash, files: [] } satisfies Patch
+          return patchRoot(value, root)
+        }),
+      )
+      return {
+        hash,
+        files: result.flatMap((item) => item.files),
+      }
     }
-
-    const files = result.text()
-    return {
-      hash,
-      files: files
-        .trim()
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean)
-        .map((x) => path.join(Instance.worktree, x)),
-    }
+    return patchRoot(hash, rootEntries()[0]!)
   }
 
   export async function restore(snapshot: string) {
     log.info("restore", { commit: snapshot })
-    const git = gitdir()
-    const result =
-      await $`git --git-dir ${git} --work-tree ${Instance.worktree} read-tree ${snapshot} && git --git-dir ${git} --work-tree ${Instance.worktree} checkout-index -a -f`
-        .quiet()
-        .cwd(Instance.worktree)
-        .nothrow()
-
-    if (result.exitCode !== 0) {
-      log.error("failed to restore snapshot", {
-        snapshot,
-        exitCode: result.exitCode,
-        stderr: result.stderr.toString(),
-        stdout: result.stdout.toString(),
-      })
+    const multi = decodeMulti(snapshot)
+    if (multi) {
+      await Promise.all(
+        rootEntries().map(async (root) => {
+          const value = multi[root.projectID]
+          if (!value) return
+          await restoreRoot(value, root)
+        }),
+      )
+      return
     }
+    await restoreRoot(snapshot, rootEntries()[0]!)
   }
 
   export async function revert(patches: Patch[]) {
+    const multi = patches.some((item) => !!decodeMulti(item.hash))
+    if (multi) {
+      for (const patch of patches) {
+        const hashes = decodeMulti(patch.hash)
+        if (!hashes) continue
+        for (const file of patch.files) {
+          const root = Instance.rootForPath(file)
+          if (!root) continue
+          const hash = hashes[root.projectID]
+          if (!hash) continue
+          const git = gitdir(root.projectID)
+          const relative = path.relative(root.sessionWorktreeDirectory, file)
+          const result = await $`git --git-dir ${git} --work-tree ${root.sessionWorktreeDirectory} checkout ${hash} -- ${relative}`
+            .quiet()
+            .cwd(root.sessionWorktreeDirectory)
+            .nothrow()
+          if (result.exitCode !== 0) {
+            await fs.unlink(file).catch(() => {})
+          }
+        }
+      }
+      return
+    }
     const files = new Set<string>()
     const git = gitdir()
     for (const item of patches) {
@@ -160,25 +323,20 @@ export namespace Snapshot {
   }
 
   export async function diff(hash: string) {
-    const git = gitdir()
-    await $`git --git-dir ${git} --work-tree ${Instance.worktree} add .`.quiet().cwd(Instance.directory).nothrow()
-    const result =
-      await $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff ${hash} -- .`
-        .quiet()
-        .cwd(Instance.worktree)
-        .nothrow()
-
-    if (result.exitCode !== 0) {
-      log.warn("failed to get diff", {
-        hash,
-        exitCode: result.exitCode,
-        stderr: result.stderr.toString(),
-        stdout: result.stdout.toString(),
-      })
-      return ""
+    const multi = decodeMulti(hash)
+    if (multi) {
+      const diffs = await Promise.all(
+        rootEntries().map(async (root) => {
+          const value = multi[root.projectID]
+          if (!value) return ""
+          const text = await diffRoot(value, root)
+          if (!text) return ""
+          return [`# ${root.slug ?? root.projectID}`, text].join("\n")
+        }),
+      )
+      return diffs.filter(Boolean).join("\n\n")
     }
-
-    return result.text().trim()
+    return diffRoot(hash, rootEntries()[0]!)
   }
 
   export const FileDiff = z
@@ -195,61 +353,19 @@ export namespace Snapshot {
     })
   export type FileDiff = z.infer<typeof FileDiff>
   export async function diffFull(from: string, to: string): Promise<FileDiff[]> {
-    const git = gitdir()
-    const result: FileDiff[] = []
-    const status = new Map<string, "added" | "deleted" | "modified">()
-
-    const statuses =
-      await $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
-        .quiet()
-        .cwd(Instance.directory)
-        .nothrow()
-        .text()
-
-    for (const line of statuses.trim().split("\n")) {
-      if (!line) continue
-      const [code, file] = line.split("\t")
-      if (!code || !file) continue
-      const kind = code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified"
-      status.set(file, kind)
+    const fromMulti = decodeMulti(from)
+    const toMulti = decodeMulti(to)
+    if (fromMulti && toMulti) {
+      const diffs = await Promise.all(
+        rootEntries().map(async (root) => {
+          const before = fromMulti[root.projectID]
+          const after = toMulti[root.projectID]
+          if (!before || !after) return [] as FileDiff[]
+          return diffFullRoot(before, after, root)
+        }),
+      )
+      return diffs.flat()
     }
-
-    for await (const line of $`git -c core.autocrlf=false -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-      .lines()) {
-      if (!line) continue
-      const [additions, deletions, file] = line.split("\t")
-      const isBinaryFile = additions === "-" && deletions === "-"
-      const before = isBinaryFile
-        ? ""
-        : await $`git -c core.autocrlf=false --git-dir ${git} --work-tree ${Instance.worktree} show ${from}:${file}`
-            .quiet()
-            .nothrow()
-            .text()
-      const after = isBinaryFile
-        ? ""
-        : await $`git -c core.autocrlf=false --git-dir ${git} --work-tree ${Instance.worktree} show ${to}:${file}`
-            .quiet()
-            .nothrow()
-            .text()
-      const added = isBinaryFile ? 0 : parseInt(additions)
-      const deleted = isBinaryFile ? 0 : parseInt(deletions)
-      result.push({
-        file,
-        before,
-        after,
-        additions: Number.isFinite(added) ? added : 0,
-        deletions: Number.isFinite(deleted) ? deleted : 0,
-        status: status.get(file) ?? "modified",
-      })
-    }
-    return result
-  }
-
-  function gitdir() {
-    const project = Instance.project
-    return path.join(Global.Path.data, "snapshot", project.id)
+    return diffFullRoot(from, to, rootEntries()[0]!)
   }
 }

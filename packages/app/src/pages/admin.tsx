@@ -410,6 +410,32 @@ export default function AdminPage() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
 
+  const readError = async (response: Response, fallback: string) => {
+    const data = await response.json().catch(() => undefined as any)
+    return data?.error || data?.message || data?.data?.message || fallback
+  }
+
+  const localizeProjectError = (message: string) => {
+    const missingGit =
+      /^No \.git directory was found in the selected path or its parent directories: (?<directory>.+)$/.exec(
+        message,
+      )
+    if (missingGit?.groups?.directory) {
+      return language.t("admin.projectRegistry.error.notGit", {
+        directory: missingGit.groups.directory,
+      })
+    }
+
+    const onlyGit = /^Only git projects can be added to the project registry(?:: (?<directory>.+))?$/.exec(message)
+    if (onlyGit?.groups?.directory) {
+      return language.t("admin.projectRegistry.error.onlyGit", {
+        directory: onlyGit.groups.directory,
+      })
+    }
+    if (onlyGit) return language.t("admin.projectRegistry.error.onlyGitGeneric")
+    return message
+  }
+
   const fetchUsers = async () => {
     const response = await fetchFn(`${server.url}/user`, {
       headers: authHeaders(),
@@ -799,8 +825,10 @@ export default function AdminPage() {
         }),
       })
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || data.message || "Failed to add project")
+        const message = localizeProjectError(
+          await readError(response, language.t("admin.projectRegistry.error.addFailed")),
+        )
+        throw new Error(message)
       }
       setShowProjectDialog(false)
       setProjectDirectory("")
@@ -816,6 +844,7 @@ export default function AdminPage() {
     const resolve = (result: string | string[] | null) => {
       const directory = Array.isArray(result) ? result[0] : result
       if (!directory) return
+      setError(null)
       setEditingProject(null)
       setProjectDirectory(directory)
       setProjectName("")
@@ -837,6 +866,7 @@ export default function AdminPage() {
 
   const openProjectDialog = (project: RegistryProject) => {
     setEditingProject(project)
+    setError(null)
     setProjectDirectory(project.directory)
     setProjectName(project.name ?? "")
     setProjectDescription(project.description ?? "")
@@ -1703,6 +1733,11 @@ export default function AdminPage() {
             </KobalteDialog.Description>
 
             <div class="mt-4 space-y-4">
+              <Show when={error()}>
+                <div class="rounded-md bg-auxiliary-error/10 p-3">
+                  <p class="text-sm text-auxiliary-error">{error()}</p>
+                </div>
+              </Show>
               <TextField
                 label={language.t("admin.projectDialog.displayName")}
                 value={projectName()}

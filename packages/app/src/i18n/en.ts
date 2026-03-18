@@ -548,6 +548,11 @@ export const dict = {
   "admin.projectRegistry.column.directory": "Directory",
   "admin.projectRegistry.column.added": "Added",
   "admin.projectRegistry.column.actions": "Actions",
+  "admin.projectRegistry.error.addFailed": "Failed to add project",
+  "admin.projectRegistry.error.notGit":
+    "No Git repository was found in the selected path or its parent directories: {{directory}}",
+  "admin.projectRegistry.error.onlyGit": "Only Git projects can be added to the project registry: {{directory}}",
+  "admin.projectRegistry.error.onlyGitGeneric": "Only Git projects can be added to the project registry",
   "admin.projectDialog.addTitle": "Add project",
   "admin.projectDialog.editTitle": "Edit project: {{project}}",
   "admin.projectDialog.addDescription": "Add a project description so other users know what this project is for",

@@ -429,6 +429,65 @@ export namespace File {
   }
 
   export async function status() {
+    const roots = Instance.roots
+    if (roots?.length) {
+      const all = await Promise.all(
+        roots.map(async (root) => {
+          if (root.vcs !== "git") return [] as Info[]
+          const prefix = (file: string) => path.join("roots", root.slug, file)
+          const diffOutput = await $`git -c core.quotepath=false diff --numstat HEAD`
+            .cwd(root.sessionWorktreeDirectory)
+            .quiet()
+            .nothrow()
+            .text()
+          const changed = [] as Info[]
+          if (diffOutput.trim()) {
+            for (const line of diffOutput.trim().split("\n")) {
+              const [added, removed, filepath] = line.split("\t")
+              changed.push({
+                path: prefix(filepath),
+                added: added === "-" ? 0 : parseInt(added, 10),
+                removed: removed === "-" ? 0 : parseInt(removed, 10),
+                status: "modified",
+              })
+            }
+          }
+          const untrackedOutput = await $`git -c core.quotepath=false ls-files --others --exclude-standard`
+            .cwd(root.sessionWorktreeDirectory)
+            .quiet()
+            .nothrow()
+            .text()
+          if (untrackedOutput.trim()) {
+            for (const filepath of untrackedOutput.trim().split("\n")) {
+              const content = await Bun.file(path.join(root.sessionWorktreeDirectory, filepath)).text().catch(() => "")
+              changed.push({
+                path: prefix(filepath),
+                added: content ? content.split("\n").length : 0,
+                removed: 0,
+                status: "added",
+              })
+            }
+          }
+          const deletedOutput = await $`git -c core.quotepath=false diff --name-only --diff-filter=D HEAD`
+            .cwd(root.sessionWorktreeDirectory)
+            .quiet()
+            .nothrow()
+            .text()
+          if (deletedOutput.trim()) {
+            for (const filepath of deletedOutput.trim().split("\n")) {
+              changed.push({
+                path: prefix(filepath),
+                added: 0,
+                removed: 0,
+                status: "deleted",
+              })
+            }
+          }
+          return changed
+        }),
+      )
+      return all.flat()
+    }
     const project = Instance.project
     if (project.vcs !== "git") return []
 
@@ -519,10 +578,45 @@ export namespace File {
   }
 
   export async function diff() {
+    const files = await status()
+    const roots = Instance.roots
+    if (roots?.length) {
+      return Promise.all(
+        files.map(async (item) => {
+          const full = path.join(Instance.directory, item.path)
+          const root = Instance.rootForPath(full)
+          if (!root) {
+            return {
+              file: item.path,
+              before: "",
+              after: "",
+              additions: item.added,
+              deletions: item.removed,
+              status: item.status,
+            }
+          }
+          const relative = path.relative(root.sessionWorktreeDirectory, full)
+          const before =
+            item.status === "added"
+              ? ""
+              : await $`git show HEAD:${relative}`.cwd(root.sessionWorktreeDirectory).quiet().nothrow().text()
+          const after =
+            item.status === "deleted"
+              ? ""
+              : await Bun.file(full).text().catch(() => "")
+          return {
+            file: item.path,
+            before,
+            after,
+            additions: item.added,
+            deletions: item.removed,
+            status: item.status,
+          }
+        }),
+      )
+    }
     const project = Instance.project
     if (project.vcs !== "git") return []
-
-    const files = await status()
     return Promise.all(
       files.map(async (item) => ({
         file: item.path,
@@ -586,11 +680,14 @@ export namespace File {
       .catch(() => "")
       .then((x) => x.trim())
 
-    if (project.vcs === "git") {
-      let diff = await $`git diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()
-      if (!diff.trim()) diff = await $`git diff --staged ${file}`.cwd(Instance.directory).quiet().nothrow().text()
+    const root = Instance.rootForPath(full)
+    if (project.vcs === "git" || root?.vcs === "git") {
+      const cwd = root?.sessionWorktreeDirectory ?? Instance.directory
+      const relative = root ? path.relative(root.sessionWorktreeDirectory, full) : file
+      let diff = await $`git diff ${relative}`.cwd(cwd).quiet().nothrow().text()
+      if (!diff.trim()) diff = await $`git diff --staged ${relative}`.cwd(cwd).quiet().nothrow().text()
       if (diff.trim()) {
-        const original = await $`git show HEAD:${file}`.cwd(Instance.directory).quiet().nothrow().text()
+        const original = await $`git show HEAD:${relative}`.cwd(cwd).quiet().nothrow().text()
         const patch = structuredPatch(file, file, original, content, "old", "new", {
           context: Infinity,
           ignoreWhitespace: true,

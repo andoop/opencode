@@ -15,6 +15,8 @@ import { useServer } from "@/context/server"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useAuth } from "@/context/auth"
+import { useGlobalSDK } from "@/context/global-sdk"
+import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
 
 export default function Home() {
   const sync = useGlobalSync()
@@ -25,6 +27,7 @@ export default function Home() {
   const server = useServer()
   const language = useLanguage()
   const auth = useAuth()
+  const globalSDK = useGlobalSDK()
   const homedir = createMemo(() => sync.data.path.home)
   const recent = createMemo(() => {
     const allProjects = sync.data.project
@@ -48,23 +51,48 @@ export default function Home() {
 
   async function chooseProject() {
     if (!auth.isAdmin) {
-      dialog.show(() => <DialogSelectProject onSelect={(result) => result && openProject(result)} />)
+      dialog.show(
+        () => (
+          <DialogSelectProject
+            onSelect={(result) => {
+              if (!result?.length) return
+              workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
+                method: "POST",
+                token: auth.token ?? undefined,
+                fetchFn: platform.fetch ?? fetch,
+                body: JSON.stringify({ directories: result }),
+              })
+                .then((workspace) => {
+                  sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
+                  openProject(workspace.directory)
+                })
+                .catch(() => undefined)
+            }}
+          />
+        ),
+      )
       return
     }
 
     function resolve(result: string | string[] | null) {
-      if (Array.isArray(result)) {
-        for (const directory of result) {
-          openProject(directory)
-        }
-      } else if (result) {
-        openProject(result)
-      }
+      const directories = Array.isArray(result) ? result : result ? [result] : []
+      if (directories.length === 0) return
+      workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
+        method: "POST",
+        token: auth.token ?? undefined,
+        fetchFn: platform.fetch ?? fetch,
+        body: JSON.stringify({ directories }),
+      })
+        .then((workspace) => {
+          sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
+          openProject(workspace.directory)
+        })
+        .catch(() => undefined)
     }
 
     if (platform.openDirectoryPickerDialog && server.isLocal()) {
       const result = await platform.openDirectoryPickerDialog?.({
-        title: language.t("command.project.open"),
+        title: language.t("workspace.new"),
         multiple: true,
       })
       resolve(result)
@@ -105,7 +133,7 @@ export default function Home() {
                 {language.t(auth.isAdmin ? "home.recentProjects" : "home.availableProjects")}
               </div>
               <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                {language.t("command.project.open")}
+                {language.t("workspace.new")}
               </Button>
             </div>
             <ul class="flex flex-col gap-2">
@@ -144,7 +172,7 @@ export default function Home() {
             </div>
             <div />
             <Button class="px-3" onClick={chooseProject}>
-              {language.t("command.project.open")}
+              {language.t("workspace.new")}
             </Button>
           </div>
         </Match>

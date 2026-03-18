@@ -46,6 +46,7 @@ import { usePlatform } from "./platform"
 import { useLanguage } from "@/context/language"
 import { useAuth, addAuthInterceptor } from "./auth"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
+import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
 
 type ProjectMeta = {
   name?: string
@@ -1076,16 +1077,21 @@ function createGlobalSync() {
         throw err
       })
 
-    let projects = [] as NonNullable<Awaited<ReturnType<typeof globalSDK.client.project.list>>["data"]>
+    let projects = [] as Project[]
+    const fetchFn = platform.fetch ?? fetch
     const results = await Promise.allSettled([
       task("global.config.get", () =>
         globalSDK.client.global.config.get().then((x) => {
           setGlobalStore("config", x.data!)
         }),
       ),
-      task("project.list", () =>
-        globalSDK.client.project.list().then(async (x) => {
-          projects = (x.data ?? [])
+      task("workspace.list", () =>
+        workspaceFetch<WorkspaceInfo[]>(globalSDK.url, "/workspace", {
+          token: auth.token ?? undefined,
+          fetchFn,
+        }).then(async (x) => {
+          projects = x
+            .map(workspaceAsProject)
             .filter((p) => !!p?.id)
             .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
             .slice()

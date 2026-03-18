@@ -29,6 +29,8 @@ import { User } from "@/user"
 import { GlobalBus } from "@/bus/global"
 import { Worktree } from "@/worktree"
 import { ProjectRegistry } from "@/project/registry"
+import { Workspace } from "@/workspace"
+import { UserWorktree } from "@/worktree/user-worktree"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -47,62 +49,28 @@ export namespace Session {
     return User.current()?.id
   }
 
-  // Build storage key for session (handles multi-user mode)
-  function sessionKey(projectID: string, sessionID: string, userID?: string): string[] {
-    if (isMultiUserMode() && userID) {
-      return ["user_session", userID, projectID, sessionID]
-    }
-    return ["session", projectID, sessionID]
+  function sessionKey(workspaceID: string, sessionID: string): string[] {
+    return ["session", workspaceID, sessionID]
   }
 
-  // Build storage prefix for listing sessions
-  function sessionListPrefix(projectID: string, userID?: string): string[] {
-    if (isMultiUserMode() && userID) {
-      return ["user_session", userID, projectID]
-    }
-    return ["session", projectID]
-  }
-
-  // Check if a directory is a session worktree
-  function isSessionWorktree(directory: string, projectID: string): boolean {
-    const worktreeRoot = path.join(Global.Path.data, "worktree", projectID)
-    return directory.startsWith(worktreeRoot + path.sep) || directory === worktreeRoot
-  }
-
-  // Get session worktree root directory
-  function getSessionWorktreeRoot(projectID: string): string {
-    return path.join(Global.Path.data, "worktree", projectID)
+  function sessionListPrefix(workspaceID: string): string[] {
+    return ["session", workspaceID]
   }
 
   // Clean up worktree for a session
   async function cleanupWorktree(session: Info): Promise<void> {
-    if (Instance.project.vcs !== "git") return
-    if (!isSessionWorktree(session.directory, session.projectID)) return
-
-    try {
-      const { Worktree } = await import("@/worktree")
-      await Worktree.remove({ directory: session.directory }).catch((error) => {
-        log.warn("failed to remove worktree for session", {
-          sessionID: session.id,
-          directory: session.directory,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
-
-      // Remove from project sandboxes
-      await Project.removeSandbox(session.projectID, session.directory).catch(() => undefined)
-
-      log.info("cleaned_up_session_worktree", {
-        sessionID: session.id,
-        directory: session.directory,
-      })
-    } catch (error) {
-      log.warn("failed to cleanup worktree for session", {
-        sessionID: session.id,
-        directory: session.directory,
-        error: error instanceof Error ? error.message : String(error),
-      })
+    for (const root of session.roots ?? []) {
+      if (root.vcs !== "git") continue
+      await $`git worktree remove --force ${root.sessionWorktreeDirectory}`
+        .quiet()
+        .nothrow()
+        .cwd(root.userWorktreeDirectory)
+      await fs.rm(root.sessionWorktreeDirectory, {
+        recursive: true,
+        force: true,
+      }).catch(() => undefined)
     }
+    await Workspace.removeSessionState(session.workspaceID, session.id)
   }
 
   function createDefaultTitle(isChild = false) {
@@ -125,12 +93,31 @@ export namespace Session {
     return `${title} (fork #1)`
   }
 
+  function currentWorkspace() {
+    try {
+      return Instance.workspace
+    } catch {
+      return
+    }
+  }
+
+  function currentProject() {
+    try {
+      return Instance.project
+    } catch {
+      return
+    }
+  }
+
   export const Info = z
     .object({
       id: Identifier.schema("session"),
       slug: z.string(),
+      workspaceID: z.string().startsWith("wsp_"),
       projectID: z.string(),
       directory: z.string(),
+      cwd: z.string(),
+      roots: Workspace.SessionRoot.array().default([]),
       userID: Identifier.schema("user").optional(), // User who owns this session (multi-user mode)
       parentID: Identifier.schema("session").optional(),
       summary: z
@@ -285,7 +272,7 @@ export namespace Session {
   export type AdminAuditSummary = z.infer<typeof AdminAuditSummary>
 
   async function listAllSessions() {
-    const prefix = isMultiUserMode() ? ["user_session"] : ["session"]
+    const prefix = ["session"]
     const items = await Storage.list(prefix)
     const sessions = await Promise.all(items.map((item) => Storage.read<Info>(item).catch(() => undefined)))
     return sessions.filter((item): item is Info => !!item).toSorted((a, b) => b.time.updated - a.time.updated)
@@ -425,12 +412,121 @@ export namespace Session {
     } satisfies AdminAuditSummary
   })
 
+  async function writeInfoFile(session: Info) {
+    const target = Workspace.sessionFile(session.workspaceID, session.id)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await Bun.write(target, JSON.stringify(session, null, 2))
+  }
+
+  async function workspaceFor(directory: string, title?: string) {
+    const workspace = currentWorkspace()
+    if (workspace) return workspace
+    const source = await Project.fromDirectory(directory)
+    const existing = (await Workspace.list()).find(
+      (item) =>
+        item.projects.length === 1 &&
+        item.projects[0]?.projectID === source.project.id &&
+        item.projects[0]?.sourceDirectory === source.project.worktree,
+    )
+    if (existing) return existing
+    return Workspace.create({
+      name: title,
+      directories: [directory],
+    })
+  }
+
+  function outputText(input: Uint8Array | undefined) {
+    if (!input?.length) return ""
+    return new TextDecoder().decode(input).trim()
+  }
+
+  async function gitText(directory: string, args: string[]) {
+    const proc = Bun.spawn(["git", ...args], {
+      cwd: directory,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const success = await proc.exited
+    if (success !== 0) return
+    const text = await new Response(proc.stdout).text()
+    return text.trim() || undefined
+  }
+
+  async function createSessionRoot(input: {
+    workspaceProject: Workspace.ProjectInfo
+    sessionID: string
+    sessionDirectory: string
+  }) {
+    const sessionWorktreeDirectory = path.join(input.sessionDirectory, "roots", input.workspaceProject.slug)
+    const userWorktreeDirectory = await UserWorktree.getOrCreate(
+      input.workspaceProject.projectID,
+      input.workspaceProject.sourceDirectory,
+    )
+    if (input.workspaceProject.vcs !== "git") {
+      await fs.mkdir(sessionWorktreeDirectory, { recursive: true })
+      return Workspace.SessionRoot.parse({
+        projectID: input.workspaceProject.projectID,
+        slug: input.workspaceProject.slug,
+        sourceDirectory: input.workspaceProject.sourceDirectory,
+        name: input.workspaceProject.name,
+        description: input.workspaceProject.description,
+        userWorktreeDirectory,
+        sessionWorktreeDirectory,
+        primary: input.workspaceProject.primary,
+        vcs: input.workspaceProject.vcs,
+      })
+    }
+    const branch = `session/${input.sessionID}`
+    const baseBranch = await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
+    const baseCommit = await gitText(userWorktreeDirectory, ["rev-parse", "HEAD"])
+    await fs.mkdir(path.dirname(sessionWorktreeDirectory), { recursive: true })
+    const created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory}`
+      .quiet()
+      .nothrow()
+      .cwd(userWorktreeDirectory)
+    if (created.exitCode !== 0) {
+      const message = outputText(created.stderr) || outputText(created.stdout) || "Failed to create session root worktree"
+      throw new Error(message)
+    }
+    await $`git reset --hard`.quiet().nothrow().cwd(sessionWorktreeDirectory)
+    return Workspace.SessionRoot.parse({
+      projectID: input.workspaceProject.projectID,
+      slug: input.workspaceProject.slug,
+      sourceDirectory: input.workspaceProject.sourceDirectory,
+      name: input.workspaceProject.name,
+      description: input.workspaceProject.description,
+      userWorktreeDirectory,
+      sessionWorktreeDirectory,
+      primary: input.workspaceProject.primary,
+      vcs: input.workspaceProject.vcs,
+      branch,
+      baseBranch,
+      baseCommit,
+      headCommit: await gitText(sessionWorktreeDirectory, ["rev-parse", "HEAD"]),
+    })
+  }
+
+  async function locate(sessionID: string) {
+    const scoped = currentWorkspace()?.id
+    if (scoped) {
+      const found = await Storage.read<Info>(sessionKey(scoped, sessionID)).catch(() => undefined)
+      if (found) return { workspaceID: scoped, info: found }
+    }
+    for (const key of await Storage.list(["session"])) {
+      if (key.at(-1) !== sessionID) continue
+      const info = await Storage.read<Info>(key).catch(() => undefined)
+      if (!info) continue
+      return { workspaceID: info.workspaceID, info }
+    }
+  }
+
   export const create = fn(
     z
       .object({
         parentID: Identifier.schema("session").optional(),
         title: z.string().optional(),
         permission: Info.shape.permission,
+        workspaceID: z.string().optional(),
       })
       .optional(),
     async (input) => {
@@ -500,129 +596,29 @@ export namespace Session {
     userID?: string
   }) {
     const userID = input.userID ?? currentUserID()
-    
-    // Generate session ID first to use for worktree branch name
     const sessionID = Identifier.descending("session", input.id)
-    
-    // For new root sessions (not child sessions), create a dedicated worktree if git project
-    let sessionDirectory = input.directory
-    if (!input.parentID && Instance.project.vcs === "git") {
-      try {
-        const branch = `session/${sessionID}`
-        const root = getSessionWorktreeRoot(Instance.project.id)
-        await fs.mkdir(root, { recursive: true })
-        
-        // Use session ID as base name, sanitize for filesystem
-        const name = sessionID.replace(/[^a-z0-9-]/gi, "-").toLowerCase()
-        const worktreeDir = path.join(root, name)
-        
-        // Check if directory already exists (shouldn't happen with unique session IDs)
-        const dirExists = await fs.stat(worktreeDir).then(() => true).catch(() => false)
-        if (dirExists) {
-          // Verify it's a valid git worktree
-          const gitDirCheck = await $`git rev-parse --git-dir`.quiet().nothrow().cwd(worktreeDir)
-          if (gitDirCheck.exitCode === 0) {
-            log.warn("worktree directory already exists, using existing", { directory: worktreeDir })
-            sessionDirectory = worktreeDir
-            
-            // Publish worktree ready event since worktree already exists and is ready
-            const worktreeName = name
-            GlobalBus.emit("event", {
-              directory: worktreeDir,
-              payload: {
-                type: Worktree.Event.Ready.type,
-                properties: {
-                  name: worktreeName,
-                  branch,
-                },
-              },
-            })
-          } else {
-            // Directory exists but is not a valid git repo, try to remove it and create fresh
-            log.warn("directory exists but is not a valid git worktree, removing and recreating", {
-              directory: worktreeDir,
-            })
-            await fs.rm(worktreeDir, { recursive: true, force: true }).catch(() => undefined)
-            
-            // Create worktree with session ID-based branch
-            const created = await $`git worktree add --no-checkout -b ${branch} ${worktreeDir}`
-              .quiet()
-              .nothrow()
-              .cwd(Instance.worktree)
-            
-            if (created.exitCode === 0) {
-              await $`git reset --hard`.quiet().nothrow().cwd(worktreeDir)
-              await Project.addSandbox(Instance.project.id, worktreeDir).catch(() => undefined)
-              sessionDirectory = worktreeDir
-              
-              // Publish worktree ready event since worktree is already created and populated
-              const worktreeName = name
-              GlobalBus.emit("event", {
-                directory: worktreeDir,
-                payload: {
-                  type: Worktree.Event.Ready.type,
-                  properties: {
-                    name: worktreeName,
-                    branch,
-                  },
-                },
-              })
-              
-              log.info("created_session_worktree", { sessionID, branch, directory: worktreeDir })
-            }
-          }
-        } else {
-          // Create worktree with session ID-based branch
-          const created = await $`git worktree add --no-checkout -b ${branch} ${worktreeDir}`
-            .quiet()
-            .nothrow()
-            .cwd(Instance.worktree)
-          
-          if (created.exitCode === 0) {
-            // Populate worktree
-            await $`git reset --hard`.quiet().nothrow().cwd(worktreeDir)
-            
-            // Add to project sandboxes
-            await Project.addSandbox(Instance.project.id, worktreeDir).catch(() => undefined)
-            
-            sessionDirectory = worktreeDir
-            
-            // Publish worktree ready event since worktree is already created and populated
-            const worktreeName = name
-            GlobalBus.emit("event", {
-              directory: worktreeDir,
-              payload: {
-                type: Worktree.Event.Ready.type,
-                properties: {
-                  name: worktreeName,
-                  branch,
-                },
-              },
-            })
-            
-            log.info("created_session_worktree", { sessionID, branch, directory: worktreeDir })
-          } else {
-            const errorMsg = created.stderr?.toString() || created.stdout?.toString() || "Unknown error"
-            log.warn("failed to create worktree for session, using project directory", {
-              sessionID,
-              error: errorMsg,
-            })
-          }
-        }
-      } catch (error) {
-        log.warn("failed to create worktree for session, using project directory", {
+    const workspace = await workspaceFor(input.directory, input.title)
+    const sessionDirectory = Workspace.sessionDirectory(workspace.id, sessionID)
+    await fs.mkdir(path.join(sessionDirectory, "roots"), { recursive: true })
+    const roots = await Promise.all(
+      workspace.projects.map((project) =>
+        createSessionRoot({
+          workspaceProject: project,
           sessionID,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }
-    
+          sessionDirectory,
+        }),
+      ),
+    )
+    const primaryRoot = roots.find((item) => item.primary) ?? roots[0]
     const result: Info = {
       id: sessionID,
       slug: Slug.create(),
       version: Installation.VERSION,
-      projectID: Instance.project.id,
+      workspaceID: workspace.id,
+      projectID: primaryRoot?.projectID ?? Instance.project.id,
       directory: sessionDirectory,
+      cwd: sessionDirectory,
+      roots,
       userID,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
@@ -633,7 +629,18 @@ export namespace Session {
       },
     }
     log.info("created", result)
-    await Storage.write(sessionKey(Instance.project.id, result.id, userID), result)
+    await Storage.write(sessionKey(result.workspaceID, result.id), result)
+    await writeInfoFile(result)
+    GlobalBus.emit("event", {
+      directory: result.directory,
+      payload: {
+        type: Worktree.Event.Ready.type,
+        properties: {
+          name: result.id,
+          branch: primaryRoot?.branch ?? "",
+        },
+      },
+    })
     Bus.publish(Event.Created, {
       info: result,
     })
@@ -662,10 +669,9 @@ export namespace Session {
   }
 
   export const get = fn(Identifier.schema("session"), async (id) => {
-    const userID = currentUserID()
-    const key = sessionKey(Instance.project.id, id, userID)
-    const read = await Storage.read<Info>(key)
-    return read as Info
+    const found = await locate(id)
+    if (!found) throw new Storage.NotFoundError({ message: `Session not found: ${id}` })
+    return found.info
   })
 
   export const getShare = fn(Identifier.schema("session"), async (id) => {
@@ -705,16 +711,15 @@ export namespace Session {
   })
 
   export async function update(id: string, editor: (session: Info) => void, options?: { touch?: boolean }) {
-    const project = Instance.project
-    const userID = currentUserID()
-    const key = sessionKey(project.id, id, userID)
-    
-    const result = await Storage.update<Info>(key, (draft) => {
+    const found = await locate(id)
+    if (!found) throw new Storage.NotFoundError({ message: `Session not found: ${id}` })
+    const result = await Storage.update<Info>(sessionKey(found.workspaceID, id), (draft) => {
       editor(draft)
       if (options?.touch !== false) {
         draft.time.updated = Date.now()
       }
     })
+    await writeInfoFile(result)
     Bus.publish(Event.Updated, {
       info: result,
     })
@@ -743,21 +748,34 @@ export namespace Session {
   )
 
   export async function* list(input?: { directory?: string }) {
-    const project = input?.directory ? (await Project.fromDirectory(input.directory)).project : Instance.project
-    const userID = currentUserID()
-    const prefix = sessionListPrefix(project.id, userID)
-    
-    for (const item of await Storage.list(prefix)) {
-      const session = await Storage.read<Info>(item).catch(() => undefined)
-      if (!session) continue
-      yield session
+    const scoped = input?.directory ? await Workspace.fromDirectory(input.directory) : undefined
+    const workspaceID = scoped?.workspace.id ?? currentWorkspace()?.id
+    if (workspaceID) {
+      const ids = [] as string[]
+      for (const item of await Storage.list(sessionListPrefix(workspaceID))) {
+        const session = await Storage.read<Info>(item).catch(() => undefined)
+        if (!session) continue
+        ids.push(session.id)
+        yield session
+      }
+      return
+    }
+    const project = input?.directory ? (await Project.fromDirectory(input.directory)).project : currentProject()
+    if (!project) return
+    const workspaces = await Workspace.list()
+    for (const workspace of workspaces) {
+      if (!workspace.projects.some((item) => item.projectID === project.id)) continue
+      for (const item of await Storage.list(sessionListPrefix(workspace.id))) {
+        const session = await Storage.read<Info>(item).catch(() => undefined)
+        if (!session) continue
+        yield session
+      }
     }
   }
 
   export const children = fn(Identifier.schema("session"), async (parentID) => {
-    const project = Instance.project
-    const userID = currentUserID()
-    const prefix = sessionListPrefix(project.id, userID)
+    const parent = await get(parentID)
+    const prefix = sessionListPrefix(parent.workspaceID)
     const result = [] as Session.Info[]
     for (const item of await Storage.list(prefix)) {
       const session = await Storage.read<Info>(item).catch(() => undefined)
@@ -769,8 +787,6 @@ export namespace Session {
   })
 
   export const remove = fn(Identifier.schema("session"), async (sessionID) => {
-    const project = Instance.project
-    const userID = currentUserID()
     try {
       const session = await get(sessionID)
       for (const child of await children(sessionID)) {
@@ -787,7 +803,7 @@ export namespace Session {
       // Clean up worktree if this session has one
       await cleanupWorktree(session)
       
-      await Storage.remove(sessionKey(project.id, sessionID, session.userID ?? userID))
+      await Storage.remove(sessionKey(session.workspaceID, sessionID))
       Bus.publish(Event.Deleted, {
         info: session,
       })

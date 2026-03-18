@@ -6,6 +6,7 @@ import { Project } from "../../project/project"
 import { lazy } from "../../util/lazy"
 import { User } from "@/user"
 import { Log } from "@/util/log"
+import { Workspace } from "@/workspace"
 
 function decode(input: string) {
   try {
@@ -53,7 +54,10 @@ export const BrowseRoutes = lazy(() =>
         const input = c.req.valid("query")
         const directory = decode(input.directory)
         using _ = log.time("list", input)
-        await Project.assertDirectoryAccess(directory)
+        const workspace = await Workspace.fromDirectory(directory)
+        if (!workspace) {
+          await Project.assertDirectoryAccess(directory)
+        }
         const content = await File.browse({
           directory,
           path: input.path,

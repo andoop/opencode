@@ -572,8 +572,8 @@ export default function Page() {
       setUi("creating", "error", message)
     }
 
-    const created = await globalSDK.client.session
-      .create({ directory: project.worktree })
+    const created = await sdk.client.session
+      .create({})
       .then((x) => x.data)
       .catch((err) => {
         fail(err instanceof Error ? err.message : String(err), "create")

@@ -308,7 +308,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   )
 
           return (
-    <Dialog title={props.title ?? language.t("command.project.open")} class="!max-w-2xl">
+    <Dialog title={props.title ?? language.t("workspace.new")} class="!max-w-2xl">
       <div class="flex flex-col gap-3 h-[500px]">
         {/* 搜索框 */}
         <div class="flex items-center gap-2">

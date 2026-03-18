@@ -21,6 +21,7 @@ const state = path.join(xdgState ?? path.join(home, ".local", "state"), app)
 
 const dirs = [
   { p: path.join(data, "storage"), label: "storage" },
+  { p: path.join(data, "workspace"), label: "workspace" },
   { p: path.join(data, "worktree"), label: "worktree" },
   { p: path.join(data, "user-worktree"), label: "user-worktree" },
   { p: path.join(data, "log"), label: "log" },

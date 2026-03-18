@@ -19,6 +19,7 @@ import { lazy } from "../../util/lazy"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { User } from "@/user"
+import { Workspace } from "@/workspace"
 
 const log = Log.create({ service: "server" })
 
@@ -67,12 +68,14 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         if (query.directory) {
-          await Project.assertDirectoryAccess(query.directory)
+          const workspace = await Workspace.fromDirectory(query.directory)
+          if (!workspace) {
+            await Project.assertDirectoryAccess(query.directory)
+          }
         }
         const term = query.search?.toLowerCase()
         const sessions: Session.Info[] = []
         for await (const session of Session.list({ directory: query.directory })) {
-          if (query.directory !== undefined && session.directory !== query.directory) continue
           if (query.roots && session.parentID) continue
           if (query.start !== undefined && session.time.updated < query.start) continue
           if (term !== undefined && !session.title.toLowerCase().includes(term)) continue

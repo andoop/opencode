@@ -1,65 +1,118 @@
 import { describe, expect, test } from "bun:test"
-import path from "path"
-import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
-const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 describe("session.list", () => {
   test("filters by directory", async () => {
-    await Instance.provide({
-      directory: projectRoot,
-      fn: async () => {
-        const app = Server.App()
+    await using firstDir = await tmpdir({ git: true })
+    await using secondDir = await tmpdir({ git: true })
+    const app = Server.App()
 
-        const first = await Session.create({})
-
-        const otherDir = path.join(projectRoot, "..", "__session_list_other")
-        const second = await Instance.provide({
-          directory: otherDir,
-          fn: async () => Session.create({}),
-        })
-
-        const response = await app.request(`/session?directory=${encodeURIComponent(projectRoot)}`)
-        expect(response.status).toBe(200)
-
-        const body = (await response.json()) as unknown[]
-        const ids = body
-          .map((s) => (typeof s === "object" && s && "id" in s ? (s as { id: string }).id : undefined))
-          .filter((x): x is string => typeof x === "string")
-
-        expect(ids).toContain(first.id)
-        expect(ids).not.toContain(second.id)
-      },
+    const firstWorkspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directories: [firstDir.path] }),
     })
+    const firstWorkspace = (await firstWorkspaceResponse.json()) as { directory: string }
+    const secondWorkspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directories: [secondDir.path] }),
+    })
+    const secondWorkspace = (await secondWorkspaceResponse.json()) as { directory: string }
+
+    const firstResponse = await app.request(`/session?directory=${encodeURIComponent(firstWorkspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const first = (await firstResponse.json()) as Session.Info
+    const secondResponse = await app.request(`/session?directory=${encodeURIComponent(secondWorkspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const second = (await secondResponse.json()) as Session.Info
+
+    const response = await app.request(`/session?directory=${encodeURIComponent(firstWorkspace.directory)}`)
+    expect(response.status).toBe(200)
+
+    const body = (await response.json()) as Session.Info[]
+    const ids = body.map((item) => item.id)
+
+    expect(ids).toContain(first.id)
+    expect(ids).not.toContain(second.id)
   })
 
   test("supports directory-scoped listing without an active instance", async () => {
     await using firstDir = await tmpdir({ git: true })
-    await using secondDir = await tmpdir({ git: true })
-
-    const first = await Instance.provide({
-      directory: firstDir.path,
-      fn: async () => Session.create({}),
-    })
-
-    const second = await Instance.provide({
-      directory: secondDir.path,
-      fn: async () => Session.create({}),
-    })
-
     const app = Server.App()
-    const response = await app.request(`/session?directory=${encodeURIComponent(firstDir.path)}&roots=true`)
+
+    const workspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directories: [firstDir.path] }),
+    })
+    const workspace = (await workspaceResponse.json()) as { directory: string }
+
+    const firstResponse = await app.request(`/session?directory=${encodeURIComponent(workspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const first = (await firstResponse.json()) as Session.Info
+
+    const response = await app.request(`/session?directory=${encodeURIComponent(first.directory)}&roots=true`)
     expect(response.status).toBe(200)
 
-    const body = (await response.json()) as unknown[]
-    const ids = body
-      .map((s) => (typeof s === "object" && s && "id" in s ? (s as { id: string }).id : undefined))
-      .filter((x): x is string => typeof x === "string")
+    const body = (await response.json()) as Session.Info[]
+    const ids = body.map((item) => item.id)
+
+    expect(ids).toContain(first.id)
+  })
+
+  test("supports directory-scoped listing for a plain project root", async () => {
+    await using firstDir = await tmpdir({ git: true })
+    await using secondDir = await tmpdir({ git: true })
+    const app = Server.App()
+
+    const firstWorkspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directories: [firstDir.path] }),
+    })
+    const firstWorkspace = (await firstWorkspaceResponse.json()) as { directory: string }
+    const secondWorkspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directories: [secondDir.path] }),
+    })
+    const secondWorkspace = (await secondWorkspaceResponse.json()) as { directory: string }
+
+    const firstResponse = await app.request(`/session?directory=${encodeURIComponent(firstWorkspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const first = (await firstResponse.json()) as Session.Info
+    const secondResponse = await app.request(`/session?directory=${encodeURIComponent(secondWorkspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const second = (await secondResponse.json()) as Session.Info
+
+    const response = await app.request(`/session?directory=${encodeURIComponent(firstDir.path)}&roots=true`)
+    if (response.status !== 200) {
+      throw new Error(await response.text())
+    }
+
+    const body = (await response.json()) as Session.Info[]
+    const ids = body.map((item) => item.id)
 
     expect(ids).toContain(first.id)
     expect(ids).not.toContain(second.id)

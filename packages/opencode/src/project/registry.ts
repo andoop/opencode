@@ -1,6 +1,7 @@
 import { GlobalBus } from "@/bus/global"
 import { Storage } from "@/storage/storage"
 import { Log } from "@/util/log"
+import { Filesystem } from "@/util/filesystem"
 import { NamedError } from "@opencode-ai/util/error"
 import z from "zod"
 import { resolveDirectory } from "./resolve"
@@ -77,11 +78,15 @@ export namespace ProjectRegistry {
   }
 
   export async function add(input: { directory: string; name?: string; description?: string; created_by?: string }) {
+    const gitHints = await Filesystem.findUp(".git", input.directory).catch(() => [])
     const resolved = await resolveDirectory(input.directory)
     if (resolved.vcs !== "git" || resolved.worktree === "/") {
       throw new InvalidDirectoryError({
         directory: input.directory,
-        message: "Only git projects can be added to the project registry",
+        message:
+          gitHints.length === 0
+            ? `No .git directory was found in the selected path or its parent directories: ${input.directory}`
+            : `Only git projects can be added to the project registry: ${input.directory}`,
       })
     }
 

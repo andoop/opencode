@@ -2,19 +2,35 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { getFilename } from "@opencode-ai/util/path"
-import { createMemo, createSignal, For, Show } from "solid-js"
-import { useGlobalSync } from "@/context/global-sync"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
+import { useGlobalSDK } from "@/context/global-sdk"
+import { useAuth } from "@/context/auth"
+import { usePlatform } from "@/context/platform"
+import { workspaceFetch } from "@/utils/workspace-api"
+import type { Project } from "@opencode-ai/sdk/v2/client"
 
-export function DialogSelectProject(props: { title?: string; onSelect: (directory: string | null) => void }) {
+export function DialogSelectProject(props: { title?: string; onSelect: (directory: string[] | null) => void }) {
   const dialog = useDialog()
-  const sync = useGlobalSync()
   const language = useLanguage()
+  const sdk = useGlobalSDK()
+  const auth = useAuth()
+  const platform = usePlatform()
   const [query, setQuery] = createSignal("")
-  const home = createMemo(() => sync.data.path.home)
+  const [selected, setSelected] = createSignal<string[]>([])
+  const [items, setItems] = createSignal<Project[]>([])
+  const home = createMemo(() => "")
+  createEffect(() => {
+    workspaceFetch<Project[]>(sdk.url, "/workspace/available-projects", {
+      token: auth.token ?? undefined,
+      fetchFn: platform.fetch ?? fetch,
+    })
+      .then(setItems)
+      .catch(() => setItems([]))
+  })
   const projects = createMemo(() => {
     const text = query().trim().toLowerCase()
-    return sync.data.project
+    return items()
       .filter((project) => !!project.worktree)
       .filter((project) => {
         if (!text) return true
@@ -37,13 +53,21 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
     return directory
   }
 
-  const resolve = (directory: string | null) => {
-    props.onSelect(directory)
+  const resolve = (value: string[] | null) => {
+    props.onSelect(value)
     dialog.close()
   }
 
+  const submit = () => {
+    resolve(selected().length ? selected() : null)
+  }
+
+  const toggle = (directory: string) => {
+    setSelected((prev) => (prev.includes(directory) ? prev.filter((item) => item !== directory) : [...prev, directory]))
+  }
+
   return (
-    <Dialog title={props.title ?? language.t("command.project.open")} class="!max-w-2xl">
+    <Dialog title={props.title ?? language.t("workspace.new")} class="!max-w-2xl">
       <div class="flex h-[480px] flex-col gap-3">
         <div class="flex items-center gap-2">
           <input
@@ -55,6 +79,9 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
           />
           <Button variant="ghost" onClick={() => resolve(null)}>
             {language.t("common.cancel")}
+          </Button>
+          <Button onClick={submit} disabled={selected().length === 0}>
+            确认
           </Button>
         </div>
         <div class="flex-1 overflow-y-auto rounded-md border border-border-base bg-background-frame p-2">
@@ -71,9 +98,14 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
                 {(project) => (
                   <button
                     class="flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
-                    onClick={() => resolve(project.worktree)}
+                    onClick={() => toggle(project.worktree)}
                   >
-                    <div class="text-14-medium text-text-strong">{project.name || getFilename(project.worktree)}</div>
+                    <div class="flex w-full items-center justify-between gap-3">
+                      <div class="text-14-medium text-text-strong">{project.name || getFilename(project.worktree)}</div>
+                      <Show when={selected().includes(project.worktree)}>
+                        <div class="text-12-regular text-text-weak">Selected</div>
+                      </Show>
+                    </div>
                     <Show when={project.description}>
                       <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
                     </Show>

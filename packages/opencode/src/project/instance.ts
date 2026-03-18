@@ -5,11 +5,15 @@ import { State } from "./state"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { Filesystem } from "@/util/filesystem"
+import type { Workspace } from "@/workspace"
 
 interface Context {
   directory: string
   worktree: string
   project: Project.Info
+  workspace?: Workspace.Info
+  session?: Workspace.SessionState
+  roots?: Workspace.SessionRoot[]
 }
 const context = Context.create<Context>("instance")
 const cache = new Map<string, Promise<Context>>()
@@ -29,6 +33,11 @@ const getUserWorktree = async (projectID: string, sandbox: string) => {
   return UserWorktree.getOrCreate(projectID, sandbox)
 }
 
+const getWorkspace = async () => {
+  const mod = await import("@/workspace")
+  return mod.Workspace
+}
+
 export const Instance = {
   async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
     // In multi-user mode, use user-specific cache key
@@ -39,6 +48,27 @@ export const Instance = {
     if (!existing) {
       Log.Default.info("creating instance", { directory: input.directory, userID: user?.id })
       existing = iife(async () => {
+        const Workspace = await getWorkspace()
+        const scoped = await Workspace.fromDirectory(input.directory)
+        if (scoped) {
+          const project = await Workspace.primaryProject(scoped)
+          const root =
+            scoped.session?.roots.find((item) => item.primary)?.sessionWorktreeDirectory ??
+            scoped.workspace.projects.find((item) => item.primary)?.sourceDirectory ??
+            project.worktree
+          const ctx = {
+            directory: input.directory,
+            worktree: root,
+            project,
+            workspace: scoped.workspace,
+            session: scoped.session,
+            roots: scoped.session?.roots,
+          }
+          await context.provide(ctx, async () => {
+            await input.init?.()
+          })
+          return ctx
+        }
         const { project, sandbox } = await Project.fromDirectory(input.directory)
 
         // In multi-user mode, get or create a user-specific worktree
@@ -48,6 +78,7 @@ export const Instance = {
           directory: input.directory,
           worktree,
           project,
+          roots: undefined,
         }
         await context.provide(ctx, async () => {
           await input.init?.()
@@ -70,6 +101,15 @@ export const Instance = {
   get project() {
     return context.use().project
   },
+  get workspace() {
+    return context.use().workspace
+  },
+  get session() {
+    return context.use().session
+  },
+  get roots() {
+    return context.use().roots
+  },
   /**
    * Check if a path is within the project boundary.
    * Returns true if path is inside Instance.directory OR Instance.worktree.
@@ -77,10 +117,16 @@ export const Instance = {
    */
   containsPath(filepath: string) {
     if (Filesystem.contains(Instance.directory, filepath)) return true
+    if (Instance.roots?.some((item) => Filesystem.contains(item.sessionWorktreeDirectory, filepath))) return true
     // Non-git projects set worktree to "/" which would match ANY absolute path.
     // Skip worktree check in this case to preserve external_directory permissions.
     if (Instance.worktree === "/") return false
     return Filesystem.contains(Instance.worktree, filepath)
+  },
+  rootForPath(filepath: string) {
+    const roots = Instance.roots
+    if (!roots?.length) return
+    return roots.find((item) => Filesystem.contains(item.sessionWorktreeDirectory, filepath))
   },
   state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): () => S {
     return State.create(() => Instance.directory, init, dispose)

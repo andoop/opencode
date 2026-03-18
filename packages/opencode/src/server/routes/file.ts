@@ -10,6 +10,7 @@ import { Snapshot } from "../../snapshot"
 import { lazy } from "../../util/lazy"
 import { User } from "@/user"
 import { Log } from "@/util/log"
+import { Workspace } from "@/workspace"
 
 function decode(input: string) {
   try {
@@ -160,7 +161,10 @@ export const FileRoutes = lazy(() =>
         const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
         const directory = decode(raw)
         using _ = log.time("list", { directory, path })
-        await Project.assertDirectoryAccess(directory)
+        const workspace = await Workspace.fromDirectory(directory)
+        if (!workspace) {
+          await Project.assertDirectoryAccess(directory)
+        }
         const content = await File.browse({
           directory,
           path,
