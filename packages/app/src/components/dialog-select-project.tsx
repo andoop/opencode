@@ -70,7 +70,18 @@ export function DialogSelectProject(props: { title?: string; onSelect: (value: S
   })
   const groupedProjects = createMemo(() => {
     const all = projects()
-    const result = groups()
+    const known = new Map(groups().map((group) => [group.id, { id: group.id, name: group.name, description: group.description }]))
+    for (const project of all) {
+      project.group_ids?.forEach((id, index) => {
+        if (known.has(id)) return
+        known.set(id, {
+          id,
+          name: project.groups?.[index] || "未命名分组",
+          description: undefined,
+        })
+      })
+    }
+    const result = [...known.values()]
       .map((group) => ({
         id: group.id,
         group: group.name,
