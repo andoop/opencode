@@ -78,7 +78,8 @@ export const WorkspaceRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await Workspace.availableProjects())
+        const result = await Workspace.availableProjects()
+        return c.json(result)
       },
     )
     .get(

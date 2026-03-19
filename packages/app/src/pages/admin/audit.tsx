@@ -63,8 +63,8 @@ export default function AdminAuditPage() {
   const [auditPrompts, { refetch: refetchAuditPrompts }] = createResource(selectedAuditSessionID, async (sessionID) => {
     if (!sessionID) return [] as AuditPrompt[]
     const response = await fetchFn(`${server.url}/session/admin/${sessionID}/messages`, {
-      headers: authHeaders(),
-    })
+        headers: authHeaders(),
+      })
     if (!response.ok) throw new Error("Failed to fetch session conversation")
     return response.json() as Promise<AuditPrompt[]>
   })

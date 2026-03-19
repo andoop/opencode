@@ -282,7 +282,7 @@ function createGlobalSync() {
     if (globalStore.project.length !== 0) return
     // In multi-user mode, don't restore from cache if user is not authenticated
     if (auth.isMultiUserEnabled && !auth.user) {
-      setGlobalStore("project", [])
+      if (globalStore.project.length !== 0) setGlobalStore("project", [])
       currentCacheUserID = null
       return
     }
@@ -305,12 +305,15 @@ function createGlobalSync() {
 
   createEffect(() => {
     if (!projectCacheReady()) return
+    if (auth.isMultiUserEnabled && !auth.user) return
     const projects = globalStore.project
     if (projects.length === 0) {
       const cachedLength = untrack(() => projectCache.value.length)
-      if (cachedLength !== 0) return
+      if (cachedLength === 0) return
+      return
     }
-    setProjectCache("value", projects.map(sanitizeProject))
+    const sanitized = projects.map(sanitizeProject)
+    setProjectCache("value", sanitized)
   })
 
   createEffect(() => {
