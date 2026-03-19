@@ -1080,11 +1080,15 @@ function createGlobalSync() {
     let projects = [] as Project[]
     const fetchFn = platform.fetch ?? fetch
     const results = await Promise.allSettled([
-      task("global.config.get", () =>
-        globalSDK.client.global.config.get().then((x) => {
-          setGlobalStore("config", x.data!)
-        }),
-      ),
+      ...(auth.isAdmin
+        ? [
+            task("global.config.get", () =>
+              globalSDK.client.global.config.get().then((x) => {
+                setGlobalStore("config", x.data!)
+              }),
+            ),
+          ]
+        : []),
       task("workspace.list", () =>
         workspaceFetch<WorkspaceInfo[]>(globalSDK.url, "/workspace", {
           token: auth.token ?? undefined,
