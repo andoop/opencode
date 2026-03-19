@@ -78,7 +78,6 @@ function list(items: Item[]) {
 function section(item: Item) {
   return [
     `### ${item.name ?? item.directory}`,
-    `Directory: ${item.directory}`,
     `Groups: ${item.groups.join(", ")}`,
     ...(item.description ? ["", item.description] : []),
     ...(item.profile_markdown ? ["", item.profile_markdown] : []),
