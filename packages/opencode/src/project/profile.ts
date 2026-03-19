@@ -146,7 +146,7 @@ export namespace ProjectProfile {
     }
     const selectedGroups = await groupItems(workspace.selected_group_ids)
     const projectProfiles = await workspaceProjects()
-    const primary = projectProfiles.find((item) => item.primary)
+    const primary = projectProfiles.find((item) => item.projectID === workspace.primaryProjectID)
     const selected = await names(workspace.selected_group_ids, workspace.selected_groups)
 
     return [
