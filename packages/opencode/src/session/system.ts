@@ -52,6 +52,6 @@ export namespace SystemPrompt {
   }
 
   export async function projectContext() {
-    return [await ProjectProfile.summary()]
+    return [await ProjectProfile.context()]
   }
 }

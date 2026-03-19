@@ -2,6 +2,16 @@ import { GroupRegistry } from "./group-registry"
 import { Instance } from "./instance"
 import { ProjectRegistry } from "./registry"
 
+type Item = {
+  projectID?: string
+  name?: string
+  directory: string
+  description?: string
+  profile_markdown?: string
+  groups: string[]
+  primary?: boolean
+}
+
 async function names(ids?: string[], fallback?: string[]) {
   if (ids?.length) {
     const resolved = await GroupRegistry.names(ids)
@@ -16,6 +26,27 @@ async function currentProjectRegistry() {
   return ProjectRegistry.findByProjectID(Instance.project.id)
 }
 
+async function currentProject() {
+  const target = await currentProjectRegistry()
+  const item = target ?? {
+    project_id: Instance.project.id,
+    name: Instance.project.name,
+    directory: Instance.project.worktree,
+    description: Instance.project.description,
+    groups: Instance.project.groups,
+    group_ids: Instance.project.group_ids,
+    profile_markdown: Instance.project.profile_markdown,
+  }
+  return {
+    projectID: item.project_id,
+    name: item.name,
+    directory: item.directory,
+    description: item.description,
+    profile_markdown: item.profile_markdown,
+    groups: await names(item.group_ids, item.groups),
+  } satisfies Item
+}
+
 async function groupItems(ids: string[]) {
   const items = await Promise.all(ids.map((id) => GroupRegistry.get(id).catch(() => undefined)))
   return items.filter((item): item is GroupRegistry.Info => !!item)
@@ -23,32 +54,58 @@ async function groupItems(ids: string[]) {
 
 async function workspaceProjects() {
   const workspace = Instance.workspace
-  if (!workspace) return [] as Array<{
-    projectID: string
-    name?: string
-    sourceDirectory: string
-    description?: string
-    profile_markdown?: string
-    groups: string[]
-    primary?: boolean
-  }>
+  if (!workspace) return [await currentProject()]
   return Promise.all(
     workspace.projects.map(async (item) => {
       const match = await ProjectRegistry.findByProjectID(item.projectID)
       return {
         projectID: item.projectID,
-        sourceDirectory: item.sourceDirectory,
+        directory: item.sourceDirectory,
         name: match?.name ?? item.name,
         description: match?.description ?? item.description,
         profile_markdown: match?.profile_markdown,
         groups: await names(match?.group_ids ?? item.group_ids, match?.groups ?? item.groups),
         primary: item.primary,
-      }
+      } satisfies Item
     }),
   )
 }
 
+function list(items: Item[]) {
+  return items.map((item) => `${item.name ?? item.directory} [${item.groups.join(", ")}]`).join("; ")
+}
+
+function section(item: Item) {
+  return [
+    `### ${item.name ?? item.directory}`,
+    `Directory: ${item.directory}`,
+    `Groups: ${item.groups.join(", ")}`,
+    ...(item.description ? ["", item.description] : []),
+    ...(item.profile_markdown ? ["", item.profile_markdown] : []),
+    "",
+  ]
+}
+
 export namespace ProjectProfile {
+  export async function context() {
+    const workspace = Instance.workspace
+    const projects = await workspaceProjects()
+    const lines = ["<project-context>"]
+
+    if (workspace) {
+      const selected = await names(workspace.selected_group_ids, workspace.selected_groups)
+      lines.push(`Workspace: ${workspace.name}`)
+      if (selected[0] !== "未分组" || workspace.selected_group_ids.length > 0 || workspace.selected_groups.length > 0) {
+        lines.push(`Selected groups: ${selected.join(", ")}`)
+      }
+    } else {
+      lines.push("Workspace: Single project workspace")
+    }
+
+    lines.push(`Workspace projects: ${list(projects)}`, "", "## Project Profiles", ...projects.flatMap(section), "</project-context>")
+    return lines.join("\n")
+  }
+
   export async function summary() {
     const project = Instance.project
     const workspace = Instance.workspace
@@ -72,7 +129,7 @@ export namespace ProjectProfile {
         lines.push(`Selected groups: ${selectedGroups.join(", ")}`)
       }
       lines.push(
-        `Workspace projects: ${projects.map((item) => `${item.name ?? item.sourceDirectory} [${item.groups.join(", ")}]`).join("; ")}`,
+        `Workspace projects: ${projects.map((item) => `${item.name ?? item.directory} [${item.groups.join(", ")}]`).join("; ")}`,
       )
     }
 
@@ -112,7 +169,7 @@ export namespace ProjectProfile {
       [
         "## Project Profiles",
         ...projectProfiles.flatMap((item) => [
-          `### ${item.name ?? item.sourceDirectory}`,
+          `### ${item.name ?? item.directory}`,
           `Groups: ${item.groups.join(", ")}`,
           ...(item.description ? [item.description] : []),
           ...(item.profile_markdown ? ["", item.profile_markdown] : []),
