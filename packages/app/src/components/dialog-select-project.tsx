@@ -10,7 +10,22 @@ import { usePlatform } from "@/context/platform"
 import { workspaceFetch } from "@/utils/workspace-api"
 import type { Project } from "@opencode-ai/sdk/v2/client"
 
-export function DialogSelectProject(props: { title?: string; onSelect: (directory: string[] | null) => void }) {
+type GroupInfo = {
+  id: string
+  name: string
+  description?: string
+}
+
+type ProjectItem = Project & {
+  group_ids?: string[]
+}
+
+type SelectionResult = {
+  directories: string[]
+  selected_group_ids: string[]
+}
+
+export function DialogSelectProject(props: { title?: string; onSelect: (value: SelectionResult | null) => void }) {
   const dialog = useDialog()
   const language = useLanguage()
   const sdk = useGlobalSDK()
@@ -18,18 +33,25 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
   const platform = usePlatform()
   const [query, setQuery] = createSignal("")
   const [selected, setSelected] = createSignal<string[]>([])
-  const [items, setItems] = createSignal<Project[]>([])
+  const [items, setItems] = createSignal<ProjectItem[]>([])
+  const [groups, setGroups] = createSignal<GroupInfo[]>([])
   const home = createMemo(() => "")
   const ungroupedLabel = "未分组"
   createEffect(() => {
-    workspaceFetch<Project[]>(sdk.url, "/workspace/available-projects", {
+    workspaceFetch<ProjectItem[]>(sdk.url, "/workspace/available-projects", {
       token: auth.token ?? undefined,
       fetchFn: platform.fetch ?? fetch,
     })
       .then(setItems)
       .catch(() => setItems([]))
+    workspaceFetch<GroupInfo[]>(sdk.url, "/project/group", {
+      token: auth.token ?? undefined,
+      fetchFn: platform.fetch ?? fetch,
+    })
+      .then(setGroups)
+      .catch(() => setGroups([]))
   })
-  const projects = createMemo(() => {
+  const projects = createMemo<ProjectItem[]>(() => {
     const text = query().trim().toLowerCase()
     return items()
       .filter((project) => !!project.worktree)
@@ -47,22 +69,26 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
       .sort((a, b) => (a.name ?? a.worktree).localeCompare(b.name ?? b.worktree))
   })
   const groupedProjects = createMemo(() => {
-    const map = new Map<string, Project[]>()
-    for (const project of projects()) {
-      const groups = project.groups?.length ? project.groups : [ungroupedLabel]
-      for (const group of groups) {
-        const list = map.get(group) ?? []
-        list.push(project)
-        map.set(group, list)
-      }
-    }
-    return [...map.entries()]
-      .sort(([a], [b]) => {
-        if (a === ungroupedLabel) return 1
-        if (b === ungroupedLabel) return -1
-        return a.localeCompare(b)
+    const all = projects()
+    const result = groups()
+      .map((group) => ({
+        id: group.id,
+        group: group.name,
+        description: group.description,
+        projects: all.filter((project) => project.group_ids?.includes(group.id)),
+      }))
+      .filter((item) => item.projects.length > 0)
+      .sort((a, b) => a.group.localeCompare(b.group))
+    const ungrouped = all.filter((project) => !project.group_ids?.length)
+    if (ungrouped.length > 0) {
+      result.push({
+        id: "",
+        group: ungroupedLabel,
+        description: undefined,
+        projects: ungrouped,
       })
-      .map(([group, projects]) => ({ group, projects }))
+    }
+    return result
   })
 
   const label = (directory: string) => {
@@ -73,13 +99,25 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
     return directory
   }
 
-  const resolve = (value: string[] | null) => {
+  const resolve = (value: SelectionResult | null) => {
     props.onSelect(value)
     dialog.close()
   }
 
   const submit = () => {
-    resolve(selected().length ? selected() : null)
+    const directories = selected()
+    if (directories.length === 0) {
+      resolve(null)
+      return
+    }
+    const selectedGroups = groupedProjects()
+      .filter((entry) => entry.id)
+      .filter((entry) => entry.projects.every((project) => directories.includes(project.worktree)))
+      .flatMap((entry) => (entry.id ? [entry.id] : []))
+    resolve({
+      directories,
+      selected_group_ids: selectedGroups,
+    })
   }
 
   const toggle = (directory: string) => {
@@ -132,7 +170,12 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
                         class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
                         onClick={() => toggleGroup(directories())}
                       >
-                        <div class="text-12-medium text-text-weak">{entry.group}</div>
+                        <div class="min-w-0">
+                          <div class="text-12-medium text-text-weak">{entry.group}</div>
+                          <Show when={entry.description}>
+                            <div class="mt-1 line-clamp-2 text-12-regular text-text-weak">{entry.description}</div>
+                          </Show>
+                        </div>
                         <div class="text-12-regular text-text-weak">
                           {selectedCount() === entry.projects.length ? "取消整组" : "选择整组"}
                           {selectedCount() > 0 ? ` (${selectedCount()}/${entry.projects.length})` : ""}

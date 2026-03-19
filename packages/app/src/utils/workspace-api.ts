@@ -6,6 +6,7 @@ export type WorkspaceProject = {
   sourceDirectory: string
   name?: string
   description?: string
+  group_ids?: string[]
   groups?: string[]
   primary?: boolean
   vcs?: "git"
@@ -17,6 +18,8 @@ export type WorkspaceInfo = {
   directory: string
   userID?: string
   primaryProjectID: string
+  selected_group_ids?: string[]
+  selected_groups?: string[]
   projects: WorkspaceProject[]
   time: {
     created: number
@@ -25,12 +28,15 @@ export type WorkspaceInfo = {
 }
 
 export function workspaceAsProject(workspace: WorkspaceInfo): Project {
-  const groups = Array.from(new Set(workspace.projects.flatMap((item) => item.groups ?? []))).sort((a, b) => a.localeCompare(b))
+  const groups = Array.from(new Set((workspace.selected_groups?.length ? workspace.selected_groups : workspace.projects.flatMap((item) => item.groups ?? [])))).sort((a, b) =>
+    a.localeCompare(b),
+  )
   return {
     id: workspace.id,
     worktree: workspace.directory,
     name: workspace.name,
     description: workspace.projects.map((item) => item.name).filter(Boolean).join(", ") || undefined,
+    group_ids: workspace.selected_group_ids ?? [],
     groups,
     sandboxes: [],
     vcs: "git",

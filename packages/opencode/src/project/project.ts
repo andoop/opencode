@@ -70,6 +70,8 @@ export namespace Project {
       vcs: z.literal("git").optional(),
       name: z.string().optional(),
       description: z.string().optional(),
+      profile_markdown: z.string().optional(),
+      group_ids: z.array(z.string()).default([]),
       groups: z.array(z.string()).default([]),
       icon: z
         .object({
@@ -136,6 +138,8 @@ export namespace Project {
       vcs: entry.vcs ?? userProject?.vcs,
       name: entry.name ?? userProject?.name,
       description: entry.description ?? userProject?.description,
+      profile_markdown: entry.profile_markdown ?? userProject?.profile_markdown,
+      group_ids: entry.group_ids,
       groups: entry.groups,
       icon: userProject?.icon,
       commands: userProject?.commands,
@@ -181,6 +185,8 @@ export namespace Project {
     const canonicalWorktree = registry?.directory ?? registryByProject?.directory ?? worktree
     const canonicalName = registry?.name ?? registryByProject?.name
     const canonicalDescription = registry?.description ?? registryByProject?.description
+    const canonicalProfile = registry?.profile_markdown ?? registryByProject?.profile_markdown
+    const canonicalGroupIDs = registry?.group_ids ?? registryByProject?.group_ids ?? []
     const canonicalGroups = registry?.groups ?? registryByProject?.groups ?? []
 
     const userID = currentUserID()
@@ -193,6 +199,8 @@ export namespace Project {
         vcs: vcs as Info["vcs"],
         name: canonicalName,
         description: canonicalDescription,
+        profile_markdown: canonicalProfile,
+        group_ids: canonicalGroupIDs,
         groups: canonicalGroups,
         sandboxes: [],
         time: {
@@ -216,6 +224,8 @@ export namespace Project {
       vcs: vcs as Info["vcs"],
       name: canonicalName ?? existing.name,
       description: canonicalDescription ?? existing.description,
+      profile_markdown: canonicalProfile ?? existing.profile_markdown,
+      group_ids: canonicalGroupIDs,
       groups: canonicalGroups,
       time: {
         ...existing.time,
@@ -344,6 +354,7 @@ export namespace Project {
       const key = projectKey(input.projectID, userID)
       const result = await Storage.update<Info>(key, (draft) => {
         draft.groups = draft.groups ?? []
+        draft.group_ids = draft.group_ids ?? []
         if (input.name !== undefined) draft.name = input.name
         if (input.icon !== undefined) {
           draft.icon = {

@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Project } from "../../project/project"
+import { GroupRegistry } from "../../project/group-registry"
 import { ProjectRegistry } from "../../project/registry"
 import z from "zod"
 import { errors } from "../error"
@@ -52,6 +53,151 @@ export const ProjectRoutes = lazy(() =>
       },
     )
     .get(
+      "/group",
+      describeRoute({
+        summary: "List project groups",
+        description: "List groups used to organize projects.",
+        operationId: "project.group.list",
+        responses: {
+          200: {
+            description: "Project groups",
+            content: {
+              "application/json": {
+                schema: resolver(GroupRegistry.Info.array()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const user = User.current()
+        const all = await GroupRegistry.list()
+        if (user?.role === "admin") return c.json(all)
+        const visible = await ProjectRegistry.list()
+        const groupIDs = new Set(
+          visible
+            .filter((item) => ProjectRegistry.visibleTo(item, { userID: user?.id, role: user?.role }))
+            .flatMap((item) => item.group_ids),
+        )
+        return c.json(all.filter((item) => groupIDs.has(item.id)))
+      },
+    )
+    .post(
+      "/group",
+      describeRoute({
+        summary: "Create project group",
+        description: "Create a group used to organize projects.",
+        operationId: "project.group.create",
+        responses: {
+          200: {
+            description: "Created project group",
+            content: {
+              "application/json": {
+                schema: resolver(GroupRegistry.Info),
+              },
+            },
+          },
+          ...errors(400, 403),
+        },
+      }),
+      requireAdmin(),
+      validator(
+        "json",
+        z.object({
+          name: z.string(),
+          description: z.string().optional(),
+          profile_markdown: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const user = User.current()
+        return c.json(
+          await GroupRegistry.add({
+            ...body,
+            created_by: user?.id,
+          }),
+        )
+      },
+    )
+    .patch(
+      "/group/:id",
+      describeRoute({
+        summary: "Update project group",
+        description: "Update a project group.",
+        operationId: "project.group.update",
+        responses: {
+          200: {
+            description: "Updated project group",
+            content: {
+              "application/json": {
+                schema: resolver(GroupRegistry.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      requireAdmin(),
+      validator("param", z.object({ id: z.string() })),
+      validator(
+        "json",
+        z.object({
+          name: z.string().optional(),
+          description: z.string().optional(),
+          profile_markdown: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const { id } = c.req.valid("param")
+        const body = c.req.valid("json")
+        return c.json(
+          await GroupRegistry.update(id, (draft) => {
+            if (body.name !== undefined) draft.name = body.name
+            if (body.description !== undefined) draft.description = body.description
+            if (body.profile_markdown !== undefined) draft.profile_markdown = body.profile_markdown
+          }),
+        )
+      },
+    )
+    .delete(
+      "/group/:id",
+      describeRoute({
+        summary: "Delete project group",
+        description: "Delete a project group.",
+        operationId: "project.group.delete",
+        responses: {
+          200: {
+            description: "Deleted project group",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ success: z.boolean() })),
+              },
+            },
+          },
+          ...errors(403, 404),
+        },
+      }),
+      requireAdmin(),
+      validator("param", z.object({ id: z.string() })),
+      async (c) => {
+        const { id } = c.req.valid("param")
+        const group = await GroupRegistry.get(id)
+        await GroupRegistry.remove(id)
+        await Promise.all(
+          (await ProjectRegistry.list())
+            .filter((item) => item.group_ids.includes(id))
+            .map((item) =>
+              ProjectRegistry.update(item.id, (draft) => {
+                draft.group_ids = draft.group_ids.filter((groupID) => groupID !== id)
+                draft.groups = draft.groups.filter((value) => value !== group.name)
+              }),
+            ),
+        )
+        return c.json({ success: true })
+      },
+    )
+    .get(
       "/registry",
       describeRoute({
         summary: "List registered projects",
@@ -99,7 +245,8 @@ export const ProjectRoutes = lazy(() =>
           directory: z.string(),
           name: z.string().optional(),
           description: z.string().optional(),
-          groups: z.array(z.string()).optional(),
+          profile_markdown: z.string().optional(),
+          group_ids: z.array(z.string()).optional(),
           visibility: z
             .object({
               mode: z.enum(["all", "include", "exclude"]).optional(),
@@ -111,8 +258,10 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         const user = User.current()
+        const groups = body.group_ids ? await GroupRegistry.names(body.group_ids) : undefined
         const project = await ProjectRegistry.add({
           ...body,
+          groups,
           created_by: user?.id,
         })
         return c.json(project)
@@ -143,7 +292,8 @@ export const ProjectRoutes = lazy(() =>
         z.object({
           name: z.string().optional(),
           description: z.string().optional(),
-          groups: z.array(z.string()).optional(),
+          profile_markdown: z.string().optional(),
+          group_ids: z.array(z.string()).optional(),
           visibility: z
             .object({
               mode: z.enum(["all", "include", "exclude"]).optional(),
@@ -155,10 +305,15 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const { id } = c.req.valid("param")
         const body = c.req.valid("json")
+        const groups = body.group_ids ? await GroupRegistry.names(body.group_ids) : undefined
         const project = await ProjectRegistry.update(id, (draft) => {
           if (body.name !== undefined) draft.name = body.name
           if (body.description !== undefined) draft.description = body.description
-          if (body.groups !== undefined) draft.groups = body.groups
+          if (body.profile_markdown !== undefined) draft.profile_markdown = body.profile_markdown
+          if (body.group_ids !== undefined) {
+            draft.group_ids = body.group_ids
+            draft.groups = groups ?? []
+          }
           if (body.visibility !== undefined) {
             draft.visibility = {
               ...draft.visibility,

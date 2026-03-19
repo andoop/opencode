@@ -24,6 +24,8 @@ export type Project = {
   vcs?: "git"
   name?: string
   description?: string
+  profile_markdown?: string
+  group_ids?: Array<string>
   groups?: Array<string>
   icon?: {
     url?: string
@@ -2119,12 +2121,15 @@ export type Workspace = {
   directory: string
   userID?: string
   primaryProjectID: string
+  selected_group_ids?: Array<string>
+  selected_groups?: Array<string>
   projects: Array<{
     projectID: string
     slug: string
     sourceDirectory: string
     name?: string
     description?: string
+    group_ids?: Array<string>
     groups?: Array<string>
     primary?: boolean
     vcs?: "git"
@@ -2229,6 +2234,8 @@ export type ProjectRegistry = {
   directory: string
   name?: string
   description?: string
+  profile_markdown?: string
+  group_ids?: Array<string>
   groups?: Array<string>
   visibility?: {
     mode?: "all" | "include" | "exclude"

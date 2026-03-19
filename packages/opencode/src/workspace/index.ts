@@ -3,6 +3,7 @@ import path from "path"
 import z from "zod"
 import { Identifier } from "@/id/id"
 import { Project } from "@/project/project"
+import { GroupRegistry } from "@/project/group-registry"
 import { Global } from "@/global"
 import { User } from "@/user"
 import { Flag } from "@/flag/flag"
@@ -27,6 +28,7 @@ export namespace Workspace {
     name: z.string().optional(),
     directories: z.array(z.string()).min(1),
     primaryProjectID: z.string().optional(),
+    selected_group_ids: z.array(z.string()).default([]).optional(),
   })
 
   export const ProjectInfo = z.object({
@@ -35,6 +37,7 @@ export namespace Workspace {
     sourceDirectory: z.string(),
     name: z.string().optional(),
     description: z.string().optional(),
+    group_ids: z.array(z.string()).default([]),
     groups: z.array(z.string()).default([]),
     primary: z.boolean().optional(),
     vcs: z.literal("git").optional(),
@@ -47,6 +50,8 @@ export namespace Workspace {
       directory: z.string(),
       userID: Identifier.schema("user").optional(),
       primaryProjectID: z.string(),
+      selected_group_ids: z.array(z.string()).default([]),
+      selected_groups: z.array(z.string()).default([]),
       projects: ProjectInfo.array(),
       time: z.object({
         created: z.number(),
@@ -187,6 +192,7 @@ export namespace Workspace {
           sourceDirectory: result.project.worktree,
           name: result.project.name,
           description: result.project.description,
+          group_ids: result.project.group_ids,
           groups: result.project.groups,
           primary: false,
           vcs: result.project.vcs,
@@ -205,6 +211,7 @@ export namespace Workspace {
 
   export async function create(input: z.input<typeof CreateInput>) {
     const { parsed, roots, primary } = await projectsFromDirectories(input)
+    const selectedGroups = await GroupRegistry.names(parsed.selected_group_ids ?? [])
     const id = Identifier.descending("workspace")
     const info = Info.parse({
       id,
@@ -212,6 +219,8 @@ export namespace Workspace {
       directory: root(id),
       userID: isMultiUserMode() ? User.current()?.id : undefined,
       primaryProjectID: primary.projectID,
+      selected_group_ids: parsed.selected_group_ids ?? [],
+      selected_groups: selectedGroups,
       projects: roots.map((item) => ({
         ...item,
         primary: item.projectID === primary.projectID,
@@ -232,13 +241,17 @@ export namespace Workspace {
       name: current.name,
       directories,
       primaryProjectID: primaryProjectID ?? current.primaryProjectID,
+      selected_group_ids: current.selected_group_ids ?? [],
     })
+    const selectedGroups = await GroupRegistry.names(current.selected_group_ids ?? [])
     const info = Info.parse({
       id: current.id,
       name: current.name,
       directory: current.directory,
       userID: current.userID,
       primaryProjectID: primary.projectID,
+      selected_group_ids: current.selected_group_ids ?? [],
+      selected_groups: selectedGroups,
       projects: roots.map((item) => ({
         ...item,
         primary: item.projectID === primary.projectID,
@@ -363,6 +376,8 @@ export namespace Workspace {
         .map((item) => item.name ?? path.basename(item.sourceDirectory))
         .join(", "),
       vcs: "git" as const,
+      group_ids: input.selected_group_ids,
+      groups: input.selected_groups,
       sandboxes: [],
       time: input.time,
     }

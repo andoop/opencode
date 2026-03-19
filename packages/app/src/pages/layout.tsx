@@ -1465,13 +1465,13 @@ export default function Layout(props: ParentProps) {
   }
 
   async function chooseProject() {
-    function resolve(directories: string[] | null) {
-      if (!directories?.length) return
+    function resolve(input: { directories: string[]; selected_group_ids: string[] } | null) {
+      if (!input?.directories.length) return
       workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
         method: "POST",
         token: auth.token ?? undefined,
         fetchFn: platform.fetch ?? fetch,
-        body: JSON.stringify({ directories }),
+        body: JSON.stringify(input),
       })
         .then((workspace) => {
           globalSync.set("project", (prev) => [

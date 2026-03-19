@@ -48,6 +48,8 @@ interface RegistryProject {
   directory: string
   name?: string
   description?: string
+  profile_markdown?: string
+  group_ids: string[]
   groups: string[]
   visibility: {
     mode: "all" | "include" | "exclude"
@@ -55,6 +57,19 @@ interface RegistryProject {
   }
   created_by?: string
   vcs?: "git"
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+interface GroupInfo {
+  id: string
+  slug: string
+  name: string
+  description?: string
+  profile_markdown?: string
+  created_by?: string
   time: {
     created: number
     updated: number
@@ -445,13 +460,6 @@ export default function AdminPage() {
     return message
   }
 
-  const parseProjectGroups = (value: string) =>
-    Array.from(new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b),
-    )
-
-  const projectGroupsValue = (groups: string[]) => groups.join(", ")
-
   const projectVisibilityLabel = (project: RegistryProject) => {
     if (project.visibility.mode === "all") return "所有用户可见"
     if (project.visibility.mode === "include") return `仅 ${project.visibility.user_ids.length} 个用户可见`
@@ -474,6 +482,14 @@ export default function AdminPage() {
     return response.json() as Promise<RegistryProject[]>
   }
 
+  const fetchGroups = async () => {
+    const response = await fetchFn(`${server.url}/project/group`, {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error("Failed to fetch groups")
+    return response.json() as Promise<GroupInfo[]>
+  }
+
   const fetchProviders = async () => {
     const response = await fetchFn(`${server.url}/provider`, {
       headers: authHeaders(),
@@ -493,6 +509,7 @@ export default function AdminPage() {
 
   const [users, { refetch }] = createResource(fetchUsers)
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects)
+  const [groups, { refetch: refetchGroups }] = createResource(fetchGroups)
   const [providers] = createResource(fetchProviders)
   const [auditSearch, setAuditSearch] = createSignal("")
   const [auditSearchDraft, setAuditSearchDraft] = createSignal("")
@@ -532,8 +549,10 @@ export default function AdminPage() {
   const [showEditDialog, setShowEditDialog] = createSignal(false)
   const [showResetPasswordDialog, setShowResetPasswordDialog] = createSignal(false)
   const [showProjectDialog, setShowProjectDialog] = createSignal(false)
+  const [showGroupDialog, setShowGroupDialog] = createSignal(false)
   const [editingUser, setEditingUser] = createSignal<UserInfo | null>(null)
   const [editingProject, setEditingProject] = createSignal<RegistryProject | null>(null)
+  const [editingGroup, setEditingGroup] = createSignal<GroupInfo | null>(null)
   const [error, setError] = createSignal<string | null>(null)
 
   // Create user form state
@@ -569,9 +588,13 @@ export default function AdminPage() {
   const [projectDirectory, setProjectDirectory] = createSignal("")
   const [projectName, setProjectName] = createSignal("")
   const [projectDescription, setProjectDescription] = createSignal("")
-  const [projectGroups, setProjectGroups] = createSignal("")
+  const [projectProfileMarkdown, setProjectProfileMarkdown] = createSignal("")
+  const [projectGroupIDs, setProjectGroupIDs] = createSignal<string[]>([])
   const [projectVisibilityMode, setProjectVisibilityMode] = createSignal<RegistryProject["visibility"]["mode"]>("all")
   const [projectVisibilityUserIDs, setProjectVisibilityUserIDs] = createSignal<string[]>([])
+  const [groupName, setGroupName] = createSignal("")
+  const [groupDescription, setGroupDescription] = createSignal("")
+  const [groupProfileMarkdown, setGroupProfileMarkdown] = createSignal("")
   const selectedAuditSession = createMemo(() =>
     (auditSessions() ?? []).find((item) => item.session.id === selectedAuditSessionID()),
   )
@@ -847,7 +870,8 @@ export default function AdminPage() {
           directory,
           name: projectName() || undefined,
           description: projectDescription() || undefined,
-          groups: parseProjectGroups(projectGroups()),
+          profile_markdown: projectProfileMarkdown() || undefined,
+          group_ids: projectGroupIDs(),
           visibility: {
             mode: projectVisibilityMode(),
             user_ids: projectVisibilityUserIDs(),
@@ -864,7 +888,8 @@ export default function AdminPage() {
       setProjectDirectory("")
       setProjectName("")
       setProjectDescription("")
-      setProjectGroups("")
+      setProjectProfileMarkdown("")
+      setProjectGroupIDs([])
       setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
       setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
       void refetchProjects()
@@ -882,7 +907,8 @@ export default function AdminPage() {
       setProjectDirectory(directory)
       setProjectName("")
       setProjectDescription("")
-      setProjectGroups("")
+      setProjectProfileMarkdown("")
+      setProjectGroupIDs([])
       setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
       setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
       setShowProjectDialog(true)
@@ -906,7 +932,8 @@ export default function AdminPage() {
     setProjectDirectory(project.directory)
     setProjectName(project.name ?? "")
     setProjectDescription(project.description ?? "")
-    setProjectGroups(projectGroupsValue(project.groups))
+    setProjectProfileMarkdown(project.profile_markdown ?? "")
+    setProjectGroupIDs(project.group_ids ?? [])
     setProjectVisibilityMode(project.visibility.mode)
     setProjectVisibilityUserIDs(project.visibility.user_ids)
     setShowProjectDialog(true)
@@ -929,7 +956,8 @@ export default function AdminPage() {
         body: JSON.stringify({
           name: projectName(),
           description: projectDescription(),
-          groups: parseProjectGroups(projectGroups()),
+          profile_markdown: projectProfileMarkdown() || undefined,
+          group_ids: projectGroupIDs(),
           visibility: {
             mode: projectVisibilityMode(),
             user_ids: projectVisibilityUserIDs(),
@@ -945,7 +973,8 @@ export default function AdminPage() {
       setProjectDirectory("")
       setProjectName("")
       setProjectDescription("")
-      setProjectGroups("")
+      setProjectProfileMarkdown("")
+      setProjectGroupIDs([])
       setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
       setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
       void refetchProjects()
@@ -969,6 +998,68 @@ export default function AdminPage() {
       void refetchProjects()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove project")
+    }
+  }
+
+  const openGroupDialog = (group?: GroupInfo) => {
+    setEditingGroup(group ?? null)
+    setError(null)
+    setGroupName(group?.name ?? "")
+    setGroupDescription(group?.description ?? "")
+    setGroupProfileMarkdown(group?.profile_markdown ?? "")
+    setShowGroupDialog(true)
+  }
+
+  const saveGroup = async () => {
+    setError(null)
+    try {
+      const editing = editingGroup()
+      const url = editing ? `${server.url}/project/group/${editing.id}` : `${server.url}/project/group`
+      const method = editing ? "PATCH" : "POST"
+      const response = await fetchFn(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          name: groupName(),
+          description: groupDescription() || undefined,
+          profile_markdown: groupProfileMarkdown() || undefined,
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || data.message || "Failed to save group")
+      }
+      setShowGroupDialog(false)
+      setEditingGroup(null)
+      setGroupName("")
+      setGroupDescription("")
+      setGroupProfileMarkdown("")
+      void refetchGroups()
+      void refetchProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save group")
+    }
+  }
+
+  const deleteGroup = async (group: GroupInfo) => {
+    if (!confirm(`Remove group ${group.name}?`)) return
+    setError(null)
+    try {
+      const response = await fetchFn(`${server.url}/project/group/${group.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || data.message || "Failed to remove group")
+      }
+      void refetchGroups()
+      void refetchProjects()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove group")
     }
   }
 
@@ -1128,6 +1219,64 @@ export default function AdminPage() {
                             Delete
                           </Button>
                         </Show>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </div>
+      </Show>
+
+      <div class="mt-10 mb-8 flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-semibold text-color-primary">分组管理</h2>
+          <p class="mt-1 text-sm text-color-secondary">维护分组名称、描述和提供给 AI 感知的 Markdown profile。</p>
+        </div>
+        <Button variant="primary" onClick={() => openGroupDialog()}>
+          新建分组
+        </Button>
+      </div>
+
+      <Show when={groups.loading}>
+        <p class="text-color-secondary">Loading groups...</p>
+      </Show>
+
+      <Show when={groups.error}>
+        <p class="text-auxiliary-error">Failed to load groups</p>
+      </Show>
+
+      <Show when={groups()}>
+        <div class="overflow-x-auto rounded-lg border border-outline-dimmed">
+          <table class="min-w-[980px] w-full table-fixed">
+            <thead class="border-b border-outline-dimmed bg-background-frame">
+              <tr>
+                <th class="px-4 py-3 text-left text-sm font-medium">名称</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">描述</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">Profile</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">创建时间</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={groups()}>
+                {(group) => (
+                  <tr class="border-b border-outline-dimmed last:border-0">
+                    <td class="px-4 py-3">{group.name}</td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">
+                      <div class="line-clamp-3 whitespace-pre-wrap break-words">{group.description || "-"}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">{group.profile_markdown ? "已配置" : "-"}</td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">{formatDate(group.time.created)}</td>
+                    <td class="px-4 py-3">
+                      <div class="flex gap-2">
+                        <Button size="small" variant="ghost" onClick={() => openGroupDialog(group)}>
+                          {language.t("common.edit")}
+                        </Button>
+                        <Button size="small" variant="secondary" onClick={() => void deleteGroup(group)}>
+                          {language.t("common.delete")}
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1797,12 +1946,23 @@ export default function AdminPage() {
                 onChange={setProjectName}
                 placeholder={language.t("admin.projectDialog.displayNamePlaceholder")}
               />
-              <TextField
-                label="分组"
-                value={projectGroups()}
-                onChange={setProjectGroups}
-                placeholder="例如：业务一组, 前端, 核心项目"
-              />
+              <div>
+                <label class="block text-sm font-medium">所属分组</label>
+                <select
+                  multiple
+                  value={projectGroupIDs()}
+                  onChange={(e) => {
+                    const next = Array.from(e.currentTarget.selectedOptions).map((item) => item.value)
+                    setProjectGroupIDs(next)
+                  }}
+                  class="mt-1 min-h-36 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+                >
+                  <For each={groups() ?? []}>
+                    {(group) => <option value={group.id}>{group.name}</option>}
+                  </For>
+                </select>
+                <p class="mt-1 text-xs text-color-secondary">未选择任何分组时，项目会归到“未分组”。</p>
+              </div>
               <div>
                 <label class="block text-sm font-medium">{language.t("admin.projectDialog.description")}</label>
                 <textarea
@@ -1811,6 +1971,16 @@ export default function AdminPage() {
                   placeholder={language.t("admin.projectDialog.descriptionPlaceholder")}
                   rows={4}
                   class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium">项目 Profile Markdown</label>
+                <textarea
+                  value={projectProfileMarkdown()}
+                  onInput={(e) => setProjectProfileMarkdown(e.currentTarget.value)}
+                  placeholder="给 AI 感知的项目背景、术语、职责、边界和注意事项"
+                  rows={8}
+                  class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm font-mono"
                 />
               </div>
               <div>
@@ -1862,7 +2032,8 @@ export default function AdminPage() {
                   setProjectDirectory("")
                   setProjectName("")
                   setProjectDescription("")
-                  setProjectGroups("")
+                  setProjectProfileMarkdown("")
+                  setProjectGroupIDs([])
                   setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
                   setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
                 }}
@@ -1871,6 +2042,67 @@ export default function AdminPage() {
               </Button>
               <Button variant="primary" onClick={saveProject} disabled={!projectDirectory()}>
                 {editingProject() ? language.t("common.save") : language.t("admin.projectRegistry.add")}
+              </Button>
+            </div>
+          </KobalteDialog.Content>
+        </KobalteDialog.Portal>
+      </KobalteDialog>
+
+      <KobalteDialog open={showGroupDialog()} onOpenChange={setShowGroupDialog}>
+        <KobalteDialog.Portal>
+          <KobalteDialog.Overlay class="fixed inset-0 bg-black/50" />
+          <KobalteDialog.Content class="fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-outline-dimmed bg-background-base p-6">
+            <KobalteDialog.Title class="text-lg font-semibold">
+              {editingGroup() ? `编辑分组：${editingGroup()?.name}` : "新建分组"}
+            </KobalteDialog.Title>
+            <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
+              维护分组描述和提供给 AI 感知的 Markdown profile。
+            </KobalteDialog.Description>
+
+            <div class="mt-4 space-y-4">
+              <Show when={error()}>
+                <div class="rounded-md bg-auxiliary-error/10 p-3">
+                  <p class="text-sm text-auxiliary-error">{error()}</p>
+                </div>
+              </Show>
+              <TextField label="分组名称" value={groupName()} onChange={setGroupName} placeholder="例如：支付平台" />
+              <div>
+                <label class="block text-sm font-medium">分组描述</label>
+                <textarea
+                  value={groupDescription()}
+                  onInput={(e) => setGroupDescription(e.currentTarget.value)}
+                  placeholder="给用户看的分组摘要"
+                  rows={4}
+                  class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium">分组 Profile Markdown</label>
+                <textarea
+                  value={groupProfileMarkdown()}
+                  onInput={(e) => setGroupProfileMarkdown(e.currentTarget.value)}
+                  placeholder="给 AI 感知的分组背景、术语、职责边界、组内项目关系等"
+                  rows={12}
+                  class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowGroupDialog(false)
+                  setEditingGroup(null)
+                  setGroupName("")
+                  setGroupDescription("")
+                  setGroupProfileMarkdown("")
+                }}
+              >
+                {language.t("common.cancel")}
+              </Button>
+              <Button variant="primary" onClick={saveGroup} disabled={!groupName().trim()}>
+                {editingGroup() ? language.t("common.save") : "创建分组"}
               </Button>
             </div>
           </KobalteDialog.Content>

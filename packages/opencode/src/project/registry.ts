@@ -4,6 +4,7 @@ import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { NamedError } from "@opencode-ai/util/error"
 import z from "zod"
+import { GroupRegistry } from "./group-registry"
 import { resolveDirectory } from "./resolve"
 
 export namespace ProjectRegistry {
@@ -45,6 +46,8 @@ export namespace ProjectRegistry {
       directory: z.string(),
       name: z.string().optional(),
       description: z.string().optional(),
+      profile_markdown: z.string().optional(),
+      group_ids: z.array(z.string()).default([]),
       groups: z.array(z.string()).default([]),
       visibility: Visibility.default({ mode: "all", user_ids: [] }),
       created_by: z.string().optional(),
@@ -88,15 +91,31 @@ export namespace ProjectRegistry {
 
   export async function list() {
     const keys = await Storage.list(["project_registry"])
-    const items = await Promise.all(keys.map((x) => Storage.read<Info>(x).then(Info.parse).catch(() => undefined)))
+    const items = await Promise.all(
+      keys.map((x) =>
+        Storage.read<Info>(x)
+          .then(Info.parse)
+          .then(hydrate)
+          .catch(() => undefined),
+      ),
+    )
     return items
       .filter((x): x is Info => !!x)
       .sort((a, b) => (a.name ?? a.directory).localeCompare(b.name ?? b.directory))
   }
 
   export async function get(id: string) {
-    return Storage.read<Info>(key(id)).then(Info.parse)
+    return Storage.read<Info>(key(id)).then(Info.parse).then(hydrate)
   }
+  async function hydrate(info: Info) {
+    if (info.group_ids.length === 0) return info
+    const groups = await GroupRegistry.names(info.group_ids)
+    return {
+      ...info,
+      groups: normalizeGroups(groups),
+    }
+  }
+
 
   export async function findByDirectory(directory: string) {
     const items = await list()
@@ -112,6 +131,8 @@ export namespace ProjectRegistry {
     directory: string
     name?: string
     description?: string
+    profile_markdown?: string
+    group_ids?: string[]
     groups?: string[]
     visibility?: Partial<Visibility>
     created_by?: string
@@ -131,6 +152,8 @@ export namespace ProjectRegistry {
     const existing = await findByDirectory(resolved.worktree)
     if (existing) throw new DuplicateError({ directory: resolved.worktree })
 
+    const group_ids = Array.from(new Set(input.group_ids ?? [])).filter(Boolean)
+    const groups = input.groups ?? (await GroupRegistry.names(group_ids))
     const now = Date.now()
     const info: Info = {
       id: crypto.randomUUID(),
@@ -138,7 +161,9 @@ export namespace ProjectRegistry {
       directory: resolved.worktree,
       name: input.name?.trim() || undefined,
       description: input.description?.trim() || undefined,
-      groups: normalizeGroups(input.groups),
+      profile_markdown: input.profile_markdown?.trim() || undefined,
+      group_ids,
+      groups: normalizeGroups(groups),
       visibility: normalizeVisibility(input.visibility),
       created_by: input.created_by,
       vcs: resolved.vcs,
@@ -160,6 +185,8 @@ export namespace ProjectRegistry {
       editor(draft)
       draft.name = draft.name?.trim() || undefined
       draft.description = draft.description?.trim() || undefined
+      draft.profile_markdown = draft.profile_markdown?.trim() || undefined
+      draft.group_ids = Array.from(new Set(draft.group_ids ?? [])).filter(Boolean)
       draft.groups = normalizeGroups(draft.groups)
       draft.visibility = normalizeVisibility(draft.visibility)
       draft.time.updated = Date.now()

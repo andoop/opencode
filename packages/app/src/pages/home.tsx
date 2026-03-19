@@ -65,13 +65,13 @@ export default function Home() {
     navigate(`/${base64Encode(directory)}`)
   }
 
-  function createWorkspace(directories: string[] | null) {
-    if (!directories?.length) return
+  function createWorkspace(input: { directories: string[]; selected_group_ids: string[] } | null) {
+    if (!input?.directories.length) return
     workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
       method: "POST",
       token: auth.token ?? undefined,
       fetchFn: fetch,
-      body: JSON.stringify({ directories }),
+      body: JSON.stringify(input),
     })
       .then((workspace) => {
         sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
