@@ -70,6 +70,7 @@ export namespace Project {
       vcs: z.literal("git").optional(),
       name: z.string().optional(),
       description: z.string().optional(),
+      groups: z.array(z.string()).default([]),
       icon: z
         .object({
           url: z.string().optional(),
@@ -119,7 +120,7 @@ export namespace Project {
   async function loadUserProjects(userID: string) {
     const prefix = projectListPrefix(userID)
     const keys = await Storage.list(prefix)
-    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
+    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).then(Info.parse).catch(() => undefined)))
     return projects
       .filter((p): p is Info => !!p)
       .map((project) => ({
@@ -135,6 +136,7 @@ export namespace Project {
       vcs: entry.vcs ?? userProject?.vcs,
       name: entry.name ?? userProject?.name,
       description: entry.description ?? userProject?.description,
+      groups: entry.groups,
       icon: userProject?.icon,
       commands: userProject?.commands,
       sandboxes: userProject?.sandboxes?.filter((x) => existsSync(x)) ?? [],
@@ -179,10 +181,11 @@ export namespace Project {
     const canonicalWorktree = registry?.directory ?? registryByProject?.directory ?? worktree
     const canonicalName = registry?.name ?? registryByProject?.name
     const canonicalDescription = registry?.description ?? registryByProject?.description
+    const canonicalGroups = registry?.groups ?? registryByProject?.groups ?? []
 
     const userID = currentUserID()
     const key = projectKey(id, userID)
-    let existing = await Storage.read<Info>(key).catch(() => undefined)
+    let existing = await Storage.read<Info>(key).then(Info.parse).catch(() => undefined)
     if (!existing) {
       existing = {
         id,
@@ -190,6 +193,7 @@ export namespace Project {
         vcs: vcs as Info["vcs"],
         name: canonicalName,
         description: canonicalDescription,
+        groups: canonicalGroups,
         sandboxes: [],
         time: {
           created: Date.now(),
@@ -212,6 +216,7 @@ export namespace Project {
       vcs: vcs as Info["vcs"],
       name: canonicalName ?? existing.name,
       description: canonicalDescription ?? existing.description,
+      groups: canonicalGroups,
       time: {
         ...existing.time,
         updated: Date.now(),
@@ -302,10 +307,11 @@ export namespace Project {
     if (isMultiUserMode()) {
       const userID = currentUserID()
       if (!userID) return []
+      const role = currentUserRole()
 
       const userProjects = await loadUserProjects(userID)
-      const registry = await ProjectRegistry.list()
-      if (currentUserRole() === "admin") {
+      const registry = (await ProjectRegistry.list()).filter((entry) => ProjectRegistry.visibleTo(entry, { userID, role }))
+      if (role === "admin") {
         const merged = new Map(userProjects.map((project) => [project.worktree, project]))
         for (const entry of registry) {
           merged.set(entry.directory, mergeRegistryProject(entry, merged.get(entry.directory)))
@@ -317,7 +323,7 @@ export namespace Project {
 
     const prefix = projectListPrefix()
     const keys = await Storage.list(prefix)
-    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).catch(() => undefined)))
+    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).then(Info.parse).catch(() => undefined)))
     return projects
       .filter((p): p is Info => !!p)
       .map((project) => ({
@@ -337,6 +343,7 @@ export namespace Project {
       const userID = currentUserID()
       const key = projectKey(input.projectID, userID)
       const result = await Storage.update<Info>(key, (draft) => {
+        draft.groups = draft.groups ?? []
         if (input.name !== undefined) draft.name = input.name
         if (input.icon !== undefined) {
           draft.icon = {
@@ -358,13 +365,14 @@ export namespace Project {
 
         draft.time.updated = Date.now()
       })
+      const parsed = Info.parse(result)
       GlobalBus.emit("event", {
         payload: {
           type: Event.Updated.type,
-          properties: result,
+          properties: parsed,
         },
       })
-      return result
+      return parsed
     },
   )
 

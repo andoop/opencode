@@ -27,6 +27,8 @@ export namespace Vcs {
     recentBranches: z.array(z.string()).optional(),
     localBranches: z.array(z.string()).optional(),
     remoteBranches: z.array(z.string()).optional(),
+  }).meta({
+    ref: "VcsSubmoduleInfo",
   })
   export const SubmoduleInfo = SubmoduleInfoSchema
   export type SubmoduleInfo = z.infer<typeof SubmoduleInfoSchema>

@@ -69,7 +69,6 @@ import { DialogSettings } from "@/components/dialog-settings"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { navStart } from "@/utils/perf"
-import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogSelectProject } from "@/components/dialog-select-project"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
@@ -1466,36 +1465,8 @@ export default function Layout(props: ParentProps) {
   }
 
   async function chooseProject() {
-    if (!auth.isAdmin) {
-      dialog.show(
-        () => (
-          <DialogSelectProject
-            onSelect={(result) => {
-              if (!result?.length) return
-              workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
-                method: "POST",
-                token: auth.token ?? undefined,
-                fetchFn: platform.fetch ?? fetch,
-                body: JSON.stringify({ directories: result }),
-              })
-                .then((workspace) => {
-                  globalSync.set("project", (prev) => [
-                    workspaceAsProject(workspace),
-                    ...prev.filter((item) => item.id !== workspace.id),
-                  ])
-                  openProject(workspace.directory)
-                })
-                .catch(() => undefined)
-            }}
-          />
-        ),
-      )
-      return
-    }
-
-    function resolve(result: string | string[] | null) {
-      const directories = Array.isArray(result) ? result : result ? [result] : []
-      if (directories.length === 0) return
+    function resolve(directories: string[] | null) {
+      if (!directories?.length) return
       workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
         method: "POST",
         token: auth.token ?? undefined,
@@ -1512,18 +1483,15 @@ export default function Layout(props: ParentProps) {
         .catch(() => undefined)
     }
 
-    if (platform.openDirectoryPickerDialog && server.isLocal()) {
-      const result = await platform.openDirectoryPickerDialog?.({
-        title: language.t("workspace.new"),
-        multiple: true,
-      })
-      resolve(result)
-    } else {
-      dialog.show(
-        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
-        () => resolve(null),
-      )
-    }
+    dialog.show(
+      () => (
+        <DialogSelectProject
+          onSelect={(result) => {
+            resolve(result)
+          }}
+        />
+      ),
+    )
   }
 
   const errorMessage = (err: unknown) => {

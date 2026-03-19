@@ -48,6 +48,11 @@ interface RegistryProject {
   directory: string
   name?: string
   description?: string
+  groups: string[]
+  visibility: {
+    mode: "all" | "include" | "exclude"
+    user_ids: string[]
+  }
   created_by?: string
   vcs?: "git"
   time: {
@@ -139,6 +144,10 @@ const FEATURE_ROWS = [
 ] as const
 
 const DEFAULT_REGISTER_MODELS = ["cursor-cli/auto", "cursor-cli/composer-1", "cursor-cli/composer-1.5"]
+const DEFAULT_PROJECT_VISIBILITY: RegistryProject["visibility"] = {
+  mode: "all",
+  user_ids: [],
+}
 
 function createRegisteredFeatures(): FeatureState {
   return {
@@ -436,6 +445,19 @@ export default function AdminPage() {
     return message
   }
 
+  const parseProjectGroups = (value: string) =>
+    Array.from(new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b),
+    )
+
+  const projectGroupsValue = (groups: string[]) => groups.join(", ")
+
+  const projectVisibilityLabel = (project: RegistryProject) => {
+    if (project.visibility.mode === "all") return "所有用户可见"
+    if (project.visibility.mode === "include") return `仅 ${project.visibility.user_ids.length} 个用户可见`
+    return `对 ${project.visibility.user_ids.length} 个用户隐藏`
+  }
+
   const fetchUsers = async () => {
     const response = await fetchFn(`${server.url}/user`, {
       headers: authHeaders(),
@@ -547,6 +569,9 @@ export default function AdminPage() {
   const [projectDirectory, setProjectDirectory] = createSignal("")
   const [projectName, setProjectName] = createSignal("")
   const [projectDescription, setProjectDescription] = createSignal("")
+  const [projectGroups, setProjectGroups] = createSignal("")
+  const [projectVisibilityMode, setProjectVisibilityMode] = createSignal<RegistryProject["visibility"]["mode"]>("all")
+  const [projectVisibilityUserIDs, setProjectVisibilityUserIDs] = createSignal<string[]>([])
   const selectedAuditSession = createMemo(() =>
     (auditSessions() ?? []).find((item) => item.session.id === selectedAuditSessionID()),
   )
@@ -822,6 +847,11 @@ export default function AdminPage() {
           directory,
           name: projectName() || undefined,
           description: projectDescription() || undefined,
+          groups: parseProjectGroups(projectGroups()),
+          visibility: {
+            mode: projectVisibilityMode(),
+            user_ids: projectVisibilityUserIDs(),
+          },
         }),
       })
       if (!response.ok) {
@@ -834,6 +864,9 @@ export default function AdminPage() {
       setProjectDirectory("")
       setProjectName("")
       setProjectDescription("")
+      setProjectGroups("")
+      setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
+      setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
       void refetchProjects()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add project")
@@ -849,6 +882,9 @@ export default function AdminPage() {
       setProjectDirectory(directory)
       setProjectName("")
       setProjectDescription("")
+      setProjectGroups("")
+      setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
+      setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
       setShowProjectDialog(true)
     }
 
@@ -870,6 +906,9 @@ export default function AdminPage() {
     setProjectDirectory(project.directory)
     setProjectName(project.name ?? "")
     setProjectDescription(project.description ?? "")
+    setProjectGroups(projectGroupsValue(project.groups))
+    setProjectVisibilityMode(project.visibility.mode)
+    setProjectVisibilityUserIDs(project.visibility.user_ids)
     setShowProjectDialog(true)
   }
 
@@ -890,6 +929,11 @@ export default function AdminPage() {
         body: JSON.stringify({
           name: projectName(),
           description: projectDescription(),
+          groups: parseProjectGroups(projectGroups()),
+          visibility: {
+            mode: projectVisibilityMode(),
+            user_ids: projectVisibilityUserIDs(),
+          },
         }),
       })
       if (!response.ok) {
@@ -901,6 +945,9 @@ export default function AdminPage() {
       setProjectDirectory("")
       setProjectName("")
       setProjectDescription("")
+      setProjectGroups("")
+      setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
+      setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
       void refetchProjects()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update project")
@@ -1115,6 +1162,8 @@ export default function AdminPage() {
             <thead class="border-b border-outline-dimmed bg-background-frame">
               <tr>
                 <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.name")}</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">分组</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">可见范围</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.description")}</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.directory")}</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.added")}</th>
@@ -1126,6 +1175,10 @@ export default function AdminPage() {
                 {(project) => (
                   <tr class="border-b border-outline-dimmed last:border-0">
                     <td class="px-4 py-3">{project.name || "-"}</td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">
+                      <div class="line-clamp-3 whitespace-pre-wrap break-words">{project.groups.join(", ") || "未分组"}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-color-secondary">{projectVisibilityLabel(project)}</td>
                     <td class="max-w-md px-4 py-3 text-sm text-color-secondary">
                       <div class="line-clamp-3 whitespace-pre-wrap break-words">{project.description || "-"}</div>
                     </td>
@@ -1744,6 +1797,12 @@ export default function AdminPage() {
                 onChange={setProjectName}
                 placeholder={language.t("admin.projectDialog.displayNamePlaceholder")}
               />
+              <TextField
+                label="分组"
+                value={projectGroups()}
+                onChange={setProjectGroups}
+                placeholder="例如：业务一组, 前端, 核心项目"
+              />
               <div>
                 <label class="block text-sm font-medium">{language.t("admin.projectDialog.description")}</label>
                 <textarea
@@ -1754,6 +1813,43 @@ export default function AdminPage() {
                   class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
                 />
               </div>
+              <div>
+                <label class="block text-sm font-medium">项目可见范围</label>
+                <select
+                  value={projectVisibilityMode()}
+                  onChange={(e) => {
+                    const mode = e.currentTarget.value as RegistryProject["visibility"]["mode"]
+                    setProjectVisibilityMode(mode)
+                    if (mode === "all") setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
+                  }}
+                  class="mt-1 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+                >
+                  <option value="all">所有用户可见</option>
+                  <option value="include">仅指定用户可见</option>
+                  <option value="exclude">对指定用户隐藏</option>
+                </select>
+              </div>
+              <Show when={projectVisibilityMode() !== "all"}>
+                <div>
+                  <label class="block text-sm font-medium">
+                    {projectVisibilityMode() === "include" ? "选择可见用户" : "选择隐藏用户"}
+                  </label>
+                  <select
+                    multiple
+                    value={projectVisibilityUserIDs()}
+                    onChange={(e) => {
+                      const next = Array.from(e.currentTarget.selectedOptions).map((item) => item.value)
+                      setProjectVisibilityUserIDs(next)
+                    }}
+                    class="mt-1 min-h-36 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
+                  >
+                    <For each={users() ?? []}>
+                      {(user) => <option value={user.id}>{user.username}</option>}
+                    </For>
+                  </select>
+                  <p class="mt-1 text-xs text-color-secondary">按住 Command 或 Ctrl 可以多选。</p>
+                </div>
+              </Show>
               <TextField label={language.t("admin.projectDialog.directory")} value={projectDirectory()} disabled />
             </div>
 
@@ -1766,6 +1862,9 @@ export default function AdminPage() {
                   setProjectDirectory("")
                   setProjectName("")
                   setProjectDescription("")
+                  setProjectGroups("")
+                  setProjectVisibilityMode(DEFAULT_PROJECT_VISIBILITY.mode)
+                  setProjectVisibilityUserIDs(DEFAULT_PROJECT_VISIBILITY.user_ids)
                 }}
               >
                 {language.t("common.cancel")}

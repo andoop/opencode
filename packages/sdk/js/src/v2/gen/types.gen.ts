@@ -24,6 +24,7 @@ export type Project = {
   vcs?: "git"
   name?: string
   description?: string
+  groups?: Array<string>
   icon?: {
     url?: string
     override?: string
@@ -69,6 +70,227 @@ export type EventGlobalDisposed = {
   }
 }
 
+export type EventUserCreated = {
+  type: "user.created"
+  properties: {
+    info: {
+      id: string
+      username: string
+      email?: string
+      role: "admin" | "user"
+      status: "active" | "disabled"
+      permission: {
+        level: "full" | "readonly" | "custom"
+        custom?: {
+          edit?: "allow" | "ask" | "deny"
+          write?: "allow" | "ask" | "deny"
+          bash?: "allow" | "ask" | "deny"
+          read?: "allow" | "ask" | "deny"
+        }
+        allowed_agents?: Array<"build" | "ask" | "plan">
+        features?: {
+          modes?: {
+            ask?: boolean
+            build?: boolean
+            plan?: boolean
+          }
+          files?: boolean
+          models?: boolean
+          providers?: boolean
+          servers?: boolean
+          mcp?: boolean
+        }
+        models?: Array<string> | null
+      }
+      time: {
+        created: number
+        updated: number
+        last_login?: number
+      }
+    }
+  }
+}
+
+export type EventUserUpdated = {
+  type: "user.updated"
+  properties: {
+    info: {
+      id: string
+      username: string
+      email?: string
+      role: "admin" | "user"
+      status: "active" | "disabled"
+      permission: {
+        level: "full" | "readonly" | "custom"
+        custom?: {
+          edit?: "allow" | "ask" | "deny"
+          write?: "allow" | "ask" | "deny"
+          bash?: "allow" | "ask" | "deny"
+          read?: "allow" | "ask" | "deny"
+        }
+        allowed_agents?: Array<"build" | "ask" | "plan">
+        features?: {
+          modes?: {
+            ask?: boolean
+            build?: boolean
+            plan?: boolean
+          }
+          files?: boolean
+          models?: boolean
+          providers?: boolean
+          servers?: boolean
+          mcp?: boolean
+        }
+        models?: Array<string> | null
+      }
+      time: {
+        created: number
+        updated: number
+        last_login?: number
+      }
+    }
+  }
+}
+
+export type EventUserDeleted = {
+  type: "user.deleted"
+  properties: {
+    info: {
+      id: string
+      username: string
+      email?: string
+      role: "admin" | "user"
+      status: "active" | "disabled"
+      permission: {
+        level: "full" | "readonly" | "custom"
+        custom?: {
+          edit?: "allow" | "ask" | "deny"
+          write?: "allow" | "ask" | "deny"
+          bash?: "allow" | "ask" | "deny"
+          read?: "allow" | "ask" | "deny"
+        }
+        allowed_agents?: Array<"build" | "ask" | "plan">
+        features?: {
+          modes?: {
+            ask?: boolean
+            build?: boolean
+            plan?: boolean
+          }
+          files?: boolean
+          models?: boolean
+          providers?: boolean
+          servers?: boolean
+          mcp?: boolean
+        }
+        models?: Array<string> | null
+      }
+      time: {
+        created: number
+        updated: number
+        last_login?: number
+      }
+    }
+  }
+}
+
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.share"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+  }
+}
+
 export type EventLspClientDiagnostics = {
   type: "lsp.client.diagnostics"
   properties: {
@@ -81,13 +303,6 @@ export type EventLspUpdated = {
   type: "lsp.updated"
   properties: {
     [key: string]: unknown
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
   }
 }
 
@@ -495,35 +710,6 @@ export type EventMessagePartRemoved = {
   }
 }
 
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-  }
-}
-
 export type SessionStatus =
   | {
       type: "idle"
@@ -631,6 +817,13 @@ export type EventSessionCompacted = {
   }
 }
 
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
 export type EventFileWatcherUpdated = {
   type: "file.watcher.updated"
   properties: {
@@ -666,72 +859,138 @@ export type EventTodoUpdated = {
   }
 }
 
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
+export type EventTaskCreated = {
+  type: "task.created"
   properties: {
-    text: string
+    task: {
+      id: string
+      sessionID: string
+      messageID: string
+      partID: string
+      kind: string
+      title: string
+      status: "pending" | "running" | "completed" | "failed" | "cancelled" | "manual_retry_pending"
+      progress?: {
+        current: number
+        total?: number
+        message?: string
+      }
+      retry: {
+        attempt: number
+        maxAttempts: number
+        lastError?: string
+      }
+      externalRef?: string
+      createdAt: number
+      updatedAt: number
+      completedAt?: number
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
   }
 }
 
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
+export type EventTaskUpdated = {
+  type: "task.updated"
   properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
+    task: {
+      id: string
+      sessionID: string
+      messageID: string
+      partID: string
+      kind: string
+      title: string
+      status: "pending" | "running" | "completed" | "failed" | "cancelled" | "manual_retry_pending"
+      progress?: {
+        current: number
+        total?: number
+        message?: string
+      }
+      retry: {
+        attempt: number
+        maxAttempts: number
+        lastError?: string
+      }
+      externalRef?: string
+      createdAt: number
+      updatedAt: number
+      completedAt?: number
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
   }
 }
 
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
+export type EventTaskCompleted = {
+  type: "task.completed"
   properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
+    task: {
+      id: string
+      sessionID: string
+      messageID: string
+      partID: string
+      kind: string
+      title: string
+      status: "pending" | "running" | "completed" | "failed" | "cancelled" | "manual_retry_pending"
+      progress?: {
+        current: number
+        total?: number
+        message?: string
+      }
+      retry: {
+        attempt: number
+        maxAttempts: number
+        lastError?: string
+      }
+      externalRef?: string
+      createdAt: number
+      updatedAt: number
+      completedAt?: number
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
   }
 }
 
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
+export type EventTaskFailed = {
+  type: "task.failed"
   properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
+    task: {
+      id: string
+      sessionID: string
+      messageID: string
+      partID: string
+      kind: string
+      title: string
+      status: "pending" | "running" | "completed" | "failed" | "cancelled" | "manual_retry_pending"
+      progress?: {
+        current: number
+        total?: number
+        message?: string
+      }
+      retry: {
+        attempt: number
+        maxAttempts: number
+        lastError?: string
+      }
+      externalRef?: string
+      createdAt: number
+      updatedAt: number
+      completedAt?: number
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
   }
 }
 
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
+export type EventTaskRecoveryPending = {
+  type: "task.recovery_pending"
   properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
+    taskIds: Array<string>
   }
 }
 
@@ -742,6 +1001,21 @@ export type EventCommandExecuted = {
     sessionID: string
     arguments: string
     messageID: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
   }
 }
 
@@ -758,8 +1032,26 @@ export type PermissionRuleset = Array<PermissionRule>
 export type Session = {
   id: string
   slug: string
+  workspaceID: string
   projectID: string
   directory: string
+  cwd: string
+  roots?: Array<{
+    projectID: string
+    slug: string
+    sourceDirectory: string
+    name?: string
+    description?: string
+    userWorktreeDirectory: string
+    sessionWorktreeDirectory: string
+    primary?: boolean
+    vcs?: "git"
+    branch?: string
+    baseBranch?: string
+    baseCommit?: string
+    headCommit?: string
+  }>
+  userID?: string
   parentID?: string
   summary?: {
     additions: number
@@ -870,21 +1162,6 @@ export type EventPtyDeleted = {
   }
 }
 
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -892,30 +1169,40 @@ export type Event =
   | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventFileEdited
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartRemoved
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
-  | EventSessionCompacted
-  | EventFileWatcherUpdated
-  | EventTodoUpdated
+  | EventUserCreated
+  | EventUserUpdated
+  | EventUserDeleted
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartRemoved
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventQuestionAsked
+  | EventQuestionReplied
+  | EventQuestionRejected
+  | EventSessionCompacted
+  | EventFileEdited
+  | EventFileWatcherUpdated
+  | EventTodoUpdated
+  | EventTaskCreated
+  | EventTaskUpdated
+  | EventTaskCompleted
+  | EventTaskFailed
+  | EventTaskRecoveryPending
   | EventCommandExecuted
+  | EventWorktreeReady
+  | EventWorktreeFailed
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -926,8 +1213,6 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
-  | EventWorktreeReady
-  | EventWorktreeFailed
 
 export type GlobalEvent = {
   directory: string
@@ -1828,6 +2113,86 @@ export type BadRequestError = {
   success: false
 }
 
+export type Workspace = {
+  id: string
+  name: string
+  directory: string
+  userID?: string
+  primaryProjectID: string
+  projects: Array<{
+    projectID: string
+    slug: string
+    sourceDirectory: string
+    name?: string
+    description?: string
+    groups?: Array<string>
+    primary?: boolean
+    vcs?: "git"
+  }>
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
+export type UserAuthLoginResponse = {
+  token: string
+  user: {
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }
+}
+
+export type UnauthorizedError = {
+  error: string
+}
+
+export type ForbiddenError = {
+  error: string
+}
+
+export type RefreshResponse = {
+  token: string
+}
+
 export type OAuth = {
   type: "oauth"
   refresh: string
@@ -1850,10 +2215,30 @@ export type WellKnownAuth = {
 
 export type Auth = OAuth | ApiAuth | WellKnownAuth
 
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
+export type FileNode = {
+  name: string
+  path: string
+  absolute: string
+  type: "file" | "directory"
+  ignored: boolean
+}
+
+export type ProjectRegistry = {
+  id: string
+  project_id: string
+  directory: string
+  name?: string
+  description?: string
+  groups?: Array<string>
+  visibility?: {
+    mode?: "all" | "include" | "exclude"
+    user_ids?: Array<string>
+  }
+  created_by?: string
+  vcs?: "git"
+  time: {
+    created: number
+    updated: number
   }
 }
 
@@ -1982,6 +2367,45 @@ export type McpResource = {
   client: string
 }
 
+export type SessionAdminAuditSummary = {
+  sessions: number
+  users: number
+  projects: number
+  prompts: number
+  last_activity?: number
+}
+
+export type SessionAdminAuditEntry = {
+  session: Session
+  user: {
+    id?: string
+    username?: string
+  }
+  project: {
+    id: string
+    name?: string
+    description?: string
+    directory: string
+  }
+  message_count: number
+  prompt_count: number
+  last_prompt?: string
+  last_prompt_at?: number
+}
+
+export type SessionAdminConversationPart = {
+  type: string
+  count: number
+}
+
+export type SessionAdminConversationMessage = {
+  messageID: string
+  created: number
+  role: "user" | "assistant"
+  text?: string
+  parts: Array<SessionAdminConversationPart>
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -2050,14 +2474,6 @@ export type Symbol = {
   }
 }
 
-export type FileNode = {
-  name: string
-  path: string
-  absolute: string
-  type: "file" | "directory"
-  ignored: boolean
-}
-
 export type FileContent = {
   type: "text" | "binary"
   content: string
@@ -2124,11 +2540,11 @@ export type Path = {
   directory: string
 }
 
-export type SubmoduleInfo = {
+export type VcsSubmoduleInfo = {
   path: string
   commit?: string
   branch?: string
-  submodules?: Array<SubmoduleInfo>
+  submodules?: Array<VcsSubmoduleInfo>
   recentBranches?: Array<string>
   localBranches?: Array<string>
   remoteBranches?: Array<string>
@@ -2137,7 +2553,7 @@ export type SubmoduleInfo = {
 export type VcsInfo = {
   branch: string
   worktree?: string
-  submodules?: Array<SubmoduleInfo>
+  submodules?: Array<VcsSubmoduleInfo>
   branches?: Array<string>
 }
 
@@ -2186,6 +2602,69 @@ export type FormatterStatus = {
   extensions: Array<string>
   enabled: boolean
 }
+
+export type HealthCheckData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/health"
+}
+
+export type HealthCheckResponses = {
+  /**
+   * Server is healthy
+   */
+  200: {
+    status: string
+  }
+}
+
+export type HealthCheckResponse = HealthCheckResponses[keyof HealthCheckResponses]
+
+export type ConfigGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/config"
+}
+
+export type ConfigGetResponses = {
+  /**
+   * Get config info
+   */
+  200: Config
+}
+
+export type ConfigGetResponse = ConfigGetResponses[keyof ConfigGetResponses]
+
+export type ConfigUpdateData = {
+  body?: Config
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/config"
+}
+
+export type ConfigUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ConfigUpdateError = ConfigUpdateErrors[keyof ConfigUpdateErrors]
+
+export type ConfigUpdateResponses = {
+  /**
+   * Successfully updated config
+   */
+  200: Config
+}
+
+export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
 
 export type GlobalHealthData = {
   body?: never
@@ -2279,6 +2758,734 @@ export type GlobalDisposeResponses = {
 
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
 
+export type WorkspaceListData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/workspace"
+}
+
+export type WorkspaceListResponses = {
+  /**
+   * Workspace list
+   */
+  200: Array<Workspace>
+}
+
+export type WorkspaceListResponse = WorkspaceListResponses[keyof WorkspaceListResponses]
+
+export type WorkspaceCreateData = {
+  body?: {
+    name?: string
+    directories: Array<string>
+    primaryProjectID?: string
+  }
+  path?: never
+  query?: never
+  url: "/workspace"
+}
+
+export type WorkspaceCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type WorkspaceCreateError = WorkspaceCreateErrors[keyof WorkspaceCreateErrors]
+
+export type WorkspaceCreateResponses = {
+  /**
+   * Created workspace
+   */
+  200: Workspace
+}
+
+export type WorkspaceCreateResponse = WorkspaceCreateResponses[keyof WorkspaceCreateResponses]
+
+export type WorkspaceAvailableProjectsData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/workspace/available-projects"
+}
+
+export type WorkspaceAvailableProjectsResponses = {
+  /**
+   * Available projects
+   */
+  200: Array<Project>
+}
+
+export type WorkspaceAvailableProjectsResponse =
+  WorkspaceAvailableProjectsResponses[keyof WorkspaceAvailableProjectsResponses]
+
+export type WorkspaceDeleteData = {
+  body?: never
+  path: {
+    workspaceID: string
+  }
+  query?: never
+  url: "/workspace/{workspaceID}"
+}
+
+export type WorkspaceDeleteResponses = {
+  /**
+   * Deleted workspace
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type WorkspaceDeleteResponse = WorkspaceDeleteResponses[keyof WorkspaceDeleteResponses]
+
+export type WorkspaceGetData = {
+  body?: never
+  path: {
+    workspaceID: string
+  }
+  query?: never
+  url: "/workspace/{workspaceID}"
+}
+
+export type WorkspaceGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkspaceGetError = WorkspaceGetErrors[keyof WorkspaceGetErrors]
+
+export type WorkspaceGetResponses = {
+  /**
+   * Workspace
+   */
+  200: Workspace
+}
+
+export type WorkspaceGetResponse = WorkspaceGetResponses[keyof WorkspaceGetResponses]
+
+export type WorkspaceUpdateProjectsData = {
+  body?: {
+    directories: Array<string>
+    primaryProjectID?: string
+  }
+  path: {
+    workspaceID: string
+  }
+  query?: never
+  url: "/workspace/{workspaceID}/projects"
+}
+
+export type WorkspaceUpdateProjectsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkspaceUpdateProjectsError = WorkspaceUpdateProjectsErrors[keyof WorkspaceUpdateProjectsErrors]
+
+export type WorkspaceUpdateProjectsResponses = {
+  /**
+   * Updated workspace
+   */
+  200: Workspace
+}
+
+export type WorkspaceUpdateProjectsResponse = WorkspaceUpdateProjectsResponses[keyof WorkspaceUpdateProjectsResponses]
+
+export type WorkspaceResetDataData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/workspace/reset"
+}
+
+export type WorkspaceResetDataResponses = {
+  /**
+   * Reset complete
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type WorkspaceResetDataResponse = WorkspaceResetDataResponses[keyof WorkspaceResetDataResponses]
+
+export type UserAuthLoginData = {
+  body?: {
+    username: string
+    password: string
+  }
+  path?: never
+  query?: never
+  url: "/user-auth/login"
+}
+
+export type UserAuthLoginErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Unauthorized
+   */
+  401: UnauthorizedError
+}
+
+export type UserAuthLoginError = UserAuthLoginErrors[keyof UserAuthLoginErrors]
+
+export type UserAuthLoginResponses = {
+  /**
+   * Login successful
+   */
+  200: UserAuthLoginResponse
+}
+
+export type UserAuthLoginResponse2 = UserAuthLoginResponses[keyof UserAuthLoginResponses]
+
+export type UserAuthRegisterData = {
+  body?: {
+    phone: string
+    password: string
+    confirmPassword: string
+  }
+  path?: never
+  query?: never
+  url: "/user-auth/register"
+}
+
+export type UserAuthRegisterErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type UserAuthRegisterError = UserAuthRegisterErrors[keyof UserAuthRegisterErrors]
+
+export type UserAuthRegisterResponses = {
+  /**
+   * Register successful
+   */
+  200: UserAuthLoginResponse
+}
+
+export type UserAuthRegisterResponse = UserAuthRegisterResponses[keyof UserAuthRegisterResponses]
+
+export type UserAuthRefreshData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/user-auth/refresh"
+}
+
+export type UserAuthRefreshErrors = {
+  /**
+   * Unauthorized
+   */
+  401: UnauthorizedError
+}
+
+export type UserAuthRefreshError = UserAuthRefreshErrors[keyof UserAuthRefreshErrors]
+
+export type UserAuthRefreshResponses = {
+  /**
+   * Token refreshed
+   */
+  200: RefreshResponse
+}
+
+export type UserAuthRefreshResponse = UserAuthRefreshResponses[keyof UserAuthRefreshResponses]
+
+export type UserAuthMeData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/user-auth/me"
+}
+
+export type UserAuthMeErrors = {
+  /**
+   * Unauthorized
+   */
+  401: UnauthorizedError
+}
+
+export type UserAuthMeError = UserAuthMeErrors[keyof UserAuthMeErrors]
+
+export type UserAuthMeResponses = {
+  /**
+   * Current user info
+   */
+  200: {
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }
+}
+
+export type UserAuthMeResponse = UserAuthMeResponses[keyof UserAuthMeResponses]
+
+export type UserAuthChangePasswordData = {
+  body?: {
+    current_password: string
+    new_password: string
+  }
+  path?: never
+  query?: never
+  url: "/user-auth/change-password"
+}
+
+export type UserAuthChangePasswordErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Unauthorized
+   */
+  401: UnauthorizedError
+}
+
+export type UserAuthChangePasswordError = UserAuthChangePasswordErrors[keyof UserAuthChangePasswordErrors]
+
+export type UserAuthChangePasswordResponses = {
+  /**
+   * Password changed
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type UserAuthChangePasswordResponse = UserAuthChangePasswordResponses[keyof UserAuthChangePasswordResponses]
+
+export type UserListData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/user"
+}
+
+export type UserListErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type UserListError = UserListErrors[keyof UserListErrors]
+
+export type UserListResponses = {
+  /**
+   * List of users
+   */
+  200: Array<{
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }>
+}
+
+export type UserListResponse = UserListResponses[keyof UserListResponses]
+
+export type UserCreateData = {
+  body?: {
+    username: string
+    password: string
+    email?: string
+    role?: "admin" | "user"
+    permission?: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+  }
+  path?: never
+  query?: never
+  url: "/user"
+}
+
+export type UserCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type UserCreateError = UserCreateErrors[keyof UserCreateErrors]
+
+export type UserCreateResponses = {
+  /**
+   * User created
+   */
+  200: {
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }
+}
+
+export type UserCreateResponse = UserCreateResponses[keyof UserCreateResponses]
+
+export type UserDeleteData = {
+  body?: never
+  path: {
+    userID: string
+  }
+  query?: never
+  url: "/user/{userID}"
+}
+
+export type UserDeleteErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type UserDeleteError = UserDeleteErrors[keyof UserDeleteErrors]
+
+export type UserDeleteResponses = {
+  /**
+   * User deleted
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type UserDeleteResponse = UserDeleteResponses[keyof UserDeleteResponses]
+
+export type UserGetData = {
+  body?: never
+  path: {
+    userID: string
+  }
+  query?: never
+  url: "/user/{userID}"
+}
+
+export type UserGetErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type UserGetError = UserGetErrors[keyof UserGetErrors]
+
+export type UserGetResponses = {
+  /**
+   * User info
+   */
+  200: {
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }
+}
+
+export type UserGetResponse = UserGetResponses[keyof UserGetResponses]
+
+export type UserUpdateData = {
+  body?: {
+    username?: string
+    email?: string
+    role?: "admin" | "user"
+    status?: "active" | "disabled"
+    permission?: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+  }
+  path: {
+    userID: string
+  }
+  query?: never
+  url: "/user/{userID}"
+}
+
+export type UserUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type UserUpdateError = UserUpdateErrors[keyof UserUpdateErrors]
+
+export type UserUpdateResponses = {
+  /**
+   * User updated
+   */
+  200: {
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }
+}
+
+export type UserUpdateResponse = UserUpdateResponses[keyof UserUpdateResponses]
+
+export type UserResetPasswordData = {
+  body?: {
+    new_password: string
+  }
+  path: {
+    userID: string
+  }
+  query?: never
+  url: "/user/{userID}/reset-password"
+}
+
+export type UserResetPasswordErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type UserResetPasswordError = UserResetPasswordErrors[keyof UserResetPasswordErrors]
+
+export type UserResetPasswordResponses = {
+  /**
+   * Password reset
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type UserResetPasswordResponse = UserResetPasswordResponses[keyof UserResetPasswordResponses]
+
 export type AuthRemoveData = {
   body?: never
   path: {
@@ -2333,6 +3540,27 @@ export type AuthSetResponses = {
 
 export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
 
+export type BrowseListData = {
+  body?: never
+  path?: never
+  query: {
+    directory: string
+    path: string
+    type?: "file" | "directory"
+    limit?: number
+  }
+  url: "/browse/file"
+}
+
+export type BrowseListResponses = {
+  /**
+   * Files and directories
+   */
+  200: Array<FileNode>
+}
+
+export type BrowseListResponse = BrowseListResponses[keyof BrowseListResponses]
+
 export type ProjectListData = {
   body?: never
   path?: never
@@ -2350,6 +3578,153 @@ export type ProjectListResponses = {
 }
 
 export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
+
+export type ProjectRegistryListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/project/registry"
+}
+
+export type ProjectRegistryListErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type ProjectRegistryListError = ProjectRegistryListErrors[keyof ProjectRegistryListErrors]
+
+export type ProjectRegistryListResponses = {
+  /**
+   * Registered projects
+   */
+  200: Array<ProjectRegistry>
+}
+
+export type ProjectRegistryListResponse = ProjectRegistryListResponses[keyof ProjectRegistryListResponses]
+
+export type ProjectRegistryCreateData = {
+  body?: {
+    directory: string
+    name?: string
+    description?: string
+    groups?: Array<string>
+    visibility?: {
+      mode?: "all" | "include" | "exclude"
+      user_ids?: Array<string>
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/project/registry"
+}
+
+export type ProjectRegistryCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type ProjectRegistryCreateError = ProjectRegistryCreateErrors[keyof ProjectRegistryCreateErrors]
+
+export type ProjectRegistryCreateResponses = {
+  /**
+   * Registered project
+   */
+  200: ProjectRegistry
+}
+
+export type ProjectRegistryCreateResponse = ProjectRegistryCreateResponses[keyof ProjectRegistryCreateResponses]
+
+export type ProjectRegistryDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/project/registry/{id}"
+}
+
+export type ProjectRegistryDeleteErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectRegistryDeleteError = ProjectRegistryDeleteErrors[keyof ProjectRegistryDeleteErrors]
+
+export type ProjectRegistryDeleteResponses = {
+  /**
+   * Deleted registered project
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type ProjectRegistryDeleteResponse = ProjectRegistryDeleteResponses[keyof ProjectRegistryDeleteResponses]
+
+export type ProjectRegistryUpdateData = {
+  body?: {
+    name?: string
+    description?: string
+    groups?: Array<string>
+    visibility?: {
+      mode?: "all" | "include" | "exclude"
+      user_ids?: Array<string>
+    }
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/project/registry/{id}"
+}
+
+export type ProjectRegistryUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectRegistryUpdateError = ProjectRegistryUpdateErrors[keyof ProjectRegistryUpdateErrors]
+
+export type ProjectRegistryUpdateResponses = {
+  /**
+   * Updated registered project
+   */
+  200: ProjectRegistry
+}
+
+export type ProjectRegistryUpdateResponse = ProjectRegistryUpdateResponses[keyof ProjectRegistryUpdateResponses]
 
 export type ProjectCurrentData = {
   body?: never
@@ -2589,51 +3964,6 @@ export type PtyConnectResponses = {
 }
 
 export type PtyConnectResponse = PtyConnectResponses[keyof PtyConnectResponses]
-
-export type ConfigGetData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/config"
-}
-
-export type ConfigGetResponses = {
-  /**
-   * Get config info
-   */
-  200: Config
-}
-
-export type ConfigGetResponse = ConfigGetResponses[keyof ConfigGetResponses]
-
-export type ConfigUpdateData = {
-  body?: Config
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/config"
-}
-
-export type ConfigUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ConfigUpdateError = ConfigUpdateErrors[keyof ConfigUpdateErrors]
-
-export type ConfigUpdateResponses = {
-  /**
-   * Successfully updated config
-   */
-  200: Config
-}
-
-export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
 
 export type ConfigProvidersData = {
   body?: never
@@ -2876,6 +4206,7 @@ export type SessionCreateData = {
     parentID?: string
     title?: string
     permission?: PermissionRuleset
+    workspaceID?: string
   }
   path?: never
   query?: {
@@ -2901,6 +4232,93 @@ export type SessionCreateResponses = {
 }
 
 export type SessionCreateResponse = SessionCreateResponses[keyof SessionCreateResponses]
+
+export type SessionAdminSummaryData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/session/admin/summary"
+}
+
+export type SessionAdminSummaryErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type SessionAdminSummaryError = SessionAdminSummaryErrors[keyof SessionAdminSummaryErrors]
+
+export type SessionAdminSummaryResponses = {
+  /**
+   * Admin session summary
+   */
+  200: SessionAdminAuditSummary
+}
+
+export type SessionAdminSummaryResponse = SessionAdminSummaryResponses[keyof SessionAdminSummaryResponses]
+
+export type SessionAdminListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    search?: string
+    userID?: string
+    projectID?: string
+    limit?: number
+  }
+  url: "/session/admin/list"
+}
+
+export type SessionAdminListErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type SessionAdminListError = SessionAdminListErrors[keyof SessionAdminListErrors]
+
+export type SessionAdminListResponses = {
+  /**
+   * Admin session audit entries
+   */
+  200: Array<SessionAdminAuditEntry>
+}
+
+export type SessionAdminListResponse = SessionAdminListResponses[keyof SessionAdminListResponses]
+
+export type SessionAdminMessagesData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/admin/{sessionID}/messages"
+}
+
+export type SessionAdminMessagesErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type SessionAdminMessagesError = SessionAdminMessagesErrors[keyof SessionAdminMessagesErrors]
+
+export type SessionAdminMessagesResponses = {
+  /**
+   * Admin session conversation
+   */
+  200: Array<SessionAdminConversationMessage>
+}
+
+export type SessionAdminMessagesResponse = SessionAdminMessagesResponses[keyof SessionAdminMessagesResponses]
 
 export type SessionStatusData = {
   body?: never
@@ -3808,6 +5226,124 @@ export type PermissionRespondResponses = {
 
 export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
 
+export type TaskGetData = {
+  body?: never
+  path: {
+    taskId: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskId}"
+}
+
+export type TaskGetErrors = {
+  /**
+   * Task not found
+   */
+  404: unknown
+}
+
+export type TaskGetResponses = {
+  /**
+   * Task details
+   */
+  200: {
+    id: string
+    sessionID: string
+    messageID: string
+    partID: string
+    kind: string
+    title: string
+    status: "pending" | "running" | "completed" | "failed" | "cancelled" | "manual_retry_pending"
+    progress?: {
+      current: number
+      total?: number
+      message?: string
+    }
+    retry: {
+      attempt: number
+      maxAttempts: number
+      lastError?: string
+    }
+    externalRef?: string
+    createdAt: number
+    updatedAt: number
+    completedAt?: number
+    metadata?: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type TaskGetResponse = TaskGetResponses[keyof TaskGetResponses]
+
+export type TaskRetryData = {
+  body?: never
+  path: {
+    taskId: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskId}/retry"
+}
+
+export type TaskRetryErrors = {
+  /**
+   * Task cannot be retried
+   */
+  400: unknown
+  /**
+   * Task not found
+   */
+  404: unknown
+}
+
+export type TaskRetryResponses = {
+  /**
+   * Retry started
+   */
+  200: {
+    ok: true
+  }
+}
+
+export type TaskRetryResponse = TaskRetryResponses[keyof TaskRetryResponses]
+
+export type TaskCancelData = {
+  body?: never
+  path: {
+    taskId: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskId}/cancel"
+}
+
+export type TaskCancelErrors = {
+  /**
+   * Task cannot be cancelled
+   */
+  400: unknown
+  /**
+   * Task not found
+   */
+  404: unknown
+}
+
+export type TaskCancelResponses = {
+  /**
+   * Cancel requested
+   */
+  200: {
+    ok: true
+  }
+}
+
+export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
+
 export type PermissionReplyData = {
   body?: {
     reply: "once" | "always" | "reject"
@@ -4209,27 +5745,6 @@ export type FindSymbolsResponses = {
 
 export type FindSymbolsResponse = FindSymbolsResponses[keyof FindSymbolsResponses]
 
-export type BrowseListData = {
-  body?: never
-  path?: never
-  query: {
-    directory: string
-    path: string
-    type?: "file" | "directory"
-    limit?: number
-  }
-  url: "/browse/file"
-}
-
-export type BrowseListResponses = {
-  /**
-   * Files and directories
-   */
-  200: Array<FileNode>
-}
-
-export type BrowseListResponse = BrowseListResponses[keyof BrowseListResponses]
-
 export type FileListData = {
   body?: never
   path?: never
@@ -4285,6 +5800,24 @@ export type FileStatusResponses = {
 }
 
 export type FileStatusResponse = FileStatusResponses[keyof FileStatusResponses]
+
+export type FileDiffData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/file/diff"
+}
+
+export type FileDiffResponses = {
+  /**
+   * File diff
+   */
+  200: Array<FileDiff>
+}
+
+export type FileDiffResponse = FileDiffResponses[keyof FileDiffResponses]
 
 export type McpStatusData = {
   body?: never

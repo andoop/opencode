@@ -20,6 +20,7 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
   const [selected, setSelected] = createSignal<string[]>([])
   const [items, setItems] = createSignal<Project[]>([])
   const home = createMemo(() => "")
+  const ungroupedLabel = "未分组"
   createEffect(() => {
     workspaceFetch<Project[]>(sdk.url, "/workspace/available-projects", {
       token: auth.token ?? undefined,
@@ -37,12 +38,31 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
         return (
           (project.name ?? "").toLowerCase().includes(text) ||
           (project.description ?? "").toLowerCase().includes(text) ||
+          (project.groups ?? []).some((group) => group.toLowerCase().includes(text)) ||
           project.worktree.toLowerCase().includes(text) ||
           getFilename(project.worktree).toLowerCase().includes(text)
         )
       })
       .slice()
       .sort((a, b) => (a.name ?? a.worktree).localeCompare(b.name ?? b.worktree))
+  })
+  const groupedProjects = createMemo(() => {
+    const map = new Map<string, Project[]>()
+    for (const project of projects()) {
+      const groups = project.groups?.length ? project.groups : [ungroupedLabel]
+      for (const group of groups) {
+        const list = map.get(group) ?? []
+        list.push(project)
+        map.set(group, list)
+      }
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => {
+        if (a === ungroupedLabel) return 1
+        if (b === ungroupedLabel) return -1
+        return a.localeCompare(b)
+      })
+      .map(([group, projects]) => ({ group, projects }))
   })
 
   const label = (directory: string) => {
@@ -64,6 +84,14 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
 
   const toggle = (directory: string) => {
     setSelected((prev) => (prev.includes(directory) ? prev.filter((item) => item !== directory) : [...prev, directory]))
+  }
+
+  const toggleGroup = (directories: string[]) => {
+    setSelected((prev) => {
+      const allSelected = directories.every((directory) => prev.includes(directory))
+      if (allSelected) return prev.filter((item) => !directories.includes(item))
+      return Array.from(new Set([...prev, ...directories]))
+    })
   }
 
   return (
@@ -93,25 +121,47 @@ export function DialogSelectProject(props: { title?: string; onSelect: (director
               </div>
             }
           >
-            <div class="flex flex-col gap-1">
-              <For each={projects()}>
-                {(project) => (
-                  <button
-                    class="flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
-                    onClick={() => toggle(project.worktree)}
-                  >
-                    <div class="flex w-full items-center justify-between gap-3">
-                      <div class="text-14-medium text-text-strong">{project.name || getFilename(project.worktree)}</div>
-                      <Show when={selected().includes(project.worktree)}>
-                        <div class="text-12-regular text-text-weak">Selected</div>
-                      </Show>
+            <div class="flex flex-col gap-3">
+              <For each={groupedProjects()}>
+                {(entry) => {
+                  const directories = () => entry.projects.map((project) => project.worktree)
+                  const selectedCount = () => directories().filter((directory) => selected().includes(directory)).length
+                  return (
+                    <div class="flex flex-col gap-1">
+                      <button
+                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
+                        onClick={() => toggleGroup(directories())}
+                      >
+                        <div class="text-12-medium text-text-weak">{entry.group}</div>
+                        <div class="text-12-regular text-text-weak">
+                          {selectedCount() === entry.projects.length ? "取消整组" : "选择整组"}
+                          {selectedCount() > 0 ? ` (${selectedCount()}/${entry.projects.length})` : ""}
+                        </div>
+                      </button>
+                      <div class="flex flex-col gap-1 pl-2">
+                        <For each={entry.projects}>
+                          {(project) => (
+                            <button
+                              class="flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
+                              onClick={() => toggle(project.worktree)}
+                            >
+                              <div class="flex w-full items-center justify-between gap-3">
+                                <div class="text-14-medium text-text-strong">{project.name || getFilename(project.worktree)}</div>
+                                <Show when={selected().includes(project.worktree)}>
+                                  <div class="text-12-regular text-text-weak">Selected</div>
+                                </Show>
+                              </div>
+                              <Show when={project.description}>
+                                <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
+                              </Show>
+                              <div class="text-12-regular text-text-weak">{label(project.worktree)}</div>
+                            </button>
+                          )}
+                        </For>
+                      </div>
                     </div>
-                    <Show when={project.description}>
-                      <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
-                    </Show>
-                    <div class="text-12-regular text-text-weak">{label(project.worktree)}</div>
-                  </button>
-                )}
+                  )
+                }}
               </For>
             </div>
           </Show>

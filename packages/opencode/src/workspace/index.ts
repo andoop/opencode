@@ -35,6 +35,7 @@ export namespace Workspace {
     sourceDirectory: z.string(),
     name: z.string().optional(),
     description: z.string().optional(),
+    groups: z.array(z.string()).default([]),
     primary: z.boolean().optional(),
     vcs: z.literal("git").optional(),
   })
@@ -186,6 +187,7 @@ export namespace Workspace {
           sourceDirectory: result.project.worktree,
           name: result.project.name,
           description: result.project.description,
+          groups: result.project.groups,
           primary: false,
           vcs: result.project.vcs,
         })

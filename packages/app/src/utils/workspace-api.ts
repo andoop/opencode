@@ -6,6 +6,7 @@ export type WorkspaceProject = {
   sourceDirectory: string
   name?: string
   description?: string
+  groups?: string[]
   primary?: boolean
   vcs?: "git"
 }
@@ -24,11 +25,13 @@ export type WorkspaceInfo = {
 }
 
 export function workspaceAsProject(workspace: WorkspaceInfo): Project {
+  const groups = Array.from(new Set(workspace.projects.flatMap((item) => item.groups ?? []))).sort((a, b) => a.localeCompare(b))
   return {
     id: workspace.id,
     worktree: workspace.directory,
     name: workspace.name,
     description: workspace.projects.map((item) => item.name).filter(Boolean).join(", ") || undefined,
+    groups,
     sandboxes: [],
     vcs: "git",
     time: workspace.time,

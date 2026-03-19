@@ -99,6 +99,13 @@ export const ProjectRoutes = lazy(() =>
           directory: z.string(),
           name: z.string().optional(),
           description: z.string().optional(),
+          groups: z.array(z.string()).optional(),
+          visibility: z
+            .object({
+              mode: z.enum(["all", "include", "exclude"]).optional(),
+              user_ids: z.array(z.string()).optional(),
+            })
+            .optional(),
         }),
       ),
       async (c) => {
@@ -136,6 +143,13 @@ export const ProjectRoutes = lazy(() =>
         z.object({
           name: z.string().optional(),
           description: z.string().optional(),
+          groups: z.array(z.string()).optional(),
+          visibility: z
+            .object({
+              mode: z.enum(["all", "include", "exclude"]).optional(),
+              user_ids: z.array(z.string()).optional(),
+            })
+            .optional(),
         }),
       ),
       async (c) => {
@@ -144,6 +158,13 @@ export const ProjectRoutes = lazy(() =>
         const project = await ProjectRegistry.update(id, (draft) => {
           if (body.name !== undefined) draft.name = body.name
           if (body.description !== undefined) draft.description = body.description
+          if (body.groups !== undefined) draft.groups = body.groups
+          if (body.visibility !== undefined) {
+            draft.visibility = {
+              ...draft.visibility,
+              ...body.visibility,
+            }
+          }
         })
         return c.json(project)
       },

@@ -9,11 +9,11 @@ import type {
   AppLogResponses,
   AppSkillsResponses,
   Auth as Auth3,
-  BrowseListResponses,
   AuthRemoveErrors,
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  BrowseListResponses,
   CommandListResponses,
   Config as Config3,
   ConfigGetResponses,
@@ -26,6 +26,7 @@ import type {
   EventTuiSessionSelect,
   EventTuiToastShow,
   ExperimentalResourceListResponses,
+  FileDiffResponses,
   FileListResponses,
   FilePartInput,
   FilePartSource,
@@ -41,6 +42,7 @@ import type {
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
+  HealthCheckResponses,
   InstanceDisposeResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -72,6 +74,14 @@ import type {
   PermissionRuleset,
   ProjectCurrentResponses,
   ProjectListResponses,
+  ProjectRegistryCreateErrors,
+  ProjectRegistryCreateResponses,
+  ProjectRegistryDeleteErrors,
+  ProjectRegistryDeleteResponses,
+  ProjectRegistryListErrors,
+  ProjectRegistryListResponses,
+  ProjectRegistryUpdateErrors,
+  ProjectRegistryUpdateResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
   ProviderAuthResponses,
@@ -99,6 +109,12 @@ import type {
   QuestionReplyResponses,
   SessionAbortErrors,
   SessionAbortResponses,
+  SessionAdminListErrors,
+  SessionAdminListResponses,
+  SessionAdminMessagesErrors,
+  SessionAdminMessagesResponses,
+  SessionAdminSummaryErrors,
+  SessionAdminSummaryResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandErrors,
@@ -141,6 +157,12 @@ import type {
   SessionUpdateErrors,
   SessionUpdateResponses,
   SubtaskPartInput,
+  TaskCancelErrors,
+  TaskCancelResponses,
+  TaskGetErrors,
+  TaskGetResponses,
+  TaskRetryErrors,
+  TaskRetryResponses,
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
@@ -163,7 +185,39 @@ import type {
   TuiSelectSessionResponses,
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
+  UserAuthChangePasswordErrors,
+  UserAuthChangePasswordResponses,
+  UserAuthLoginErrors,
+  UserAuthLoginResponses,
+  UserAuthMeErrors,
+  UserAuthMeResponses,
+  UserAuthRefreshErrors,
+  UserAuthRefreshResponses,
+  UserAuthRegisterErrors,
+  UserAuthRegisterResponses,
+  UserCreateErrors,
+  UserCreateResponses,
+  UserDeleteErrors,
+  UserDeleteResponses,
+  UserGetErrors,
+  UserGetResponses,
+  UserListErrors,
+  UserListResponses,
+  UserResetPasswordErrors,
+  UserResetPasswordResponses,
+  UserUpdateErrors,
+  UserUpdateResponses,
   VcsGetResponses,
+  WorkspaceAvailableProjectsResponses,
+  WorkspaceCreateErrors,
+  WorkspaceCreateResponses,
+  WorkspaceDeleteResponses,
+  WorkspaceGetErrors,
+  WorkspaceGetResponses,
+  WorkspaceListResponses,
+  WorkspaceResetDataResponses,
+  WorkspaceUpdateProjectsErrors,
+  WorkspaceUpdateProjectsResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
@@ -219,7 +273,96 @@ class HeyApiRegistry<T> {
   }
 }
 
+export class Health extends HeyApiClient {
+  /**
+   * Health check
+   *
+   * Check if the server is running
+   */
+  public check<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<HealthCheckResponses, unknown, ThrowOnError>({
+      url: "/health",
+      ...options,
+    })
+  }
+}
+
 export class Config extends HeyApiClient {
+  /**
+   * Get configuration
+   *
+   * Retrieve the current OpenCode configuration settings and preferences.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ConfigGetResponses, unknown, ThrowOnError>({
+      url: "/config",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update configuration
+   *
+   * Update OpenCode configuration settings and preferences.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      config?: Config3
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "config", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<ConfigUpdateResponses, ConfigUpdateErrors, ThrowOnError>({
+      url: "/config",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List config providers
+   *
+   * Get a list of all configured AI providers and their default models.
+   */
+  public providers<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ConfigProvidersResponses, unknown, ThrowOnError>({
+      url: "/config/providers",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Config2 extends HeyApiClient {
   /**
    * Get global configuration
    *
@@ -294,9 +437,501 @@ export class Global extends HeyApiClient {
     })
   }
 
-  private _config?: Config
-  get config(): Config {
-    return (this._config ??= new Config({ client: this.client }))
+  private _config?: Config2
+  get config(): Config2 {
+    return (this._config ??= new Config2({ client: this.client }))
+  }
+}
+
+export class Workspace extends HeyApiClient {
+  /**
+   * List workspaces
+   */
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<WorkspaceListResponses, unknown, ThrowOnError>({
+      url: "/workspace",
+      ...options,
+    })
+  }
+
+  /**
+   * Create workspace
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      name?: string
+      directories?: Array<string>
+      primaryProjectID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "name" },
+            { in: "body", key: "directories" },
+            { in: "body", key: "primaryProjectID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkspaceCreateResponses, WorkspaceCreateErrors, ThrowOnError>({
+      url: "/workspace",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List available projects
+   */
+  public availableProjects<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<WorkspaceAvailableProjectsResponses, unknown, ThrowOnError>({
+      url: "/workspace/available-projects",
+      ...options,
+    })
+  }
+
+  /**
+   * Delete workspace
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      workspaceID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "workspaceID" }] }])
+    return (options?.client ?? this.client).delete<WorkspaceDeleteResponses, unknown, ThrowOnError>({
+      url: "/workspace/{workspaceID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get workspace
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      workspaceID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "workspaceID" }] }])
+    return (options?.client ?? this.client).get<WorkspaceGetResponses, WorkspaceGetErrors, ThrowOnError>({
+      url: "/workspace/{workspaceID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update workspace projects
+   */
+  public updateProjects<ThrowOnError extends boolean = false>(
+    parameters: {
+      workspaceID: string
+      directories?: Array<string>
+      primaryProjectID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "workspaceID" },
+            { in: "body", key: "directories" },
+            { in: "body", key: "primaryProjectID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      WorkspaceUpdateProjectsResponses,
+      WorkspaceUpdateProjectsErrors,
+      ThrowOnError
+    >({
+      url: "/workspace/{workspaceID}/projects",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Reset all runtime data
+   */
+  public resetData<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).post<WorkspaceResetDataResponses, unknown, ThrowOnError>({
+      url: "/workspace/reset",
+      ...options,
+    })
+  }
+}
+
+export class UserAuth extends HeyApiClient {
+  /**
+   * User login
+   *
+   * Authenticate user and return JWT token
+   */
+  public login<ThrowOnError extends boolean = false>(
+    parameters?: {
+      username?: string
+      password?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "username" },
+            { in: "body", key: "password" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<UserAuthLoginResponses, UserAuthLoginErrors, ThrowOnError>({
+      url: "/user-auth/login",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Register user
+   *
+   * Register a new user in multi-user mode using a phone number
+   */
+  public register<ThrowOnError extends boolean = false>(
+    parameters?: {
+      phone?: string
+      password?: string
+      confirmPassword?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "phone" },
+            { in: "body", key: "password" },
+            { in: "body", key: "confirmPassword" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<UserAuthRegisterResponses, UserAuthRegisterErrors, ThrowOnError>({
+      url: "/user-auth/register",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Refresh token
+   *
+   * Get a new JWT token using existing token
+   */
+  public refresh<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).post<UserAuthRefreshResponses, UserAuthRefreshErrors, ThrowOnError>({
+      url: "/user-auth/refresh",
+      ...options,
+    })
+  }
+
+  /**
+   * Get current user
+   *
+   * Get information about the currently authenticated user
+   */
+  public me<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<UserAuthMeResponses, UserAuthMeErrors, ThrowOnError>({
+      url: "/user-auth/me",
+      ...options,
+    })
+  }
+
+  /**
+   * Change password
+   *
+   * Change the current user's password
+   */
+  public changePassword<ThrowOnError extends boolean = false>(
+    parameters?: {
+      current_password?: string
+      new_password?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "current_password" },
+            { in: "body", key: "new_password" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      UserAuthChangePasswordResponses,
+      UserAuthChangePasswordErrors,
+      ThrowOnError
+    >({
+      url: "/user-auth/change-password",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class User extends HeyApiClient {
+  /**
+   * List users
+   *
+   * Get a list of all users (admin only)
+   */
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<UserListResponses, UserListErrors, ThrowOnError>({
+      url: "/user",
+      ...options,
+    })
+  }
+
+  /**
+   * Create user
+   *
+   * Create a new user (admin only)
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      username?: string
+      password?: string
+      email?: string
+      role?: "admin" | "user"
+      permission?: {
+        level: "full" | "readonly" | "custom"
+        custom?: {
+          edit?: "allow" | "ask" | "deny"
+          write?: "allow" | "ask" | "deny"
+          bash?: "allow" | "ask" | "deny"
+          read?: "allow" | "ask" | "deny"
+        }
+        allowed_agents?: Array<"build" | "ask" | "plan">
+        features?: {
+          modes?: {
+            ask?: boolean
+            build?: boolean
+            plan?: boolean
+          }
+          files?: boolean
+          models?: boolean
+          providers?: boolean
+          servers?: boolean
+          mcp?: boolean
+        }
+        models?: Array<string> | null
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "username" },
+            { in: "body", key: "password" },
+            { in: "body", key: "email" },
+            { in: "body", key: "role" },
+            { in: "body", key: "permission" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<UserCreateResponses, UserCreateErrors, ThrowOnError>({
+      url: "/user",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete user
+   *
+   * Delete user by ID (admin only)
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      userID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "userID" }] }])
+    return (options?.client ?? this.client).delete<UserDeleteResponses, UserDeleteErrors, ThrowOnError>({
+      url: "/user/{userID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get user
+   *
+   * Get user by ID (admin only)
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      userID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "userID" }] }])
+    return (options?.client ?? this.client).get<UserGetResponses, UserGetErrors, ThrowOnError>({
+      url: "/user/{userID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update user
+   *
+   * Update user by ID (admin only)
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      userID: string
+      username?: string
+      email?: string
+      role?: "admin" | "user"
+      status?: "active" | "disabled"
+      permission?: {
+        level: "full" | "readonly" | "custom"
+        custom?: {
+          edit?: "allow" | "ask" | "deny"
+          write?: "allow" | "ask" | "deny"
+          bash?: "allow" | "ask" | "deny"
+          read?: "allow" | "ask" | "deny"
+        }
+        allowed_agents?: Array<"build" | "ask" | "plan">
+        features?: {
+          modes?: {
+            ask?: boolean
+            build?: boolean
+            plan?: boolean
+          }
+          files?: boolean
+          models?: boolean
+          providers?: boolean
+          servers?: boolean
+          mcp?: boolean
+        }
+        models?: Array<string> | null
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "userID" },
+            { in: "body", key: "username" },
+            { in: "body", key: "email" },
+            { in: "body", key: "role" },
+            { in: "body", key: "status" },
+            { in: "body", key: "permission" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<UserUpdateResponses, UserUpdateErrors, ThrowOnError>({
+      url: "/user/{userID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Reset user password
+   *
+   * Reset a user's password (admin only)
+   */
+  public resetPassword<ThrowOnError extends boolean = false>(
+    parameters: {
+      userID: string
+      new_password?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "userID" },
+            { in: "body", key: "new_password" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<UserResetPasswordResponses, UserResetPasswordErrors, ThrowOnError>({
+      url: "/user/{userID}/reset-password",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -345,6 +980,205 @@ export class Auth extends HeyApiClient {
     )
     return (options?.client ?? this.client).put<AuthSetResponses, AuthSetErrors, ThrowOnError>({
       url: "/auth/{providerID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Browse extends HeyApiClient {
+  /**
+   * Browse files
+   *
+   * Browse files and directories without initializing a project instance.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory: string
+      path: string
+      type?: "file" | "directory"
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "path" },
+            { in: "query", key: "type" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<BrowseListResponses, unknown, ThrowOnError>({
+      url: "/browse/file",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Registry extends HeyApiClient {
+  /**
+   * List registered projects
+   *
+   * Get the admin-managed project registry.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProjectRegistryListResponses, ProjectRegistryListErrors, ThrowOnError>({
+      url: "/project/registry",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Register project
+   *
+   * Add a local project directory to the admin registry.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      query_directory?: string
+      body_directory?: string
+      name?: string
+      description?: string
+      groups?: Array<string>
+      visibility?: {
+        mode?: "all" | "include" | "exclude"
+        user_ids?: Array<string>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "groups" },
+            { in: "body", key: "visibility" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ProjectRegistryCreateResponses,
+      ProjectRegistryCreateErrors,
+      ThrowOnError
+    >({
+      url: "/project/registry",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete registered project
+   *
+   * Remove a project from the admin registry.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ProjectRegistryDeleteResponses,
+      ProjectRegistryDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/project/registry/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update registered project
+   *
+   * Update an admin-managed project registry entry.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      name?: string
+      description?: string
+      groups?: Array<string>
+      visibility?: {
+        mode?: "all" | "include" | "exclude"
+        user_ids?: Array<string>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "groups" },
+            { in: "body", key: "visibility" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      ProjectRegistryUpdateResponses,
+      ProjectRegistryUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/project/registry/{id}",
       ...options,
       ...params,
       headers: {
@@ -443,6 +1277,11 @@ export class Project extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _registry?: Registry
+  get registry(): Registry {
+    return (this._registry ??= new Registry({ client: this.client }))
   }
 }
 
@@ -638,81 +1477,6 @@ export class Pty extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<PtyConnectResponses, PtyConnectErrors, ThrowOnError>({
       url: "/pty/{ptyID}/connect",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Config2 extends HeyApiClient {
-  /**
-   * Get configuration
-   *
-   * Retrieve the current OpenCode configuration settings and preferences.
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ConfigGetResponses, unknown, ThrowOnError>({
-      url: "/config",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Update configuration
-   *
-   * Update OpenCode configuration settings and preferences.
-   */
-  public update<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      config?: Config3
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { key: "config", map: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).patch<ConfigUpdateResponses, ConfigUpdateErrors, ThrowOnError>({
-      url: "/config",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * List config providers
-   *
-   * Get a list of all configured AI providers and their default models.
-   */
-  public providers<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ConfigProvidersResponses, unknown, ThrowOnError>({
-      url: "/config/providers",
       ...options,
       ...params,
     })
@@ -926,6 +1690,97 @@ export class Experimental extends HeyApiClient {
   }
 }
 
+export class Admin extends HeyApiClient {
+  /**
+   * Get admin session summary
+   *
+   * Retrieve cross-user session statistics for admins.
+   */
+  public summary<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SessionAdminSummaryResponses, SessionAdminSummaryErrors, ThrowOnError>({
+      url: "/session/admin/summary",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List admin session audit entries
+   *
+   * Retrieve cross-user session audit entries for admins.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      search?: string
+      userID?: string
+      projectID?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "search" },
+            { in: "query", key: "userID" },
+            { in: "query", key: "projectID" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionAdminListResponses, SessionAdminListErrors, ThrowOnError>({
+      url: "/session/admin/list",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get admin session conversation
+   *
+   * Retrieve session conversation messages for admin auditing.
+   */
+  public messages<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionAdminMessagesResponses,
+      SessionAdminMessagesErrors,
+      ThrowOnError
+    >({
+      url: "/session/admin/{sessionID}/messages",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Session extends HeyApiClient {
   /**
    * List sessions
@@ -974,6 +1829,7 @@ export class Session extends HeyApiClient {
       parentID?: string
       title?: string
       permission?: PermissionRuleset
+      workspaceID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -986,6 +1842,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "parentID" },
             { in: "body", key: "title" },
             { in: "body", key: "permission" },
+            { in: "body", key: "workspaceID" },
           ],
         },
       ],
@@ -1767,6 +2624,11 @@ export class Session extends HeyApiClient {
       ...params,
     })
   }
+
+  private _admin?: Admin
+  get admin(): Admin {
+    return (this._admin ??= new Admin({ client: this.client }))
+  }
 }
 
 export class Part extends HeyApiClient {
@@ -1937,6 +2799,98 @@ export class Permission extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<PermissionListResponses, unknown, ThrowOnError>({
       url: "/permission",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Task extends HeyApiClient {
+  /**
+   * Get task
+   *
+   * Get task details by ID. Requires directory in query or header.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskId: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskId" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskGetResponses, TaskGetErrors, ThrowOnError>({
+      url: "/task/{taskId}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Retry task
+   *
+   * Retry a task with status manual_retry_pending. Requires directory in query or header.
+   */
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskId: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskId" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskRetryResponses, TaskRetryErrors, ThrowOnError>({
+      url: "/task/{taskId}/retry",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Cancel task
+   *
+   * Cancel a running task. Requires directory in query or header.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskId: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskId" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskCancelResponses, TaskCancelErrors, ThrowOnError>({
+      url: "/task/{taskId}/cancel",
       ...options,
       ...params,
     })
@@ -2339,6 +3293,25 @@ export class File extends HeyApiClient {
       ...params,
     })
   }
+
+  /**
+   * Get file diff
+   *
+   * Get the git diff of all files in the project working tree.
+   */
+  public diff<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<FileDiffResponses, unknown, ThrowOnError>({
+      url: "/file/diff",
+      ...options,
+      ...params,
+    })
+  }
 }
 
 export class Auth2 extends HeyApiClient {
@@ -2469,42 +3442,6 @@ export class Auth2 extends HeyApiClient {
         ...params,
       },
     )
-  }
-}
-
-export class Browse extends HeyApiClient {
-  /**
-   * Browse files
-   *
-   * Browse files and directories without initializing a project instance.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters: {
-      directory: string
-      path: string
-      type?: "file" | "directory"
-      limit?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "path" },
-            { in: "query", key: "type" },
-            { in: "query", key: "limit" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<BrowseListResponses, unknown, ThrowOnError>({
-      url: "/browse/file",
-      ...options,
-      ...params,
-    })
   }
 }
 
@@ -3223,14 +4160,44 @@ export class OpencodeClient extends HeyApiClient {
     OpencodeClient.__registry.set(this, args?.key)
   }
 
+  private _health?: Health
+  get health(): Health {
+    return (this._health ??= new Health({ client: this.client }))
+  }
+
+  private _config?: Config
+  get config(): Config {
+    return (this._config ??= new Config({ client: this.client }))
+  }
+
   private _global?: Global
   get global(): Global {
     return (this._global ??= new Global({ client: this.client }))
   }
 
+  private _workspace?: Workspace
+  get workspace(): Workspace {
+    return (this._workspace ??= new Workspace({ client: this.client }))
+  }
+
+  private _userAuth?: UserAuth
+  get userAuth(): UserAuth {
+    return (this._userAuth ??= new UserAuth({ client: this.client }))
+  }
+
+  private _user?: User
+  get user(): User {
+    return (this._user ??= new User({ client: this.client }))
+  }
+
   private _auth?: Auth
   get auth(): Auth {
     return (this._auth ??= new Auth({ client: this.client }))
+  }
+
+  private _browse?: Browse
+  get browse(): Browse {
+    return (this._browse ??= new Browse({ client: this.client }))
   }
 
   private _project?: Project
@@ -3241,11 +4208,6 @@ export class OpencodeClient extends HeyApiClient {
   private _pty?: Pty
   get pty(): Pty {
     return (this._pty ??= new Pty({ client: this.client }))
-  }
-
-  private _config?: Config2
-  get config(): Config2 {
-    return (this._config ??= new Config2({ client: this.client }))
   }
 
   private _tool?: Tool
@@ -3278,6 +4240,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._permission ??= new Permission({ client: this.client }))
   }
 
+  private _task?: Task
+  get task(): Task {
+    return (this._task ??= new Task({ client: this.client }))
+  }
+
   private _question?: Question
   get question(): Question {
     return (this._question ??= new Question({ client: this.client }))
@@ -3291,11 +4258,6 @@ export class OpencodeClient extends HeyApiClient {
   private _find?: Find
   get find(): Find {
     return (this._find ??= new Find({ client: this.client }))
-  }
-
-  private _browse?: Browse
-  get browse(): Browse {
-    return (this._browse ??= new Browse({ client: this.client }))
   }
 
   private _file?: File

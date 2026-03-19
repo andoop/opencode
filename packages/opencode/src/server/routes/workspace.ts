@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Workspace } from "@/workspace"
+import { Project } from "@/project/project"
 import { errors } from "../error"
 import { lazy } from "@/util/lazy"
 import { User } from "@/user"
@@ -70,7 +71,7 @@ export const WorkspaceRoutes = lazy(() =>
             description: "Available projects",
             content: {
               "application/json": {
-                schema: resolver(z.any().array()),
+                schema: resolver(Project.Info.array()),
               },
             },
           },

@@ -5,10 +5,8 @@ import { useLayout } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
-import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogSelectProject } from "@/components/dialog-select-project"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useServer } from "@/context/server"
@@ -21,7 +19,6 @@ import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/
 export default function Home() {
   const sync = useGlobalSync()
   const layout = useLayout()
-  const platform = usePlatform()
   const dialog = useDialog()
   const navigate = useNavigate()
   const server = useServer()
@@ -29,6 +26,7 @@ export default function Home() {
   const auth = useAuth()
   const globalSDK = useGlobalSDK()
   const homedir = createMemo(() => sync.data.path.home)
+  const ungroupedLabel = "未分组"
   const recent = createMemo(() => {
     const allProjects = sync.data.project
     if (!auth.isAdmin) {
@@ -42,6 +40,24 @@ export default function Home() {
     const sorted = filtered.toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
     return sorted.slice(0, 5)
   })
+  const groupedRecent = createMemo(() => {
+    const map = new Map<string, ReturnType<typeof recent>>()
+    for (const project of recent()) {
+      const groups = project.groups?.length ? project.groups : [ungroupedLabel]
+      for (const group of groups) {
+        const list = map.get(group) ?? []
+        list.push(project)
+        map.set(group, list)
+      }
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => {
+        if (a === ungroupedLabel) return 1
+        if (b === ungroupedLabel) return -1
+        return a.localeCompare(b)
+      })
+      .map(([group, projects]) => ({ group, projects }))
+  })
 
   function openProject(directory: string) {
     layout.projects.open(directory)
@@ -49,59 +65,31 @@ export default function Home() {
     navigate(`/${base64Encode(directory)}`)
   }
 
+  function createWorkspace(directories: string[] | null) {
+    if (!directories?.length) return
+    workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
+      method: "POST",
+      token: auth.token ?? undefined,
+      fetchFn: fetch,
+      body: JSON.stringify({ directories }),
+    })
+      .then((workspace) => {
+        sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
+        openProject(workspace.directory)
+      })
+      .catch(() => undefined)
+  }
+
   async function chooseProject() {
-    if (!auth.isAdmin) {
-      dialog.show(
-        () => (
-          <DialogSelectProject
-            onSelect={(result) => {
-              if (!result?.length) return
-              workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
-                method: "POST",
-                token: auth.token ?? undefined,
-                fetchFn: platform.fetch ?? fetch,
-                body: JSON.stringify({ directories: result }),
-              })
-                .then((workspace) => {
-                  sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
-                  openProject(workspace.directory)
-                })
-                .catch(() => undefined)
-            }}
-          />
-        ),
-      )
-      return
-    }
-
-    function resolve(result: string | string[] | null) {
-      const directories = Array.isArray(result) ? result : result ? [result] : []
-      if (directories.length === 0) return
-      workspaceFetch<WorkspaceInfo>(globalSDK.url, "/workspace", {
-        method: "POST",
-        token: auth.token ?? undefined,
-        fetchFn: platform.fetch ?? fetch,
-        body: JSON.stringify({ directories }),
-      })
-        .then((workspace) => {
-          sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
-          openProject(workspace.directory)
-        })
-        .catch(() => undefined)
-    }
-
-    if (platform.openDirectoryPickerDialog && server.isLocal()) {
-      const result = await platform.openDirectoryPickerDialog?.({
-        title: language.t("workspace.new"),
-        multiple: true,
-      })
-      resolve(result)
-    } else {
-      dialog.show(
-        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
-        () => resolve(null),
-      )
-    }
+    dialog.show(
+      () => (
+        <DialogSelectProject
+          onSelect={(result) => {
+            createWorkspace(result)
+          }}
+        />
+      ),
+    )
   }
 
   return (
@@ -136,29 +124,38 @@ export default function Home() {
                 {language.t("workspace.new")}
               </Button>
             </div>
-            <ul class="flex flex-col gap-2">
-              <For each={recent()}>
-                {(project) => (
-                  <Button
-                    size="large"
-                    variant="ghost"
-                    class="h-auto px-3 py-3 text-left"
-                    onClick={() => openProject(project.worktree)}
-                  >
-                    <div class="min-w-0 flex-1">
-                      <div class="truncate text-14-medium text-text-strong">{project.name || project.worktree.replace(homedir(), "~")}</div>
-                      <Show when={project.description}>
-                        <div class="mt-1 line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
-                      </Show>
-                      <div class="mt-1 truncate text-12-regular text-text-weak">{project.worktree.replace(homedir(), "~")}</div>
-                    </div>
-                    <div class="ml-4 shrink-0 text-14-regular text-text-weak">
-                      {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
-                    </div>
-                  </Button>
+            <div class="flex flex-col gap-4">
+              <For each={groupedRecent()}>
+                {(entry) => (
+                  <div class="flex flex-col gap-2">
+                    <div class="px-3 text-12-medium text-text-weak">{entry.group}</div>
+                    <ul class="flex flex-col gap-2">
+                      <For each={entry.projects}>
+                        {(project) => (
+                          <Button
+                            size="large"
+                            variant="ghost"
+                            class="h-auto px-3 py-3 text-left"
+                            onClick={() => openProject(project.worktree)}
+                          >
+                            <div class="min-w-0 flex-1">
+                              <div class="truncate text-14-medium text-text-strong">{project.name || project.worktree.replace(homedir(), "~")}</div>
+                              <Show when={project.description}>
+                                <div class="mt-1 line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
+                              </Show>
+                              <div class="mt-1 truncate text-12-regular text-text-weak">{project.worktree.replace(homedir(), "~")}</div>
+                            </div>
+                            <div class="ml-4 shrink-0 text-14-regular text-text-weak">
+                              {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
+                            </div>
+                          </Button>
+                        )}
+                      </For>
+                    </ul>
+                  </div>
                 )}
               </For>
-            </ul>
+            </div>
           </div>
         </Match>
         <Match when={true}>
