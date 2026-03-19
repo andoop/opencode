@@ -28,6 +28,7 @@ import {
   QuestionInfo,
 } from "@opencode-ai/sdk/v2"
 import { createStore } from "solid-js/store"
+import { copyText } from "../copy"
 import { useData } from "../context"
 import { useDiffComponent } from "../context/diff"
 import { useCodeComponent } from "../context/code"
@@ -359,7 +360,8 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
   const handleCopy = async () => {
     const content = text()
     if (!content) return
-    await navigator.clipboard.writeText(content)
+    const ok = await copyText(content)
+    if (!ok) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -688,7 +690,8 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
   const handleCopy = async () => {
     const content = displayText()
     if (!content) return
-    await navigator.clipboard.writeText(content)
+    const ok = await copyText(content)
+    if (!ok) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

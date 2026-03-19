@@ -10,6 +10,7 @@ import {
 } from "@opencode-ai/sdk/v2/client"
 import { type FileDiff } from "@opencode-ai/sdk/v2"
 import { useData } from "../context"
+import { copyText } from "../copy"
 import { useDiffComponent } from "../context/diff"
 import { type UiI18nKey, type UiI18nParams, useI18n } from "../context/i18n"
 import { findLast } from "@opencode-ai/util/array"
@@ -459,7 +460,8 @@ export function SessionTurn(
   const handleCopy = async () => {
     const content = response() ?? ""
     if (!content) return
-    await navigator.clipboard.writeText(content)
+    const ok = await copyText(content)
+    if (!ok) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

@@ -2,6 +2,7 @@ import { TextField as Kobalte } from "@kobalte/core/text-field"
 import { createSignal, Show, splitProps } from "solid-js"
 import type { ComponentProps } from "solid-js"
 import { useI18n } from "../context/i18n"
+import { copyText } from "../copy"
 import { IconButton } from "./icon-button"
 import { Tooltip } from "./tooltip"
 
@@ -55,7 +56,8 @@ export function TextField(props: TextFieldProps) {
 
   async function handleCopy() {
     const value = local.value ?? local.defaultValue ?? ""
-    await navigator.clipboard.writeText(value)
+    const ok = await copyText(value)
+    if (!ok) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
