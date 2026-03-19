@@ -2,6 +2,15 @@ import { GroupRegistry } from "./group-registry"
 import { Instance } from "./instance"
 import { ProjectRegistry } from "./registry"
 
+async function names(ids?: string[], fallback?: string[]) {
+  if (ids?.length) {
+    const resolved = await GroupRegistry.names(ids)
+    if (resolved.length > 0) return resolved
+  }
+  if (fallback?.length) return fallback
+  return ["未分组"]
+}
+
 async function currentProjectRegistry() {
   if (Instance.project.vcs !== "git") return
   return ProjectRegistry.findByProjectID(Instance.project.id)
@@ -12,28 +21,58 @@ async function groupItems(ids: string[]) {
   return items.filter((item): item is GroupRegistry.Info => !!item)
 }
 
+async function workspaceProjects() {
+  const workspace = Instance.workspace
+  if (!workspace) return [] as Array<{
+    projectID: string
+    name?: string
+    sourceDirectory: string
+    description?: string
+    profile_markdown?: string
+    groups: string[]
+    primary?: boolean
+  }>
+  return Promise.all(
+    workspace.projects.map(async (item) => {
+      const match = await ProjectRegistry.findByProjectID(item.projectID)
+      return {
+        projectID: item.projectID,
+        sourceDirectory: item.sourceDirectory,
+        name: match?.name ?? item.name,
+        description: match?.description ?? item.description,
+        profile_markdown: match?.profile_markdown,
+        groups: await names(match?.group_ids ?? item.group_ids, match?.groups ?? item.groups),
+        primary: item.primary,
+      }
+    }),
+  )
+}
+
 export namespace ProjectProfile {
   export async function summary() {
     const project = Instance.project
     const workspace = Instance.workspace
     const registry = await currentProjectRegistry()
+    const projectGroups = await names(registry?.group_ids ?? project.group_ids, registry?.groups ?? project.groups)
     const lines = [
       "<project-context>",
       `Current project: ${project.name ?? project.worktree}`,
       `Project directory: ${project.worktree}`,
-      `Project groups: ${(project.groups.length ? project.groups : ["未分组"]).join(", ")}`,
+      `Project groups: ${projectGroups.join(", ")}`,
     ]
 
     if (registry?.description) lines.push(`Project description: ${registry.description}`)
     if (registry?.profile_markdown) lines.push("Project profile markdown is available via the profile tool.")
 
     if (workspace) {
+      const selectedGroups = await names(workspace.selected_group_ids, workspace.selected_groups)
+      const projects = await workspaceProjects()
       lines.push(`Workspace: ${workspace.name}`)
-      if (workspace.selected_groups.length > 0) {
-        lines.push(`Selected groups: ${workspace.selected_groups.join(", ")}`)
+      if (selectedGroups[0] !== "未分组" || workspace.selected_group_ids.length > 0 || workspace.selected_groups.length > 0) {
+        lines.push(`Selected groups: ${selectedGroups.join(", ")}`)
       }
       lines.push(
-        `Workspace projects: ${workspace.projects.map((item) => `${item.name ?? item.sourceDirectory} [${(item.groups.length ? item.groups : ["未分组"]).join(", ")}]`).join("; ")}`,
+        `Workspace projects: ${projects.map((item) => `${item.name ?? item.sourceDirectory} [${item.groups.join(", ")}]`).join("; ")}`,
       )
     }
 
@@ -49,22 +88,15 @@ export namespace ProjectProfile {
       return project()
     }
     const selectedGroups = await groupItems(workspace.selected_group_ids)
-    const projectProfiles = await Promise.all(
-      workspace.projects.map(async (item) => {
-        const match = await ProjectRegistry.findByProjectID(item.projectID)
-        return {
-          ...item,
-          profile_markdown: match?.profile_markdown,
-          description: match?.description ?? item.description,
-        }
-      }),
-    )
+    const projectProfiles = await workspaceProjects()
+    const primary = projectProfiles.find((item) => item.primary)
+    const selected = await names(workspace.selected_group_ids, workspace.selected_groups)
 
     return [
       `# Workspace`,
       `- Name: ${workspace.name}`,
-      `- Primary project: ${workspace.projects.find((item) => item.primary)?.name ?? workspace.primaryProjectID}`,
-      `- Selected groups: ${(workspace.selected_groups.length ? workspace.selected_groups : ["未分组"]).join(", ")}`,
+      `- Primary project: ${primary?.name ?? workspace.primaryProjectID}`,
+      `- Selected groups: ${selected.join(", ")}`,
       "",
       selectedGroups.length > 0
         ? [
@@ -81,7 +113,7 @@ export namespace ProjectProfile {
         "## Project Profiles",
         ...projectProfiles.flatMap((item) => [
           `### ${item.name ?? item.sourceDirectory}`,
-          `Groups: ${(item.groups.length ? item.groups : ["未分组"]).join(", ")}`,
+          `Groups: ${item.groups.join(", ")}`,
           ...(item.description ? [item.description] : []),
           ...(item.profile_markdown ? ["", item.profile_markdown] : []),
           "",
@@ -103,12 +135,12 @@ export namespace ProjectProfile {
       group_ids: Instance.project.group_ids,
       profile_markdown: Instance.project.profile_markdown,
     }
-    const groups = await groupItems(item.group_ids ?? [])
+    const groups = await names(item.group_ids, item.groups)
     return [
       `# Project`,
       `- Name: ${item.name ?? item.directory}`,
       `- Directory: ${item.directory}`,
-      `- Groups: ${((item.groups?.length ? item.groups : groups.map((group) => group.name)) || ["未分组"]).join(", ")}`,
+      `- Groups: ${groups.join(", ")}`,
       ...(item.description ? ["", item.description] : []),
       ...(item.profile_markdown ? ["", "## Project Profile", item.profile_markdown] : []),
     ].join("\n")
