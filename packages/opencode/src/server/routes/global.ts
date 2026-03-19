@@ -14,6 +14,16 @@ import { User } from "@/user"
 
 const log = Log.create({ service: "server" })
 
+function requireAdmin() {
+  return async (c: any, next: any) => {
+    const user = User.current()
+    if (!user || user.role !== "admin") {
+      return c.json({ error: "Admin access required" }, 403)
+    }
+    return next()
+  }
+}
+
 function assertConfigFeatureAccess(config: z.infer<typeof Config.Info>) {
   if ((config.model !== undefined || config.small_model !== undefined) && !User.featureEnabled("models")) {
     User.requireFeature("models")
@@ -133,6 +143,7 @@ export const GlobalRoutes = lazy(() =>
     )
     .get(
       "/config",
+      requireAdmin(),
       describeRoute({
         summary: "Get global configuration",
         description: "Retrieve the current global OpenCode configuration settings and preferences.",
@@ -154,6 +165,7 @@ export const GlobalRoutes = lazy(() =>
     )
     .patch(
       "/config",
+      requireAdmin(),
       describeRoute({
         summary: "Update global configuration",
         description: "Update global OpenCode configuration settings and preferences.",

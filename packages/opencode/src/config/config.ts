@@ -48,6 +48,10 @@ export namespace Config {
 
   const managedConfigDir = process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR || getManagedConfigDir()
 
+  export function managedDirectory() {
+    return managedConfigDir
+  }
+
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
@@ -1105,6 +1109,10 @@ export namespace Config {
           },
         ),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
+      workspace_boundary_prompt: z
+        .string()
+        .optional()
+        .describe("Global system prompt for workspace and worktree editing boundaries"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),
       tools: z.record(z.string(), z.boolean()).optional(),

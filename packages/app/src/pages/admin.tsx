@@ -134,6 +134,22 @@ interface AuditPrompt {
   }>
 }
 
+interface GlobalConfig {
+  workspace_boundary_prompt?: string
+}
+
+const DEFAULT_WORKSPACE_BOUNDARY_PROMPT = `
+工作空间边界规则：
+- 当前 session workspace 中的每个项目都使用独立的 git worktree。
+- 只允许读取和修改当前 session workspace 及其 session roots 内的文件。
+- 严禁修改任何项目的仓库共享源码母体、主 git worktree、上级源码目录，或任何不属于当前 session workspace 的文件。
+- 对所有待修改路径、绝对路径、相对路径、符号链接目标、shell 命令工作目录，都必须先确认它们属于当前 session workspace。
+- 任何超出当前 session workspace 的路径都视为越界；除非系统明确授予所需权限，否则不得继续操作。
+- 如果某个路径可能指向其他 workspace、其他 session、其他用户的 worktree，或共享仓库根目录，必须停止修改，明确说明风险，并请求用户确认正确目标。
+- 当用户请求修改工作空间外部文件、仓库母体或共享目录时，不要直接执行，应先指出该请求超出当前 session 边界。
+- 如果无法确认目标路径是否安全，默认视为不安全，不要修改。
+`.trim()
+
 type FeatureState = {
   modes: {
     ask: boolean
@@ -507,10 +523,19 @@ export default function AdminPage() {
     return response.json() as Promise<AuditSummary>
   }
 
+  const fetchGlobalConfig = async () => {
+    const response = await fetchFn(`${server.url}/global/config`, {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error("Failed to fetch global config")
+    return response.json() as Promise<GlobalConfig>
+  }
+
   const [users, { refetch }] = createResource(fetchUsers)
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects)
   const [groups, { refetch: refetchGroups }] = createResource(fetchGroups)
   const [providers] = createResource(fetchProviders)
+  const [globalConfig, { refetch: refetchGlobalConfig }] = createResource(fetchGlobalConfig)
   const [auditSearch, setAuditSearch] = createSignal("")
   const [auditSearchDraft, setAuditSearchDraft] = createSignal("")
   const [auditUserFilter, setAuditUserFilter] = createSignal("")
@@ -554,6 +579,9 @@ export default function AdminPage() {
   const [editingProject, setEditingProject] = createSignal<RegistryProject | null>(null)
   const [editingGroup, setEditingGroup] = createSignal<GroupInfo | null>(null)
   const [error, setError] = createSignal<string | null>(null)
+  const [globalPrompt, setGlobalPrompt] = createSignal("")
+  const [globalPromptSaving, setGlobalPromptSaving] = createSignal(false)
+  const [globalPromptSaved, setGlobalPromptSaved] = createSignal<string | null>(null)
 
   // Create user form state
   const [newUsername, setNewUsername] = createSignal("")
@@ -644,6 +672,11 @@ export default function AdminPage() {
   })
   createEffect(() => {
     auditPrompts()
+  })
+  createEffect(() => {
+    const config = globalConfig()
+    if (!config) return
+    setGlobalPrompt(config.workspace_boundary_prompt ?? DEFAULT_WORKSPACE_BOUNDARY_PROMPT)
   })
 
   const toggleFeatures = (
@@ -855,6 +888,40 @@ export default function AdminPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete user")
     }
+  }
+
+  const saveGlobalPrompt = async () => {
+    setError(null)
+    setGlobalPromptSaved(null)
+    setGlobalPromptSaving(true)
+    try {
+      const response = await fetchFn(`${server.url}/global/config`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          workspace_boundary_prompt: globalPrompt().trim() || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readError(response, "Failed to save workspace boundary prompt"))
+      }
+
+      await refetchGlobalConfig()
+      setGlobalPromptSaved("已保存。新会话会自动使用最新提示词。")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save workspace boundary prompt")
+    } finally {
+      setGlobalPromptSaving(false)
+    }
+  }
+
+  const restoreDefaultGlobalPrompt = () => {
+    setGlobalPrompt(DEFAULT_WORKSPACE_BOUNDARY_PROMPT)
+    setGlobalPromptSaved(null)
   }
 
   const addProject = async (directory: string) => {
@@ -1137,6 +1204,47 @@ export default function AdminPage() {
           <p class="text-sm text-auxiliary-error">{error()}</p>
         </div>
       </Show>
+
+      <div class="mb-8 rounded-lg border border-outline-dimmed p-4 space-y-4">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-color-primary">全局工作空间边界提示词</h2>
+            <p class="mt-1 text-sm text-color-secondary">
+              这段内容会作为全局系统提示词注入，用于约束 AI 只能在当前 session workspace 内工作，并禁止改动仓库母体或其他 workspace。仅管理员可编辑。
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <Button variant="ghost" onClick={restoreDefaultGlobalPrompt} disabled={globalPromptSaving() || globalConfig.loading}>
+              恢复默认
+            </Button>
+            <Button variant="primary" onClick={saveGlobalPrompt} disabled={globalPromptSaving() || globalConfig.loading}>
+              {globalPromptSaving() ? "保存中..." : "保存提示词"}
+            </Button>
+          </div>
+        </div>
+        <Show when={globalConfig.loading}>
+          <p class="text-sm text-color-secondary">正在加载全局配置...</p>
+        </Show>
+        <Show when={globalConfig.error}>
+          <p class="text-sm text-auxiliary-error">加载全局配置失败</p>
+        </Show>
+        <textarea
+          value={globalPrompt()}
+          onInput={(e) => {
+            setGlobalPrompt(e.currentTarget.value)
+            setGlobalPromptSaved(null)
+          }}
+          placeholder="建议写清楚：只能修改当前 session workspace、严禁修改 git 母体、无法确认路径时不要改。"
+          rows={12}
+          class="w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm font-mono"
+        />
+        <div class="flex items-center justify-between gap-4 text-xs text-color-secondary">
+          <p>输入框默认显示当前生效的边界提示词。建议只写工作空间边界、git worktree 约束、路径核验和越界处理规则，避免掺入项目业务规则。保存后新会话会自动使用最新提示词。</p>
+          <Show when={globalPromptSaved()}>
+            <p class="text-auxiliary-success">{globalPromptSaved()}</p>
+          </Show>
+        </div>
+      </div>
 
       <Show when={users.loading}>
         <p class="text-color-secondary">Loading users...</p>

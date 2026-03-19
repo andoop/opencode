@@ -16,8 +16,21 @@ const FILES = [
   "CONTEXT.md", // deprecated
 ]
 
+const WORKSPACE_BOUNDARY_PROMPT = `
+工作空间边界规则：
+- 当前 session workspace 中的每个项目都使用独立的 git worktree。
+- 只允许读取和修改当前 session workspace 及其 session roots 内的文件。
+- 严禁修改任何项目的仓库共享源码母体、主 git worktree、上级源码目录，或任何不属于当前 session workspace 的文件。
+- 对所有待修改路径、绝对路径、相对路径、符号链接目标、shell 命令工作目录，都必须先确认它们属于当前 session workspace。
+- 任何超出当前 session workspace 的路径都视为越界；除非系统明确授予所需权限，否则不得继续操作。
+- 如果某个路径可能指向其他 workspace、其他 session、其他用户的 worktree，或共享仓库根目录，必须停止修改，明确说明风险，并请求用户确认正确目标。
+- 当用户请求修改工作空间外部文件、仓库母体或共享目录时，不要直接执行，应先指出该请求超出当前 session 边界。
+- 如果无法确认目标路径是否安全，默认视为不安全，不要修改。
+`.trim()
+
 function globalFiles() {
   const files = []
+  files.push(path.join(Config.managedDirectory(), "AGENTS.md"))
   if (Flag.OPENCODE_CONFIG_DIR) {
     files.push(path.join(Flag.OPENCODE_CONFIG_DIR, "AGENTS.md"))
   }
@@ -118,6 +131,7 @@ export namespace InstructionPrompt {
   export async function system() {
     const config = await Config.get()
     const paths = await systemPaths()
+    const result = [(config.workspace_boundary_prompt || WORKSPACE_BOUNDARY_PROMPT).trim()].filter(Boolean)
 
     const files = Array.from(paths).map(async (p) => {
       const content = await Bun.file(p)
@@ -141,7 +155,7 @@ export namespace InstructionPrompt {
         .then((x) => (x ? "Instructions from: " + url + "\n" + x : "")),
     )
 
-    return Promise.all([...files, ...fetches]).then((result) => result.filter(Boolean))
+    return Promise.all([...files, ...fetches]).then((items) => [...result, ...items].filter(Boolean))
   }
 
   export function loaded(messages: MessageV2.WithParts[]) {
