@@ -38,6 +38,10 @@ const Session = lazy(() => import("@/pages/session"))
 const Login = lazy(() => import("@/pages/login"))
 const Register = lazy(() => import("@/pages/register"))
 const Admin = lazy(() => import("@/pages/admin"))
+const AdminConfig = lazy(() => import("@/pages/admin/config"))
+const AdminUsers = lazy(() => import("@/pages/admin/users"))
+const AdminProjects = lazy(() => import("@/pages/admin/projects"))
+const AdminAudit = lazy(() => import("@/pages/admin/audit"))
 const Loading = () => <div class="size-full" />
 
 function AuthGuard(props: ParentProps) {
@@ -214,14 +218,48 @@ export function AppInterface(props: { defaultUrl?: string }) {
                 />
                 <Route
                   path="/admin"
-                  component={() => (
+                  component={(props) => (
                     <AdminGuard>
                       <Suspense fallback={<Loading />}>
-                        <Admin />
+                        <Admin>{props.children}</Admin>
                       </Suspense>
                     </AdminGuard>
                   )}
-                />
+                >
+                  <Route path="/" component={() => <Navigate href="config" />} />
+                  <Route
+                    path="config"
+                    component={() => (
+                      <Suspense fallback={<Loading />}>
+                        <AdminConfig />
+                      </Suspense>
+                    )}
+                  />
+                  <Route
+                    path="users"
+                    component={() => (
+                      <Suspense fallback={<Loading />}>
+                        <AdminUsers />
+                      </Suspense>
+                    )}
+                  />
+                  <Route
+                    path="projects"
+                    component={() => (
+                      <Suspense fallback={<Loading />}>
+                        <AdminProjects />
+                      </Suspense>
+                    )}
+                  />
+                  <Route
+                    path="audit"
+                    component={() => (
+                      <Suspense fallback={<Loading />}>
+                        <AdminAudit />
+                      </Suspense>
+                    )}
+                  />
+                </Route>
                 <Route
                   path="/"
                   component={() => (
