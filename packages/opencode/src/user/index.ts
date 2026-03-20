@@ -11,7 +11,13 @@ import z from "zod"
 export namespace User {
   const log = Log.create({ service: "user" })
   type ModelRef = string | { providerID: string; modelID: string }
-  const DEFAULT_REGISTERED_MODELS = ["cursor-cli/auto", "cursor-cli/composer-1", "cursor-cli/composer-1.5"] as const
+  const DEFAULT_REGISTERED_MODELS = [
+    "cursor-cli/auto",
+    "cursor-cli/composer-1",
+    "cursor-cli/composer-1.5",
+    "cursor-cli/composer-2",
+    "cursor-cli/composer-2-fast",
+  ] as const
   const FEATURE_DEFAULTS = {
     modes: {
       ask: true,

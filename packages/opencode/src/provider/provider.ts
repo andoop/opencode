@@ -708,6 +708,8 @@ export namespace Provider {
   function cursorProvider(): Info {
     const defs: Array<[id: string, name: string, reasoning?: boolean]> = [
       ["auto", "Auto"],
+      ["composer-2-fast", "Composer 2 Fast"],
+      ["composer-2", "Composer 2"],
       ["composer-1.5", "Composer 1.5"],
       ["composer-1", "Composer 1"],
       ["opus-4.6-thinking", "Claude 4.6 Opus (Thinking)", true],

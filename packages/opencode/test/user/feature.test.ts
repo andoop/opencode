@@ -151,5 +151,7 @@ test("defaultRegisteredPermission enables ask only with cursor-cli whitelist", (
   expect(User.modelEnabled("cursor-cli/auto", { role: "user", permission })).toBe(true)
   expect(User.modelEnabled("cursor-cli/composer-1", { role: "user", permission })).toBe(true)
   expect(User.modelEnabled("cursor-cli/composer-1.5", { role: "user", permission })).toBe(true)
-  expect(User.modelEnabled("cursor-cli/composer-2", { role: "user", permission })).toBe(false)
+  expect(User.modelEnabled("cursor-cli/composer-2", { role: "user", permission })).toBe(true)
+  expect(User.modelEnabled("cursor-cli/composer-2-fast", { role: "user", permission })).toBe(true)
+  expect(User.modelEnabled("cursor-cli/opus-4.6", { role: "user", permission })).toBe(false)
 })
