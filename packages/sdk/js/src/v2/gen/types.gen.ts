@@ -327,7 +327,6 @@ export type UserMessage = {
   summary?: {
     title?: string
     body?: string
-    diffs: Array<FileDiff>
   }
   agent: string
   model: {
@@ -1059,7 +1058,6 @@ export type Session = {
     additions: number
     deletions: number
     files: number
-    diffs?: Array<FileDiff>
   }
   share?: {
     url: string
@@ -1099,14 +1097,6 @@ export type EventSessionDeleted = {
   type: "session.deleted"
   properties: {
     info: Session
-  }
-}
-
-export type EventSessionDiff = {
-  type: "session.diff"
-  properties: {
-    sessionID: string
-    diff: Array<FileDiff>
   }
 }
 
@@ -1208,7 +1198,6 @@ export type Event =
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
-  | EventSessionDiff
   | EventSessionError
   | EventVcsBranchUpdated
   | EventPtyCreated
@@ -4689,27 +4678,6 @@ export type SessionShareResponses = {
 }
 
 export type SessionShareResponse = SessionShareResponses[keyof SessionShareResponses]
-
-export type SessionDiffData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-    messageID?: string
-  }
-  url: "/session/{sessionID}/diff"
-}
-
-export type SessionDiffResponses = {
-  /**
-   * Successfully retrieved diff
-   */
-  200: Array<FileDiff>
-}
-
-export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
 
 export type SessionSummarizeData = {
   body?: {

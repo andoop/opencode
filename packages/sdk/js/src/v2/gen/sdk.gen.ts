@@ -123,7 +123,6 @@ import type {
   SessionCreateResponses,
   SessionDeleteErrors,
   SessionDeleteResponses,
-  SessionDiffResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
@@ -2202,38 +2201,6 @@ export class Session extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SessionShareResponses, SessionShareErrors, ThrowOnError>({
       url: "/session/{sessionID}/share",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Get message diff
-   *
-   * Get the file changes (diff) that resulted from a specific user message in the session.
-   */
-  public diff<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-      messageID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "messageID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<SessionDiffResponses, unknown, ThrowOnError>({
-      url: "/session/{sessionID}/diff",
       ...options,
       ...params,
     })

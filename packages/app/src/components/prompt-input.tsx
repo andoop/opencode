@@ -329,25 +329,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const tabs = createMemo(() => layout.tabs(sessionKey))
 
-  const commentInReview = (path: string) => {
-    const sessionID = params.id
-    if (!sessionID) return false
-
-    const diffs = sync.data.session_diff[sessionID]
-    if (!diffs) return false
-    return diffs.some((diff) => diff.file === path)
-  }
-
   const openComment = (item: { path: string; commentID?: string; commentOrigin?: "review" | "file" }) => {
     if (!item.commentID) return
 
     const focus = { file: item.path, id: item.commentID }
     comments.setActive(focus)
 
-    const wantsReview = item.commentOrigin === "review" || (item.commentOrigin !== "file" && commentInReview(item.path))
+    const wantsReview = item.commentOrigin === "review"
     if (wantsReview) {
       layout.fileTree.open()
-      layout.fileTree.setTab("changes")
+      layout.fileTree.setTab("git")
       requestAnimationFrame(() => comments.setFocus(focus))
       return
     }
