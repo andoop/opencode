@@ -220,6 +220,7 @@ export namespace PermissionNext {
   export const reply = fn(
     z.object({
       requestID: Identifier.schema("permission"),
+      sessionID: Identifier.schema("session").optional(),
       reply: Reply,
       message: z.string().optional(),
     }),
@@ -229,8 +230,16 @@ export namespace PermissionNext {
       if (!existing) {
         log.warn("reply for unknown request", {
           requestID: input.requestID,
+          sessionID: input.sessionID,
           reply: input.reply,
         })
+        if (input.sessionID) {
+          Bus.publish(Event.Replied, {
+            sessionID: input.sessionID,
+            requestID: input.requestID,
+            reply: input.reply,
+          })
+        }
         return
       }
       delete s.pending[input.requestID]

@@ -641,6 +641,9 @@ function createGlobalSync() {
             grouped[perm.sessionID] = [perm]
           }
 
+          if (Object.keys(grouped).length > 0) {
+          }
+
           batch(() => {
             for (const sessionID of Object.keys(store.permission)) {
               if (grouped[sessionID]) continue
@@ -978,8 +981,10 @@ function createGlobalSync() {
       }
       case "permission.replied": {
         const permissions = store.permission[event.properties.sessionID]
+        const result = permissions
+          ? Binary.search(permissions, event.properties.requestID, (p) => p.id)
+          : { found: false, index: -1 }
         if (!permissions) break
-        const result = Binary.search(permissions, event.properties.requestID, (p) => p.id)
         if (!result.found) break
         setStore(
           "permission",

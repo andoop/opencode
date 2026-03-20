@@ -19,6 +19,15 @@ function classifyCursorFailure(message: string) {
   return "other"
 }
 
+function listKeys(input: unknown, max = 8) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return ""
+  return Object.keys(input).slice(0, max).join(",")
+}
+
+function textLength(input: unknown) {
+  return textFromContent(input).length
+}
+
 type StreamEvent =
   | { type: "start" }
   | { type: "start-step" }
@@ -264,7 +273,18 @@ class Rpc {
         return
       }
       if (msg.method === "session/request_permission" && msg.id !== undefined && msg.id !== null) {
+        this.slog.info("acp permission requested", {
+          requestID: String(msg.id),
+          options: (msg.params?.options ?? [])
+            .map((item: any) => `${item.optionId}:${item.kind ?? ""}`)
+            .join(","),
+        })
         const option = msg.params?.options?.find((item: any) => item.kind?.startsWith("allow")) ?? msg.params?.options?.[0]
+        this.slog.info("acp permission auto-selected", {
+          requestID: String(msg.id),
+          optionId: option?.optionId ?? "",
+          optionKind: option?.kind ?? "",
+        })
         this.respond(msg.id, {
           outcome: option
             ? {
@@ -293,6 +313,10 @@ class Rpc {
 
   respond(id: number, result: Record<string, unknown>) {
     this.proc.stdin?.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\n")
+  }
+
+  trackSession(sessionId: string) {
+    this.sessions.add(sessionId)
   }
 
   close() {
@@ -357,6 +381,13 @@ export namespace CursorCLI {
       error: (m, e) => log.error(m, { ...ctx, ...e }),
       info: (m, e) => log.info(m, { ...ctx, ...e }),
     }
+    slog.info("cursor-cli stream init", {
+      cwd: input.cwd,
+      agent: input.agent,
+      promptChars: prompt.length,
+      allowedTools: input.allowedTools.join(","),
+      bridgeCommand: bridge.command,
+    })
     let stderrLines = 0
     const stderrMax = 10
     if (proc.stderr) {
@@ -376,11 +407,16 @@ export namespace CursorCLI {
     })
     let textOpen = false
     let reasoningOpen = false
+    let textChars = 0
+    let reasoningChars = 0
     const seenToolInput = new Set<string>()
     const seenToolCall = new Set<string>()
     const settledToolCalls = new Set<string>()
     const toolInputs = new Map<string, unknown>()
     const toolNames = new Map<string, string>()
+    const seenUpdateKinds = new Set<string>()
+    const toolUpdateCounts = new Map<string, number>()
+    const toolLastStatus = new Map<string, string>()
 
     function settleOpenToolCalls(reason: string) {
       for (const id of seenToolCall) {
@@ -400,12 +436,61 @@ export namespace CursorCLI {
         })
       }
     }
+
+    function logSessionUpdate(update: any) {
+      const kind = String(update.sessionUpdate ?? "unknown")
+      if (!seenUpdateKinds.has(kind)) {
+        seenUpdateKinds.add(kind)
+        slog.info("cursor session update kind", {
+          kind,
+          updateKeys: listKeys(update, 12),
+        })
+      }
+      if (kind !== "tool_call" && kind !== "tool_call_update") {
+        if (kind.includes("tool") || kind.includes("permission")) {
+          slog.info("cursor session update detail", {
+            kind,
+            toolCallId: update.toolCallId ?? "",
+            status: update.status ?? "",
+            title: update.title ?? "",
+          })
+        }
+        return
+      }
+      const id = String(update.toolCallId ?? "")
+      const count = (toolUpdateCounts.get(id) ?? 0) + 1
+      toolUpdateCounts.set(id, count)
+      const status = typeof update.status === "string" ? update.status : ""
+      const lastStatus = toolLastStatus.get(id)
+      const shouldLog =
+        kind === "tool_call" ||
+        count <= 3 ||
+        (status && status !== lastStatus) ||
+        status === "completed" ||
+        status === "failed"
+      if (!shouldLog) return
+      if (status) {
+        toolLastStatus.set(id, status)
+      }
+      slog.info("cursor tool lifecycle", {
+        kind,
+        toolCallId: id,
+        toolName: toolNames.get(id) ?? toolName(update),
+        status,
+        count,
+        title: update.title ?? "",
+        rawInputKeys: listKeys(update.rawInput),
+        contentLen: textLength(update.content),
+        rawOutputLen: textLength(update.rawOutput),
+      })
+    }
     const textId = "cursor-text"
     const reasoningId = "cursor-reasoning"
     const rpc = new Rpc(proc, (msg) => {
       if (msg.method !== "session/update") return
       const update = msg.params?.update
       if (!update) return
+      logSessionUpdate(update)
       switch (update.sessionUpdate) {
         case "agent_message_chunk": {
           const text = textFromContent(update.content)
@@ -414,6 +499,7 @@ export namespace CursorCLI {
             textOpen = true
             queue.push({ type: "text-start", id: textId })
           }
+          textChars += text.length
           chunks.push(text)
           queue.push({ type: "text-delta", id: textId, text })
           return
@@ -425,6 +511,7 @@ export namespace CursorCLI {
             reasoningOpen = true
             queue.push({ type: "reasoning-start", id: reasoningId })
           }
+          reasoningChars += text.length
           queue.push({ type: "reasoning-delta", id: reasoningId, text })
           return
         }
@@ -445,6 +532,13 @@ export namespace CursorCLI {
           const id = update.toolCallId as string
           const name = toolNames.get(id) ?? toolName(update)
           toolNames.set(id, name)
+          if (!seenToolCall.has(id) && !toolInputs.has(id) && update.rawInput === undefined) {
+            slog.warn("cursor tool update missing initial input", {
+              toolCallId: id,
+              toolName: name,
+              status: update.status ?? "",
+            })
+          }
           if (!seenToolInput.has(id)) {
             seenToolInput.add(id)
             queue.push({ type: "tool-input-start", id, toolName: name })
@@ -513,6 +607,9 @@ export namespace CursorCLI {
             version: Installation.VERSION,
           },
         })
+        slog.info("cursor initialize completed", {
+          authMethods: (init?.authMethods ?? []).map((item: any) => item.methodId).join(","),
+        })
         const cursorLogin = init?.authMethods?.find((item: any) => item.methodId === "cursor_login")
         if (cursorLogin) {
           await rpc.request("authenticate", { methodId: "cursor_login" }).catch((error) => {
@@ -531,14 +628,29 @@ export namespace CursorCLI {
           ],
         })
         const sessionId = session.sessionId as string
+        rpc.trackSession(sessionId)
+        slog.info("cursor session created", {
+          cursorSessionID: sessionId,
+          modes: (session.modes?.availableModes ?? []).map((m: any) => `${m.id}:${m.name}`).join(","),
+          currentModeId: session.modes?.currentModeId ?? "",
+        })
         const modes = session.modes?.availableModes as Array<{ id: string; name: string }> | undefined
         const target = modes?.find((m) => m.name === input.agent)
         if (target && target.id !== session.modes?.currentModeId) {
+          slog.info("cursor session set mode", {
+            cursorSessionID: sessionId,
+            modeId: target.id,
+            modeName: target.name,
+          })
           await rpc.request("session/set_mode", {
             sessionId,
             modeId: target.id,
           })
         }
+        slog.info("cursor session prompt start", {
+          cursorSessionID: sessionId,
+          promptChars: prompt.length,
+        })
         const response = await rpc.request("session/prompt", {
           sessionId,
           prompt: [
@@ -547,6 +659,15 @@ export namespace CursorCLI {
               text: prompt,
             },
           ],
+        })
+        slog.info("cursor session prompt completed", {
+          cursorSessionID: sessionId,
+          stopReason: response?.stopReason ?? "",
+          finishReason: finishReason(response?.stopReason ?? "end_turn"),
+          textChars,
+          reasoningChars,
+          toolCalls: seenToolCall.size,
+          unsettledTools: [...seenToolCall].filter((id) => !settledToolCalls.has(id)).join(","),
         })
         if (reasoningOpen) {
           reasoningOpen = false

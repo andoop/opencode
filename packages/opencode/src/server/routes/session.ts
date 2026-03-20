@@ -1000,6 +1000,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         await PermissionNext.reply({
+          sessionID: params.sessionID,
           requestID: params.permissionID,
           reply: c.req.valid("json").response,
         })

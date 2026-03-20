@@ -270,10 +270,34 @@ export async function startBridgeServer(input: { cwd: string; sessionID: string;
     }
     const abort = new AbortController()
     try {
-      return await tool.execute((req.params.arguments ?? {}) as Record<string, unknown>, abort.signal)
+      const args = (req.params.arguments ?? {}) as Record<string, unknown>
+      blog.info("bridged tool execute start", {
+        sessionID: input.sessionID,
+        agent: input.agent,
+        name: req.params.name,
+        argKeys: Object.keys(args).slice(0, 10).join(","),
+      })
+      const result = await tool.execute(args, abort.signal)
+      blog.info("bridged tool execute complete", {
+        sessionID: input.sessionID,
+        agent: input.agent,
+        name: req.params.name,
+        isError: result.isError === true,
+        contentTypes: result.content.map((item) => String(item["type"] ?? "")).join(","),
+        textPreview: truncateBridge(
+          result.content
+            .filter((item) => item["type"] === "text")
+            .map((item) => String(item["text"] ?? ""))
+            .join("\n"),
+          240,
+        ),
+      })
+      return result
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       blog.warn("bridged tool execute threw", {
+        sessionID: input.sessionID,
+        agent: input.agent,
         name: req.params.name,
         error: truncateBridge(msg, 500),
       })

@@ -377,6 +377,17 @@ export default function Page() {
   })
   const sessionSyncData = createMemo(() => sessionSyncResult().data)
   const actualSessionDir = createMemo(() => sessionSyncResult().directory)
+  const permissionClient = createMemo(() =>
+    actualSessionDir() === sdk.directory
+      ? sdk.client
+      : createOpencodeClient({
+          baseUrl: sdk.url,
+          fetch: platform.fetch,
+          directory: actualSessionDir(),
+          throwOnError: true,
+          onClient: (c) => addAuthInterceptor(c, () => auth.token),
+        }),
+  )
   const terminalDir = createMemo(() => actualSessionDir() || sdk.directory)
   const terminal = {
     ready: () => terminalContext.directory(terminalDir(), params.id).ready(),
@@ -462,7 +473,7 @@ export default function Page() {
     if (ui.responding) return
 
     setUi("responding", true)
-    sdk.client.permission
+    permissionClient().permission
       .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
@@ -2445,7 +2456,9 @@ export default function Page() {
                             sessionID: string
                             permissionID: string
                             response: "once" | "always" | "reject"
-                          }) => sessionClient().permission.respond(input)
+                          }) => {
+                            return sessionClient().permission.respond(input)
+                          }
                           const replyToQuestion = (input: { requestID: string; answers: QuestionAnswer[] }) =>
                             sessionClient().question.reply(input)
                           const rejectQuestion = (input: { requestID: string }) =>

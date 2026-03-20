@@ -544,6 +544,13 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
     if (next.tool!.callID !== part.callID) return undefined
     return next
   })
+  const [dismissedPermissionID, setDismissedPermissionID] = createSignal("")
+  const visiblePermission = createMemo(() => {
+    const perm = permission()
+    if (!perm) return
+    if (perm.id === dismissedPermissionID()) return
+    return perm
+  })
 
   const questionRequest = createMemo(() => {
     const next = data.store.question?.[props.message.sessionID]?.[0]
@@ -556,7 +563,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const [showQuestion, setShowQuestion] = createSignal(false)
 
   createEffect(() => {
-    const perm = permission()
+    const perm = visiblePermission()
     if (perm) {
       const timeout = setTimeout(() => setShowPermission(true), 50)
       onCleanup(() => clearTimeout(timeout))
@@ -577,12 +584,14 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
 
   const [forceOpen, setForceOpen] = createSignal(false)
   createEffect(() => {
-    if (permission() || questionRequest()) setForceOpen(true)
+    if (visiblePermission() || questionRequest()) setForceOpen(true)
   })
 
   const respond = (response: "once" | "always" | "reject") => {
-    const perm = permission()
+    const perm = visiblePermission()
     if (!perm || !data.respondToPermission) return
+    setDismissedPermissionID(perm.id)
+    setShowPermission(false)
     data.respondToPermission({
       sessionID: perm.sessionID,
       permissionID: perm.id,
@@ -597,7 +606,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   // @ts-expect-error
   const partMetadata = () => part.state?.metadata ?? emptyMetadata
   const metadata = () => {
-    const perm = permission()
+    const perm = visiblePermission()
     if (perm?.metadata) return { ...perm.metadata, ...partMetadata() }
     return partMetadata()
   }
@@ -659,7 +668,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
           />
         </Match>
       </Switch>
-      <Show when={showPermission() && permission()}>
+      <Show when={showPermission() && visiblePermission()}>
         <div data-component="permission-prompt">
           <div data-slot="permission-actions">
             <Button variant="ghost" size="small" onClick={() => respond("reject")}>
@@ -984,6 +993,13 @@ ToolRegistry.register({
       const permissions = data.store.permission?.[sessionId] ?? []
       return permissions[0]
     })
+    const [dismissedChildPermissionID, setDismissedChildPermissionID] = createSignal("")
+    const visibleChildPermission = createMemo(() => {
+      const perm = childPermission()
+      if (!perm) return
+      if (perm.id === dismissedChildPermissionID()) return
+      return perm
+    })
 
     const childToolPart = createMemo(() => {
       const perm = childPermission()
@@ -1005,14 +1021,20 @@ ToolRegistry.register({
     })
 
     const respond = (response: "once" | "always" | "reject") => {
-      const perm = childPermission()
+      const perm = visibleChildPermission()
       if (!perm || !data.respondToPermission) return
+      setDismissedChildPermissionID(perm.id)
       data.respondToPermission({
         sessionID: perm.sessionID,
         permissionID: perm.id,
         response,
       })
     }
+
+    createEffect(() => {
+      const perm = visibleChildPermission()
+      if (!perm) return
+    })
 
     const handleSubtitleClick = () => {
       const sessionId = childSessionId()
@@ -1044,9 +1066,9 @@ ToolRegistry.register({
     }
 
     return (
-      <div data-component="tool-part-wrapper" data-permission={!!childPermission()}>
+      <div data-component="tool-part-wrapper" data-permission={!!visibleChildPermission()}>
         <Switch>
-          <Match when={childPermission()}>
+          <Match when={visibleChildPermission()}>
             <>
               <Show
                 when={childToolPart()}
@@ -1065,7 +1087,7 @@ ToolRegistry.register({
               >
                 {renderChildToolPart()}
               </Show>
-              <div data-component="permission-prompt">
+                <div data-component="permission-prompt">
                 <div data-slot="permission-actions">
                   <Button variant="ghost" size="small" onClick={() => respond("reject")}>
                     {i18n.t("ui.permission.deny")}
