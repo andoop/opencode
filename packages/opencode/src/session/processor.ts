@@ -20,6 +20,22 @@ export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
   const log = Log.create({ service: "session.processor" })
 
+  function incompleteTurnUserMessage(
+    err: { name?: string; message?: string } | undefined,
+    incomplete: MessageV2.ToolPart[],
+  ) {
+    if (err?.name === "MessageAbortedError") return "Session aborted (user stopped)"
+    if (err?.message) return `${err.name ?? "Error"}: ${err.message}`
+    const tools = [...new Set(incomplete.map((p) => p.tool))]
+    if (tools.length === 1 && tools[0] === "terminal") {
+      return "Terminal was still running when the session ended (stop, disconnect, or model finished the turn early). Retry if needed."
+    }
+    if (tools.length > 0) {
+      return `Session ended before tools completed (${tools.join(", ")}). Retry if needed.`
+    }
+    return "Tool execution aborted"
+  }
+
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
 
@@ -154,17 +170,34 @@ export namespace SessionProcessor {
                       )
                     ) {
                       const agent = await Agent.get(input.assistantMessage.agent)
-                      await PermissionNext.ask({
-                        permission: "doom_loop",
-                        patterns: [value.toolName],
+                      const permission = {
                         sessionID: input.assistantMessage.sessionID,
-                        metadata: {
-                          tool: value.toolName,
-                          input: value.input,
-                        },
-                        always: [value.toolName],
-                        ruleset: agent.permission,
-                      })
+                        messageID: input.assistantMessage.id,
+                        permission: "doom_loop",
+                        tool: value.toolName,
+                        toolCallID: value.toolCallId,
+                      }
+                      log.info("awaiting permission", permission)
+                      try {
+                        await PermissionNext.ask({
+                          permission: "doom_loop",
+                          patterns: [value.toolName],
+                          sessionID: input.assistantMessage.sessionID,
+                          metadata: {
+                            tool: value.toolName,
+                            input: value.input,
+                          },
+                          always: [value.toolName],
+                          ruleset: agent.permission,
+                        })
+                        log.info("permission granted", permission)
+                      } catch (error) {
+                        log.warn("permission rejected", {
+                          ...permission,
+                          error: error instanceof Error ? error.message : String(error),
+                        })
+                        throw error
+                      }
                     }
                   }
                   break
@@ -338,9 +371,13 @@ export namespace SessionProcessor {
               if (needsCompaction) break
             }
           } catch (e: any) {
+            const em = e instanceof Error ? e.message : String(e)
             log.error("process", {
               error: e,
               stack: JSON.stringify(e.stack),
+              sessionID: input.sessionID,
+              model: `${input.model.providerID}/${input.model.id}`,
+              resourceExhausted: em.toLowerCase().includes("resource_exhausted"),
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             const retry = SessionRetry.retryable(error)
@@ -379,12 +416,30 @@ export namespace SessionProcessor {
           }
           const p = await MessageV2.parts(input.assistantMessage.id)
           const err = input.assistantMessage.error as { name?: string; message?: string } | undefined
-          const errMsg =
-            err?.name === "MessageAbortedError"
-              ? "Session aborted (user stopped)"
-              : err?.message
-                ? `${err.name ?? "Error"}: ${err.message}`
-                : "Tool execution aborted"
+          const incompleteTools = p.filter(
+            (part): part is MessageV2.ToolPart =>
+              part.type === "tool" &&
+              part.state.status !== "completed" &&
+              part.state.status !== "error",
+          )
+          const errMsg = incompleteTurnUserMessage(err, incompleteTools)
+          if (incompleteTools.length > 0) {
+            const raw = err?.message ?? ""
+            log.warn("session turn ended with incomplete tools", {
+              sessionID: input.sessionID,
+              messageID: input.assistantMessage.id,
+              model: `${input.model.providerID}/${input.model.id}`,
+              userFacingError: errMsg.slice(0, 220),
+              errName: err?.name,
+              errMessage: raw ? raw.slice(0, 500) : undefined,
+              resourceExhausted: raw.toLowerCase().includes("resource_exhausted"),
+              incompleteTools: incompleteTools.map((x) => ({
+                callID: x.callID,
+                tool: x.tool,
+                status: x.state.status,
+              })),
+            })
+          }
           for (const part of p) {
             if (part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") continue
             // background-task with taskId: task runs in background, TaskRunner.syncPart will update when done

@@ -11,8 +11,15 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
+import { Log } from "@/util/log"
 
 const PREFIX = "opencode_"
+const blog = Log.create({ service: "cursor-bridge" })
+
+function truncateBridge(text: string, max: number) {
+  if (text.length <= max) return text
+  return text.slice(0, max) + "…"
+}
 const BRIDGED = new Set([
   "bash",
   "read",
@@ -255,6 +262,7 @@ export async function startBridgeServer(input: { cwd: string; sessionID: string;
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const tool = byName[req.params.name]
     if (!tool) {
+      blog.warn("bridged tool not found", { name: req.params.name })
       return {
         isError: true,
         content: [{ type: "text", text: `Unknown tool: ${req.params.name}` }],
@@ -264,6 +272,11 @@ export async function startBridgeServer(input: { cwd: string; sessionID: string;
     try {
       return await tool.execute((req.params.arguments ?? {}) as Record<string, unknown>, abort.signal)
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      blog.warn("bridged tool execute threw", {
+        name: req.params.name,
+        error: truncateBridge(msg, 500),
+      })
       return {
         isError: true,
         content: [

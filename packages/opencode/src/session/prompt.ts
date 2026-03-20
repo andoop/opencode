@@ -404,11 +404,28 @@ export namespace SessionPrompt {
             } satisfies MessageV2.ToolPart)
           },
           async ask(req) {
-            await PermissionNext.ask({
-              ...req,
-              sessionID: sessionID,
-              ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
-            })
+            const permission = {
+              sessionID,
+              permission: req.permission,
+              patterns: req.patterns,
+              toolCallID: part.callID,
+              tool: "task",
+            }
+            log.info("awaiting permission", permission)
+            try {
+              await PermissionNext.ask({
+                ...req,
+                sessionID: sessionID,
+                ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
+              })
+              log.info("permission granted", permission)
+            } catch (error) {
+              log.warn("permission rejected", {
+                ...permission,
+                error: error instanceof Error ? error.message : String(error),
+              })
+              throw error
+            }
           },
         }
         const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
@@ -726,12 +743,28 @@ export namespace SessionPrompt {
         }
       },
       async ask(req) {
-        await PermissionNext.ask({
-          ...req,
+        const permission = {
           sessionID: input.session.id,
-          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: PermissionNext.merge(input.agent.permission, input.session.permission ?? []),
-        })
+          permission: req.permission,
+          patterns: req.patterns,
+          toolCallID: options.toolCallId,
+        }
+        log.info("awaiting permission", permission)
+        try {
+          await PermissionNext.ask({
+            ...req,
+            sessionID: input.session.id,
+            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+            ruleset: PermissionNext.merge(input.agent.permission, input.session.permission ?? []),
+          })
+          log.info("permission granted", permission)
+        } catch (error) {
+          log.warn("permission rejected", {
+            ...permission,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          throw error
+        }
       },
     })
 

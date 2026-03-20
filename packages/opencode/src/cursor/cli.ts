@@ -7,6 +7,18 @@ import { Installation } from "@/installation"
 
 const log = Log.create({ service: "cursor-cli" })
 
+function truncate(text: string, max: number) {
+  if (text.length <= max) return text
+  return text.slice(0, max) + "…"
+}
+
+function classifyCursorFailure(message: string) {
+  const m = message.toLowerCase()
+  if (m.includes("resource_exhausted")) return "resource_exhausted"
+  if (m.includes("aborted") || m.includes("abort")) return "aborted"
+  return "other"
+}
+
 type StreamEvent =
   | { type: "start" }
   | { type: "start-step" }
@@ -200,27 +212,52 @@ function cursorPath() {
   return process.env.OPENCODE_CURSOR_CLI_PATH || Bun.which("agent")
 }
 
+type RpcPending = {
+  resolve(value: any): void
+  reject(error: Error): void
+  method: string
+}
+
+type CursorStreamLog = {
+  warn(message: string, extra?: Record<string, unknown>): void
+  error(message: string, extra?: Record<string, unknown>): void
+  info(message: string, extra?: Record<string, unknown>): void
+}
+
 class Rpc {
   private nextId = 1
-  private pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>()
+  private pending = new Map<number, RpcPending>()
   private sessions = new Set<string>()
   private rl
 
   constructor(
     private proc: ReturnType<typeof spawn>,
     private onUpdate: (msg: any) => void,
+    private slog: CursorStreamLog,
   ) {
     this.rl = createInterface({
       input: proc.stdout!,
     })
     this.rl.on("line", (line) => {
       if (!line.trim()) return
-      const msg = JSON.parse(line)
+      let msg: any
+      try {
+        msg = JSON.parse(line)
+      } catch {
+        this.slog.warn("acp stdout not json", { preview: truncate(line, 240) })
+        return
+      }
       if (msg.id !== undefined && msg.id !== null && this.pending.has(msg.id)) {
         const pending = this.pending.get(msg.id)!
         this.pending.delete(msg.id)
         if (msg.error) {
-          pending.reject(new Error(msg.error.message ?? JSON.stringify(msg.error)))
+          const detail = msg.error.message ?? JSON.stringify(msg.error)
+          this.slog.warn("acp rpc response error", {
+            rpcMethod: pending.method,
+            rpcError: truncate(detail, 480),
+            failureKind: classifyCursorFailure(detail),
+          })
+          pending.reject(new Error(detail))
           return
         }
         pending.resolve(msg.result)
@@ -246,7 +283,7 @@ class Rpc {
     const id = this.nextId++
     this.proc.stdin?.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n")
     return new Promise<any>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      this.pending.set(id, { resolve, reject, method })
     })
   }
 
@@ -259,6 +296,12 @@ class Rpc {
   }
 
   close() {
+    if (this.pending.size > 0) {
+      this.slog.warn("acp rpc closing with pending requests", {
+        pendingCount: this.pending.size,
+        pendingMethods: [...this.pending.values()].map((p) => p.method).join(","),
+      })
+    }
     for (const sessionId of this.sessions) {
       this.notify("session/cancel", { sessionId })
     }
@@ -308,12 +351,55 @@ export namespace CursorCLI {
         ...process.env,
       },
     })
+    const ctx = { sessionID: input.sessionID, modelID: input.modelID }
+    const slog: CursorStreamLog = {
+      warn: (m, e) => log.warn(m, { ...ctx, ...e }),
+      error: (m, e) => log.error(m, { ...ctx, ...e }),
+      info: (m, e) => log.info(m, { ...ctx, ...e }),
+    }
+    let stderrLines = 0
+    const stderrMax = 10
+    if (proc.stderr) {
+      const errRl = createInterface({ input: proc.stderr })
+      errRl.on("line", (line) => {
+        const t = line.trim()
+        if (!t) return
+        stderrLines++
+        if (stderrLines > stderrMax) return
+        slog.warn("cursor agent stderr", { stderrLine: stderrLines, text: truncate(t, 500) })
+      })
+    }
+    proc.on("exit", (code, signal) => {
+      if (code !== 0 && code !== null) {
+        slog.warn("cursor agent process exited", { exitCode: code, signal: signal ?? "" })
+      }
+    })
     let textOpen = false
     let reasoningOpen = false
     const seenToolInput = new Set<string>()
     const seenToolCall = new Set<string>()
+    const settledToolCalls = new Set<string>()
     const toolInputs = new Map<string, unknown>()
     const toolNames = new Map<string, string>()
+
+    function settleOpenToolCalls(reason: string) {
+      for (const id of seenToolCall) {
+        if (settledToolCalls.has(id)) continue
+        settledToolCalls.add(id)
+        const name = toolNames.get(id) ?? "cursor_tool"
+        slog.warn("cursor-cli unfinished tool settled", {
+          toolCallId: id,
+          toolName: name,
+          reason: truncate(reason, 200),
+        })
+        queue.push({
+          type: "tool-error",
+          toolCallId: id,
+          input: toolInputs.get(id),
+          error: new Error(reason),
+        })
+      }
+    }
     const textId = "cursor-text"
     const reasoningId = "cursor-reasoning"
     const rpc = new Rpc(proc, (msg) => {
@@ -376,6 +462,7 @@ export namespace CursorCLI {
             })
           }
           if (update.status === "completed") {
+            settledToolCalls.add(id)
             queue.push({
               type: "tool-result",
               toolCallId: id,
@@ -388,11 +475,20 @@ export namespace CursorCLI {
             })
           }
           if (update.status === "failed") {
+            settledToolCalls.add(id)
+            const toolErrMsg =
+              textFromContent(update.content) || textFromContent(update.rawOutput) || "Tool failed"
+            slog.warn("cursor tool_call_update failed", {
+              toolCallId: id,
+              toolName: name,
+              detail: truncate(toolErrMsg, 400),
+              failureKind: classifyCursorFailure(toolErrMsg),
+            })
             queue.push({
               type: "tool-error",
               toolCallId: id,
               input: toolInputs.get(id),
-              error: new Error(textFromContent(update.content) || textFromContent(update.rawOutput) || "Tool failed"),
+              error: new Error(toolErrMsg),
             })
           }
           return
@@ -400,7 +496,7 @@ export namespace CursorCLI {
         default:
           return
       }
-    })
+    }, slog)
 
     const text = (async () => {
       try {
@@ -460,6 +556,9 @@ export namespace CursorCLI {
           textOpen = false
           queue.push({ type: "text-end", id: textId })
         }
+        settleOpenToolCalls(
+          "Cursor ended the turn before this tool finished (common with terminal commands or disconnect).",
+        )
         queue.push({
           type: "finish-step",
           finishReason: finishReason(response?.stopReason ?? "end_turn"),
@@ -475,6 +574,13 @@ export namespace CursorCLI {
         return chunks.join("")
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error))
+        settleOpenToolCalls(
+          truncate(`Stream ended before tool finished: ${err.message}`, 400),
+        )
+        slog.error("cursor-cli stream failed", {
+          failureKind: classifyCursorFailure(err.message),
+          message: truncate(err.message, 600),
+        })
         queue.push({ type: "error", error: err })
         queue.fail(err)
         throw err
@@ -486,6 +592,7 @@ export namespace CursorCLI {
     input.abort.addEventListener(
       "abort",
       () => {
+        slog.info("cursor-cli stream aborted by client")
         rpc.close()
       },
       { once: true },

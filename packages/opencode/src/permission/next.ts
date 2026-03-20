@@ -190,6 +190,15 @@ export namespace PermissionNext {
           throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
         if (rule.action === "ask") {
           const id = input.id ?? Identifier.ascending("permission")
+          log.info("asking", {
+            requestID: id,
+            sessionID: request.sessionID,
+            permission: request.permission,
+            patterns: request.patterns,
+            toolCallID: request.tool?.callID,
+            messageID: request.tool?.messageID,
+            metadataKeys: Object.keys(request.metadata ?? {}),
+          })
           return new Promise<void>((resolve, reject) => {
             const info: Request = {
               id,
@@ -217,8 +226,22 @@ export namespace PermissionNext {
     async (input) => {
       const s = await state()
       const existing = s.pending[input.requestID]
-      if (!existing) return
+      if (!existing) {
+        log.warn("reply for unknown request", {
+          requestID: input.requestID,
+          reply: input.reply,
+        })
+        return
+      }
       delete s.pending[input.requestID]
+      log.info("replied", {
+        requestID: input.requestID,
+        sessionID: existing.info.sessionID,
+        permission: existing.info.permission,
+        reply: input.reply,
+        toolCallID: existing.info.tool?.callID,
+        messageID: existing.info.tool?.messageID,
+      })
       Bus.publish(Event.Replied, {
         sessionID: existing.info.sessionID,
         requestID: existing.info.id,
@@ -242,6 +265,11 @@ export namespace PermissionNext {
         return
       }
       if (input.reply === "once") {
+        log.info("resolved", {
+          requestID: input.requestID,
+          sessionID: existing.info.sessionID,
+          reply: input.reply,
+        })
         existing.resolve()
         return
       }
@@ -254,9 +282,16 @@ export namespace PermissionNext {
           })
         }
 
+        log.info("resolved", {
+          requestID: input.requestID,
+          sessionID: existing.info.sessionID,
+          reply: input.reply,
+          approvedCount: existing.info.always.length,
+        })
         existing.resolve()
 
         const sessionID = existing.info.sessionID
+        let autoResolved = 0
         for (const [id, pending] of Object.entries(s.pending)) {
           if (pending.info.sessionID !== sessionID) continue
           const ok = pending.info.patterns.every(
@@ -264,12 +299,20 @@ export namespace PermissionNext {
           )
           if (!ok) continue
           delete s.pending[id]
+          autoResolved++
           Bus.publish(Event.Replied, {
             sessionID: pending.info.sessionID,
             requestID: pending.info.id,
             reply: "always",
           })
           pending.resolve()
+        }
+        if (autoResolved > 0) {
+          log.info("auto resolved", {
+            requestID: input.requestID,
+            sessionID: existing.info.sessionID,
+            count: autoResolved,
+          })
         }
 
         // TODO: we don't save the permission ruleset to disk yet until there's
