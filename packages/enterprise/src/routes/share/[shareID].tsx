@@ -1,17 +1,14 @@
-import { FileDiff, Message, Model, Part, Session, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
+import { Message, Model, Part, Session, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
-import { SessionReview } from "@opencode-ai/ui/session-review"
 import { DataProvider } from "@opencode-ai/ui/context"
-import { DiffComponentProvider } from "@opencode-ai/ui/context/diff"
 import { CodeComponentProvider } from "@opencode-ai/ui/context/code"
 import { WorkerPoolProvider } from "@opencode-ai/ui/context/worker-pool"
 import { createAsync, query, useParams } from "@solidjs/router"
-import { createEffect, createMemo, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, ErrorBoundary, For, Show } from "solid-js"
 import { Share } from "~/core/share"
 import { Logo, Mark } from "@opencode-ai/ui/logo"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
-import { createDefaultOptions } from "@opencode-ai/ui/pierre"
 import { iife } from "@opencode-ai/util/iife"
 import { Binary } from "@opencode-ai/util/binary"
 import { NamedError } from "@opencode-ai/util/error"
@@ -19,16 +16,12 @@ import { DateTime } from "luxon"
 import { createStore } from "solid-js/store"
 import z from "zod"
 import NotFound from "../[...404]"
-import { Tabs } from "@opencode-ai/ui/tabs"
 import { MessageNav } from "@opencode-ai/ui/message-nav"
-import { preloadMultiFileDiff, PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
-import { Diff as SSRDiff } from "@opencode-ai/ui/diff-ssr"
 import { clientOnly } from "@solidjs/start"
 import { type IconName } from "@opencode-ai/ui/icons/provider"
 import { Meta, Title } from "@solidjs/meta"
 import { Base64 } from "js-base64"
 
-const ClientOnlyDiff = clientOnly(() => import("@opencode-ai/ui/diff").then((m) => ({ default: m.Diff })))
 const ClientOnlyCode = clientOnly(() => import("@opencode-ai/ui/code").then((m) => ({ default: m.Code })))
 const ClientOnlyWorkerPoolProvider = clientOnly(() =>
   import("@opencode-ai/ui/pierre/worker").then((m) => ({
@@ -55,15 +48,6 @@ const getData = query(async (shareID) => {
     sessionID: string
     shareID: string
     session: Session[]
-    session_diff: {
-      [sessionID: string]: FileDiff[]
-    }
-    session_diff_preload: {
-      [sessionID: string]: PreloadMultiFileDiffResult<any>[]
-    }
-    session_diff_preload_split: {
-      [sessionID: string]: PreloadMultiFileDiffResult<any>[]
-    }
     session_status: {
       [sessionID: string]: SessionStatus
     }
@@ -80,15 +64,6 @@ const getData = query(async (shareID) => {
     sessionID: share.sessionID,
     shareID,
     session: [],
-    session_diff: {
-      [share.sessionID]: [],
-    },
-    session_diff_preload: {
-      [share.sessionID]: [],
-    },
-    session_diff_preload_split: {
-      [share.sessionID]: [],
-    },
     session_status: {
       [share.sessionID]: {
         type: "idle",
@@ -102,31 +77,6 @@ const getData = query(async (shareID) => {
     switch (item.type) {
       case "session":
         result.session.push(item.data)
-        break
-      case "session_diff":
-        result.session_diff[share.sessionID] = item.data
-        await Promise.all([
-          Promise.all(
-            item.data.map(async (diff) =>
-              preloadMultiFileDiff<any>({
-                oldFile: { name: diff.file, contents: diff.before },
-                newFile: { name: diff.file, contents: diff.after },
-                options: createDefaultOptions("unified"),
-                // annotations,
-              }),
-            ),
-          ).then((r) => (result.session_diff_preload[share.sessionID] = r)),
-          Promise.all(
-            item.data.map(async (diff) =>
-              preloadMultiFileDiff<any>({
-                oldFile: { name: diff.file, contents: diff.before },
-                newFile: { name: diff.file, contents: diff.after },
-                options: createDefaultOptions("split"),
-                // annotations,
-              }),
-            ),
-          ).then((r) => (result.session_diff_preload_split[share.sessionID] = r)),
-        ])
         break
       case "message":
         result.message[item.data.sessionID] = result.message[item.data.sessionID] ?? []
@@ -218,9 +168,8 @@ export default function () {
               <Meta property="og:image" content={ogImage()} />
               <Meta name="twitter:image" content={ogImage()} />
               <ClientOnlyWorkerPoolProvider>
-                <DiffComponentProvider component={ClientOnlyDiff}>
-                  <CodeComponentProvider component={ClientOnlyCode}>
-                    <DataProvider data={data()} directory={info().directory}>
+                <CodeComponentProvider component={ClientOnlyCode}>
+                  <DataProvider data={data()} directory={info().directory}>
                       {iife(() => {
                         const [store, setStore] = createStore({
                           messageId: undefined as string | undefined,
@@ -247,23 +196,6 @@ export default function () {
                         const provider = createMemo(() => activeMessage()?.model?.providerID)
                         const modelID = createMemo(() => activeMessage()?.model?.modelID)
                         const model = createMemo(() => data().model[data().sessionID]?.find((m) => m.id === modelID()))
-                        const diffs = createMemo(() => {
-                          const diffs = data().session_diff[data().sessionID] ?? []
-                          const preloaded = data().session_diff_preload[data().sessionID] ?? []
-                          return diffs.map((diff) => ({
-                            ...diff,
-                            preloaded: preloaded.find((d) => d.newFile.name === diff.file),
-                          }))
-                        })
-                        const splitDiffs = createMemo(() => {
-                          const diffs = data().session_diff[data().sessionID] ?? []
-                          const preloaded = data().session_diff_preload_split[data().sessionID] ?? []
-                          return diffs.map((diff) => ({
-                            ...diff,
-                            preloaded: preloaded.find((d) => d.newFile.name === diff.file),
-                          }))
-                        })
-
                         const title = () => (
                           <div class="flex flex-col gap-4">
                             <div class="flex flex-col gap-2 sm:flex-row sm:gap-4 sm:items-center sm:h-8 justify-start self-stretch">
@@ -315,8 +247,6 @@ export default function () {
                           </div>
                         )
 
-                        const wide = createMemo(() => diffs().length === 0)
-
                         return (
                           <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
                             <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
@@ -345,9 +275,7 @@ export default function () {
                             <div class="select-text flex flex-col flex-1 min-h-0">
                               <div
                                 classList={{
-                                  "hidden w-full flex-1 min-h-0": true,
-                                  "md:flex": wide(),
-                                  "lg:flex": !wide(),
+                                  "hidden w-full flex-1 min-h-0 md:flex": true,
                                 }}
                               >
                                 <div
@@ -396,85 +324,14 @@ export default function () {
                                     </SessionTurn>
                                   </div>
                                 </div>
-                                <Show when={diffs().length > 0}>
-                                  <DiffComponentProvider component={SSRDiff}>
-                                    <div class="@container relative grow pt-14 flex-1 min-h-0 border-l border-border-weak-base">
-                                      <SessionReview
-                                        class="@4xl:hidden"
-                                        diffs={diffs()}
-                                        classes={{
-                                          root: "pb-20",
-                                          header: "px-6",
-                                          container: "px-6",
-                                        }}
-                                      />
-                                      <SessionReview
-                                        split
-                                        class="hidden @4xl:flex"
-                                        diffs={splitDiffs()}
-                                        classes={{
-                                          root: "pb-20",
-                                          header: "px-6",
-                                          container: "px-6",
-                                        }}
-                                      />
-                                    </div>
-                                  </DiffComponentProvider>
-                                </Show>
                               </div>
-                              <Switch>
-                                <Match when={diffs().length > 0}>
-                                  <Tabs classList={{ "md:hidden": wide(), "lg:hidden": !wide() }}>
-                                    <Tabs.List>
-                                      <Tabs.Trigger value="session" class="w-1/2" classes={{ button: "w-full" }}>
-                                        Session
-                                      </Tabs.Trigger>
-                                      <Tabs.Trigger
-                                        value="review"
-                                        class="w-1/2 !border-r-0"
-                                        classes={{ button: "w-full" }}
-                                      >
-                                        {diffs().length} Files Changed
-                                      </Tabs.Trigger>
-                                    </Tabs.List>
-                                    <Tabs.Content value="session" class="!overflow-hidden">
-                                      {turns()}
-                                    </Tabs.Content>
-                                    <Tabs.Content
-                                      forceMount
-                                      value="review"
-                                      class="!overflow-hidden hidden data-[selected]:block"
-                                    >
-                                      <div class="relative h-full pt-8 overflow-y-auto no-scrollbar">
-                                        <DiffComponentProvider component={SSRDiff}>
-                                          <SessionReview
-                                            diffs={diffs()}
-                                            classes={{
-                                              root: "pb-20",
-                                              header: "px-4",
-                                              container: "px-4",
-                                            }}
-                                          />
-                                        </DiffComponentProvider>
-                                      </div>
-                                    </Tabs.Content>
-                                  </Tabs>
-                                </Match>
-                                <Match when={true}>
-                                  <div
-                                    classList={{ "!overflow-hidden": true, "md:hidden": wide(), "lg:hidden": !wide() }}
-                                  >
-                                    {turns()}
-                                  </div>
-                                </Match>
-                              </Switch>
+                              <div class="!overflow-hidden md:hidden">{turns()}</div>
                             </div>
                           </div>
                         )
                       })}
                     </DataProvider>
                   </CodeComponentProvider>
-                </DiffComponentProvider>
               </ClientOnlyWorkerPoolProvider>
             </>
           )

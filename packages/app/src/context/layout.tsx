@@ -68,14 +68,20 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       const fileTree = value.fileTree
       const migratedFileTree = (() => {
         if (!isRecord(fileTree)) return fileTree
-        if (fileTree.tab === "changes" || fileTree.tab === "all" || fileTree.tab === "git") return fileTree
+        if (fileTree.tab === "all" || fileTree.tab === "git") return fileTree
+        if (fileTree.tab === "changes") {
+          return {
+            ...fileTree,
+            tab: "git",
+          }
+        }
 
         const width = typeof fileTree.width === "number" ? fileTree.width : 344
         return {
           ...fileTree,
           opened: true,
           width: width === 260 ? 344 : width,
-          tab: "changes",
+          tab: "git",
         }
       })()
 
@@ -107,7 +113,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         fileTree: {
           opened: true,
           width: 344,
-          tab: "changes" as "changes" | "all" | "git",
+          tab: "git" as "all" | "git",
         },
         session: {
           width: 600,
@@ -501,8 +507,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       fileTree: {
         opened: createMemo(() => store.fileTree?.opened ?? true),
         width: createMemo(() => store.fileTree?.width ?? 344),
-        tab: createMemo(() => store.fileTree?.tab ?? "changes"),
-        setTab(tab: "changes" | "all" | "git") {
+        tab: createMemo(() => store.fileTree?.tab ?? "git"),
+        setTab(tab: "all" | "git") {
           if (!store.fileTree) {
             setStore("fileTree", { opened: true, width: 344, tab })
             return
@@ -511,28 +517,28 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         open() {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: true, width: 344, tab: "changes" })
+            setStore("fileTree", { opened: true, width: 344, tab: "git" })
             return
           }
           setStore("fileTree", "opened", true)
         },
         close() {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: false, width: 344, tab: "changes" })
+            setStore("fileTree", { opened: false, width: 344, tab: "git" })
             return
           }
           setStore("fileTree", "opened", false)
         },
         toggle() {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: true, width: 344, tab: "changes" })
+            setStore("fileTree", { opened: true, width: 344, tab: "git" })
             return
           }
           setStore("fileTree", "opened", (x) => !x)
         },
         resize(width: number) {
           if (!store.fileTree) {
-            setStore("fileTree", { opened: true, width, tab: "changes" })
+            setStore("fileTree", { opened: true, width, tab: "git" })
             return
           }
           setStore("fileTree", "width", width)

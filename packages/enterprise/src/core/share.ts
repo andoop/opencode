@@ -1,4 +1,4 @@
-import { FileDiff, Message, Model, Part, Session } from "@opencode-ai/sdk/v2"
+import { Message, Model, Part, Session } from "@opencode-ai/sdk/v2"
 import { fn } from "@opencode-ai/util/fn"
 import { iife } from "@opencode-ai/util/iife"
 import { Identifier } from "@opencode-ai/util/identifier"
@@ -26,10 +26,6 @@ export namespace Share {
     z.object({
       type: z.literal("part"),
       data: z.custom<Part>(),
-    }),
-    z.object({
-      type: z.literal("session_diff"),
-      data: z.custom<FileDiff[]>(),
     }),
     z.object({
       type: z.literal("model"),
@@ -110,8 +106,6 @@ export namespace Share {
               return `message/${item.data.id}`
             case "part":
               return `${item.data.messageID}/${item.data.id}`
-            case "session_diff":
-              return "session_diff"
             case "model":
               return "model"
           }
@@ -157,9 +151,6 @@ export namespace Share {
                 await Storage.write(["share_data", input.share.id, "part", data.messageID, data.id], item.data)
                 break
               }
-              case "session_diff":
-                await Storage.write(["share_data", input.share.id, "session_diff"], item.data)
-                break
               case "model":
                 await Storage.write(["share_data", input.share.id, "model"], item.data)
                 break

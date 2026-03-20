@@ -6,7 +6,6 @@ import {
   type Config,
   type Path,
   type Project,
-  type FileDiff,
   type Todo,
   type SessionStatus,
   type ProviderListResponse,
@@ -74,9 +73,6 @@ type State = {
   sessionsReady: boolean
   session_status: {
     [sessionID: string]: SessionStatus
-  }
-  session_diff: {
-    [sessionID: string]: FileDiff[]
   }
   todo: {
     [sessionID: string]: Todo[]
@@ -466,7 +462,6 @@ function createGlobalSync() {
           sessionTotal: 0,
           sessionsReady: false,
           session_status: {},
-          session_diff: {},
           todo: {},
           permission: {},
           question: {},
@@ -722,7 +717,6 @@ function createGlobalSync() {
     setStore(
       produce((draft) => {
         delete draft.message[sessionID]
-        delete draft.session_diff[sessionID]
         delete draft.todo[sessionID]
         delete draft.permission[sessionID]
         delete draft.question[sessionID]
@@ -773,7 +767,6 @@ function createGlobalSync() {
 
       const hasAny =
         store.message[sessionID] !== undefined ||
-        store.session_diff[sessionID] !== undefined ||
         store.todo[sessionID] !== undefined ||
         store.permission[sessionID] !== undefined ||
         store.question[sessionID] !== undefined ||
@@ -793,7 +786,6 @@ function createGlobalSync() {
           }
 
           delete draft.message[sessionID]
-          delete draft.session_diff[sessionID]
           delete draft.todo[sessionID]
           delete draft.permission[sessionID]
           delete draft.question[sessionID]
@@ -866,9 +858,6 @@ function createGlobalSync() {
         setStore("sessionTotal", (value) => Math.max(0, value - 1))
         break
       }
-      case "session.diff":
-        setStore("session_diff", event.properties.sessionID, reconcile(event.properties.diff, { key: "file" }))
-        break
       case "todo.updated":
         setStore("todo", event.properties.sessionID, reconcile(event.properties.todos, { key: "id" }))
         break

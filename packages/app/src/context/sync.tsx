@@ -46,7 +46,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const absolute = (path: string) => (current()[0].path.directory + "/" + path).replace("//", "/")
     const chunk = 400
     const inflight = new Map<string, Promise<void>>()
-    const inflightDiff = new Map<string, Promise<void>>()
     const inflightTodo = new Map<string, Promise<void>>()
     const [meta, setMeta] = createStore({
       limit: {} as Record<string, number>,
@@ -212,27 +211,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             })
 
           inflight.set(key, promise)
-          return promise
-        },
-        async diff(sessionID: string, sessionDir?: string, force?: boolean) {
-          const directory = sessionDir ?? sdk.directory
-          const client = clientFor(directory)
-          const [store, setStore] = globalSync.child(directory)
-          if (!force && store.session_diff[sessionID] !== undefined) return
-
-          const key = keyFor(directory, sessionID)
-          const pending = inflightDiff.get(key)
-          if (pending) return pending
-
-          const promise = retry(() => client.session.diff({ sessionID }))
-            .then((diff) => {
-              setStore("session_diff", sessionID, reconcile(diff.data ?? [], { key: "file" }))
-            })
-            .finally(() => {
-              inflightDiff.delete(key)
-            })
-
-          inflightDiff.set(key, promise)
           return promise
         },
         async todo(sessionID: string, sessionDir?: string) {

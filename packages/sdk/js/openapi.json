@@ -279,6 +279,320 @@
         ]
       }
     },
+    "/workspace": {
+      "get": {
+        "operationId": "workspace.list",
+        "summary": "List workspaces",
+        "responses": {
+          "200": {
+            "description": "Workspace list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Workspace"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.list({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "workspace.create",
+        "summary": "Create workspace",
+        "responses": {
+          "200": {
+            "description": "Created workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "directories": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "primaryProjectID": {
+                    "type": "string"
+                  },
+                  "selected_group_ids": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "directories"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.create({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/workspace/available-projects": {
+      "get": {
+        "operationId": "workspace.availableProjects",
+        "summary": "List available projects",
+        "responses": {
+          "200": {
+            "description": "Available projects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Project"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.availableProjects({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/workspace/{workspaceID}": {
+      "get": {
+        "operationId": "workspace.get",
+        "summary": "Get workspace",
+        "responses": {
+          "200": {
+            "description": "Workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.get({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "workspace.delete",
+        "summary": "Delete workspace",
+        "responses": {
+          "200": {
+            "description": "Deleted workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/workspace/{workspaceID}/projects": {
+      "patch": {
+        "operationId": "workspace.updateProjects",
+        "summary": "Update workspace projects",
+        "responses": {
+          "200": {
+            "description": "Updated workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "directories": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "primaryProjectID": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "directories"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.updateProjects({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/workspace/reset": {
+      "post": {
+        "operationId": "workspace.resetData",
+        "summary": "Reset all runtime data",
+        "responses": {
+          "200": {
+            "description": "Reset complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.workspace.resetData({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/user-auth/login": {
       "post": {
         "operationId": "userAuth.login",
@@ -2249,6 +2563,278 @@
         ]
       }
     },
+    "/project/group": {
+      "get": {
+        "operationId": "project.group.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List project groups",
+        "description": "List groups used to organize projects.",
+        "responses": {
+          "200": {
+            "description": "Project groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectGroup"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.project.group.list({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "project.group.create",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Create project group",
+        "description": "Create a group used to organize projects.",
+        "responses": {
+          "200": {
+            "description": "Created project group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "profile_markdown": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.project.group.create({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/project/group/{id}": {
+      "patch": {
+        "operationId": "project.group.update",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Update project group",
+        "description": "Update a project group.",
+        "responses": {
+          "200": {
+            "description": "Updated project group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "profile_markdown": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.project.group.update({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "project.group.delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Delete project group",
+        "description": "Delete a project group.",
+        "responses": {
+          "200": {
+            "description": "Deleted project group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.project.group.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/project/registry": {
       "get": {
         "operationId": "project.registry.list",
@@ -2354,6 +2940,34 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "profile_markdown": {
+                    "type": "string"
+                  },
+                  "group_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "visibility": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "all",
+                          "include",
+                          "exclude"
+                        ]
+                      },
+                      "user_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "required": [
@@ -2446,6 +3060,34 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "profile_markdown": {
+                    "type": "string"
+                  },
+                  "group_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "visibility": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "all",
+                          "include",
+                          "exclude"
+                        ]
+                      },
+                      "user_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -3518,6 +4160,9 @@
                   },
                   "permission": {
                     "$ref": "#/components/schemas/PermissionRuleset"
+                  },
+                  "workspaceID": {
+                    "type": "string"
                   }
                 }
               }
@@ -4428,60 +5073,6 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.unshare({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/session/{sessionID}/diff": {
-      "get": {
-        "operationId": "session.diff",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "sessionID",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses.*"
-            },
-            "required": true
-          },
-          {
-            "in": "query",
-            "name": "messageID",
-            "schema": {
-              "type": "string",
-              "pattern": "^msg.*"
-            }
-          }
-        ],
-        "summary": "Get message diff",
-        "description": "Get the file changes (diff) that resulted from a specific user message in the session.",
-        "responses": {
-          "200": {
-            "description": "Successfully retrieved diff",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FileDiff"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.diff({\n  ...\n})"
           }
         ]
       }
@@ -8717,6 +9308,23 @@
           "description": {
             "type": "string"
           },
+          "profile_markdown": {
+            "type": "string"
+          },
+          "group_ids": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groups": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "icon": {
             "type": "object",
             "properties": {
@@ -9768,41 +10376,6 @@
           "properties"
         ]
       },
-      "FileDiff": {
-        "type": "object",
-        "properties": {
-          "file": {
-            "type": "string"
-          },
-          "before": {
-            "type": "string"
-          },
-          "after": {
-            "type": "string"
-          },
-          "additions": {
-            "type": "number"
-          },
-          "deletions": {
-            "type": "number"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "added",
-              "deleted",
-              "modified"
-            ]
-          }
-        },
-        "required": [
-          "file",
-          "before",
-          "after",
-          "additions",
-          "deletions"
-        ]
-      },
       "UserMessage": {
         "type": "object",
         "properties": {
@@ -9835,17 +10408,8 @@
               },
               "body": {
                 "type": "string"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
               }
-            },
-            "required": [
-              "diffs"
-            ]
+            }
           },
           "agent": {
             "type": "string"
@@ -12269,11 +12833,74 @@
           "slug": {
             "type": "string"
           },
+          "workspaceID": {
+            "type": "string",
+            "pattern": "^wsp_.*"
+          },
           "projectID": {
             "type": "string"
           },
           "directory": {
             "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "roots": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "projectID": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sourceDirectory": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "userWorktreeDirectory": {
+                  "type": "string"
+                },
+                "sessionWorktreeDirectory": {
+                  "type": "string"
+                },
+                "primary": {
+                  "type": "boolean"
+                },
+                "vcs": {
+                  "type": "string",
+                  "const": "git"
+                },
+                "branch": {
+                  "type": "string"
+                },
+                "baseBranch": {
+                  "type": "string"
+                },
+                "baseCommit": {
+                  "type": "string"
+                },
+                "headCommit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "projectID",
+                "slug",
+                "sourceDirectory",
+                "userWorktreeDirectory",
+                "sessionWorktreeDirectory"
+              ]
+            }
           },
           "userID": {
             "type": "string",
@@ -12294,12 +12921,6 @@
               },
               "files": {
                 "type": "number"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
               }
             },
             "required": [
@@ -12373,8 +12994,10 @@
         "required": [
           "id",
           "slug",
+          "workspaceID",
           "projectID",
           "directory",
+          "cwd",
           "title",
           "version",
           "time"
@@ -12444,37 +13067,6 @@
             },
             "required": [
               "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.diff": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.diff"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "diff": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
-              }
-            },
-            "required": [
-              "sessionID",
-              "diff"
             ]
           }
         },
@@ -12819,9 +13411,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.session.deleted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.diff"
           },
           {
             "$ref": "#/components/schemas/Event.session.error"
@@ -14342,6 +14931,10 @@
               "type": "string"
             }
           },
+          "workspace_boundary_prompt": {
+            "description": "Global system prompt for workspace and worktree editing boundaries",
+            "type": "string"
+          },
           "layout": {
             "$ref": "#/components/schemas/LayoutConfig"
           },
@@ -14438,6 +15031,138 @@
           "data",
           "errors",
           "success"
+        ]
+      },
+      "Workspace": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^wsp_.*"
+          },
+          "name": {
+            "type": "string"
+          },
+          "directory": {
+            "type": "string"
+          },
+          "userID": {
+            "type": "string",
+            "pattern": "^usr.*"
+          },
+          "primaryProjectID": {
+            "type": "string"
+          },
+          "selected_group_ids": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "selected_groups": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "projectID": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sourceDirectory": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "group_ids": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "groups": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "primary": {
+                  "type": "boolean"
+                },
+                "vcs": {
+                  "type": "string",
+                  "const": "git"
+                }
+              },
+              "required": [
+                "projectID",
+                "slug",
+                "sourceDirectory"
+              ]
+            }
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              },
+              "updated": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "created",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "directory",
+          "primaryProjectID",
+          "projects",
+          "time"
+        ]
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "NotFoundError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
         ]
       },
       "UserAuth.LoginResponse": {
@@ -14655,30 +15380,6 @@
           "token"
         ]
       },
-      "NotFoundError": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "const": "NotFoundError"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "name",
-          "data"
-        ]
-      },
       "OAuth": {
         "type": "object",
         "properties": {
@@ -14789,6 +15490,50 @@
           "ignored"
         ]
       },
+      "ProjectGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "profile_markdown": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              },
+              "updated": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "created",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "time"
+        ]
+      },
       "ProjectRegistry": {
         "type": "object",
         "properties": {
@@ -14806,6 +15551,48 @@
           },
           "description": {
             "type": "string"
+          },
+          "profile_markdown": {
+            "type": "string"
+          },
+          "group_ids": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groups": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "visibility": {
+            "default": {
+              "mode": "all",
+              "user_ids": []
+            },
+            "type": "object",
+            "properties": {
+              "mode": {
+                "default": "all",
+                "type": "string",
+                "enum": [
+                  "all",
+                  "include",
+                  "exclude"
+                ]
+              },
+              "user_ids": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "created_by": {
             "type": "string"
@@ -15767,6 +16554,41 @@
           "status"
         ]
       },
+      "FileDiff": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "before": {
+            "type": "string"
+          },
+          "after": {
+            "type": "string"
+          },
+          "additions": {
+            "type": "number"
+          },
+          "deletions": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "added",
+              "deleted",
+              "modified"
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "before",
+          "after",
+          "additions",
+          "deletions"
+        ]
+      },
       "MCPStatusConnected": {
         "type": "object",
         "properties": {
@@ -15881,6 +16703,47 @@
           "directory"
         ]
       },
+      "VcsSubmoduleInfo": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "submodules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VcsSubmoduleInfo"
+            }
+          },
+          "recentBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "localBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remoteBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
       "VcsInfo": {
         "type": "object",
         "properties": {
@@ -15893,7 +16756,7 @@
           "submodules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/__schema0"
+              "$ref": "#/components/schemas/VcsSubmoduleInfo"
             }
           },
           "branches": {
@@ -15905,50 +16768,7 @@
         },
         "required": [
           "branch"
-        ],
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "path": {
-                "type": "string"
-              },
-              "commit": {
-                "type": "string"
-              },
-              "branch": {
-                "type": "string"
-              },
-              "submodules": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/__schema0"
-                }
-              },
-              "recentBranches": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "localBranches": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "remoteBranches": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "required": [
-              "path"
-            ]
-          }
-        }
+        ]
       },
       "Command": {
         "type": "object",

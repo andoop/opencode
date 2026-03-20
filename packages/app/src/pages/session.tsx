@@ -721,8 +721,12 @@ export default function Page() {
     tabs().setActive(normalized)
   })
 
-  const diffs = createMemo(() => (params.id ? (sessionSyncData().session_diff[params.id] ?? []) : []))
-  const reviewCount = createMemo(() => Math.max(info()?.summary?.files ?? 0, diffs().length))
+  const [gitStatus, setGitStatus] = createSignal<Array<{ path: string; added: number; removed: number; status: string }>>([])
+  const [gitDiffs, setGitDiffs] = createSignal<FileDiff[]>([])
+  const [gitDiffsReady, setGitDiffsReady] = createSignal(false)
+  const [gitRefresh, setGitRefresh] = createSignal(0)
+  let gitStatusRequest = 0
+  const reviewCount = createMemo(() => gitDiffs().length)
   const hasReview = createMemo(() => reviewCount() > 0)
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
   const messages = createMemo(() => {
@@ -794,7 +798,7 @@ export default function Page() {
     expanded: {} as Record<string, boolean>,
     messageId: undefined as string | undefined,
     turnStart: 0,
-    mobileTab: "session" as "session" | "changes",
+    mobileTab: "session" as "session" | "git",
     promptHeight: 0,
   })
 
@@ -848,7 +852,7 @@ export default function Page() {
     const normalize = (p: string) => p.replaceAll("\\\\", "/").replace(/\/+$/, "")
 
     const out = new Map<string, "add" | "del" | "mix">()
-    for (const diff of diffs()) {
+    for (const diff of gitDiffs()) {
       const file = normalize(diff.file)
       const kind = diff.status === "added" ? "add" : diff.status === "deleted" ? "del" : "mix"
 
@@ -864,13 +868,8 @@ export default function Page() {
     return out
   })
   const emptyDiffFiles: string[] = []
-  const diffFiles = createMemo(() => diffs().map((d) => d.file), emptyDiffFiles, { equals: same })
-  const diffsReady = createMemo(() => {
-    const id = params.id
-    if (!id) return true
-    if (!hasReview()) return true
-    return sessionSyncData().session_diff[id] !== undefined
-  })
+  const diffFiles = createMemo(() => gitDiffs().map((d) => d.file), emptyDiffFiles, { equals: same })
+  const diffsReady = createMemo(() => gitDiffsReady())
 
   const idle = { type: "idle" as const }
   let inputRef!: HTMLDivElement
@@ -1485,10 +1484,10 @@ export default function Page() {
       .filter((tab) => tab !== "context"),
   )
 
-  const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
+  const mobileReview = createMemo(() => !isDesktop() && store.mobileTab === "git")
 
   const fileTreeTab = () => layout.fileTree.tab()
-  const setFileTreeTab = (value: "changes" | "all" | "git") => layout.fileTree.setTab(value)
+  const setFileTreeTab = (value: "all" | "git") => layout.fileTree.setTab(value)
 
   const [tree, setTree] = createStore({
     reviewScroll: undefined as HTMLDivElement | undefined,
@@ -1505,7 +1504,7 @@ export default function Page() {
 
   const showAllFiles = () => {
     if (!auth.canFeature("files")) return
-    if (fileTreeTab() !== "changes") return
+    if (fileTreeTab() !== "git") return
     setFileTreeTab("all")
   }
 
@@ -1537,9 +1536,7 @@ export default function Page() {
           <Match when={true}>
             <div class="h-full px-6 pb-30 flex flex-col items-center justify-center text-center gap-6">
               <Mark class="w-14 opacity-10" />
-              <div class="text-14-regular text-text-weak max-w-56">
-                {fileTreeTab() === "git" ? language.t("session.git.noChanges") : language.t("session.review.empty")}
-              </div>
+              <div class="text-14-regular text-text-weak max-w-56">{language.t("session.git.noChanges")}</div>
             </div>
           </Match>
         </Switch>
@@ -1552,7 +1549,7 @@ export default function Page() {
       () => tabs().active(),
       (active) => {
         if (!active) return
-        if (fileTreeTab() !== "changes") return
+        if (fileTreeTab() !== "git") return
         if (!file.pathFromTab(active)) return
         showAllFiles()
       },
@@ -1561,7 +1558,7 @@ export default function Page() {
   )
 
   const setFileTreeTabValue = (value: string) => {
-    if (value !== "changes" && value !== "all" && value !== "git") return
+    if (value !== "all" && value !== "git") return
     setFileTreeTab(value)
   }
 
@@ -1610,7 +1607,7 @@ export default function Page() {
     const pending = pendingDiff()
     if (!pending) return
     if (!reviewScroll()) return
-    const ready = fileTreeTab() === "git" ? gitDiffsReady() : diffsReady()
+    const ready = gitDiffsReady()
     if (!ready) return
 
     const attempt = (count: number) => {
@@ -1670,23 +1667,6 @@ export default function Page() {
   })
 
   createEffect(() => {
-    const id = params.id
-    if (!id) return
-
-    const wants = isDesktop() ? layout.fileTree.opened() && fileTreeTab() === "changes" : store.mobileTab === "changes"
-    if (!wants) return
-
-    const cached = sessionSyncData().session_diff[id]
-    const expected = info()?.summary?.files ?? 0
-    const stale = cached !== undefined && cached.length === 0 && expected > 0
-    if (cached !== undefined && !stale) return
-    if (sync.status === "loading") return
-
-    const dir = actualSessionDir()
-    void sync.session.diff(id, dir !== sdk.directory ? dir : undefined, stale)
-  })
-
-  createEffect(() => {
     if (!isDesktop()) return
     if (!layout.fileTree.opened()) return
     if (sync.status === "loading") return
@@ -1695,11 +1675,6 @@ export default function Page() {
     void file.tree.list("")
   })
 
-  const [gitStatus, setGitStatus] = createSignal<Array<{ path: string; added: number; removed: number; status: string }>>([])
-  const [gitDiffs, setGitDiffs] = createSignal<FileDiff[]>([])
-  const [gitDiffsReady, setGitDiffsReady] = createSignal(false)
-  const [gitRefresh, setGitRefresh] = createSignal(0)
-  let gitStatusRequest = 0
   const gitStatusFiles = createMemo(() => gitStatus().map((f) => f.path))
   const gitStatusKinds = createMemo(() => {
     const merge = (a: "add" | "del" | "mix" | undefined, b: "add" | "del" | "mix") => {
@@ -1787,11 +1762,10 @@ export default function Page() {
     onCleanup(stop)
   })
 
-  const reviewDiffs = createMemo(() => (fileTreeTab() === "git" ? gitDiffs() : diffs()))
-  const reviewReady = createMemo(() => (fileTreeTab() === "git" ? gitDiffsReady() : diffsReady()))
-  const reviewHasChanges = createMemo(() => (fileTreeTab() === "git" ? gitDiffs().length > 0 : hasReview()))
+  const reviewDiffs = createMemo(() => gitDiffs())
+  const reviewReady = createMemo(() => gitDiffsReady())
+  const reviewHasChanges = createMemo(() => gitDiffs().length > 0)
   const viewReviewFile = (path: string) => {
-    if (fileTreeTab() === "changes") showAllFiles()
     if (fileTreeTab() === "git") setFileTreeTab("all")
     const value = file.tab(path)
     tabs().open(value)
@@ -2230,10 +2204,10 @@ export default function Page() {
                 {language.t("session.tab.session")}
               </Tabs.Trigger>
               <Tabs.Trigger
-                value="changes"
+                value="git"
                 class="w-1/2 !border-r-0"
                 classes={{ button: "w-full" }}
-                onClick={() => setStore("mobileTab", "changes")}
+                onClick={() => setStore("mobileTab", "git")}
               >
                 <Switch>
                   <Match when={hasReview()}>
@@ -2263,7 +2237,7 @@ export default function Page() {
               <Match when={params.id}>
                 <Show when={activeMessage()}>
                   <Show
-                    when={!mobileChanges()}
+                    when={!mobileReview()}
                     fallback={
                       <div class="relative h-full overflow-hidden">
                         <Switch>
@@ -2272,12 +2246,13 @@ export default function Page() {
                               when={diffsReady()}
                               fallback={
                                 <div class="px-4 py-4 text-text-weak">
-                                  {language.t("session.review.loadingChanges")}
+                                  {language.t("common.loading")}
+                                  {language.t("common.loading.ellipsis")}
                                 </div>
                               }
                             >
                               <SessionReviewTab
-                                diffs={diffs}
+                                diffs={gitDiffs}
                                 view={view}
                                 diffStyle="unified"
                                 focusedFile={activeDiff()}
@@ -2302,9 +2277,7 @@ export default function Page() {
                           <Match when={true}>
                             <div class="h-full px-4 pb-30 flex flex-col items-center justify-center text-center gap-6">
                               <Mark class="w-14 opacity-10" />
-                              <div class="text-14-regular text-text-weak max-w-56">
-                                {language.t("session.review.empty")}
-                              </div>
+                              <div class="text-14-regular text-text-weak max-w-56">{language.t("session.git.noChanges")}</div>
                             </div>
                           </Match>
                         </Switch>
@@ -2724,7 +2697,7 @@ export default function Page() {
           >
             <div class="flex-1 min-w-0 h-full">
               <Show
-                when={fileTreeTab() === "changes" || fileTreeTab() === "git"}
+                when={fileTreeTab() === "git"}
                 fallback={
                   <DragDropProvider
                     onDragStart={handleDragStart}
@@ -3410,10 +3383,6 @@ export default function Page() {
                     data-scope="filetree"
                   >
                     <Tabs.List>
-                      <Tabs.Trigger value="changes" class="flex-1" classes={{ button: "w-full" }}>
-                        {reviewCount()}{" "}
-                        {language.t(reviewCount() === 1 ? "session.review.change.one" : "session.review.change.other")}
-                      </Tabs.Trigger>
                       <Tabs.Trigger value="git" class="flex-1" classes={{ button: "w-full" }}>
                         {gitStatus().length ? `${gitStatus().length} ` : ""}
                         {language.t("session.files.git")}
@@ -3422,35 +3391,6 @@ export default function Page() {
                         {language.t("session.files.all")}
                       </Tabs.Trigger>
                     </Tabs.List>
-                    <Tabs.Content value="changes" class="bg-background-base px-3 py-0">
-                      <Switch>
-                        <Match when={hasReview()}>
-                          <Show
-                            when={diffsReady()}
-                            fallback={
-                              <div class="px-2 py-2 text-12-regular text-text-weak">
-                                {language.t("common.loading")}
-                                {language.t("common.loading.ellipsis")}
-                              </div>
-                            }
-                          >
-                            <FileTree
-                              path=""
-                              allowed={diffFiles()}
-                              kinds={kinds()}
-                              draggable={false}
-                              active={activeDiff()}
-                              onFileClick={(node) => focusReviewDiff(node.path)}
-                            />
-                          </Show>
-                        </Match>
-                        <Match when={true}>
-                          <div class="mt-8 text-center text-12-regular text-text-weak">
-                            {language.t("session.review.noChanges")}
-                          </div>
-                        </Match>
-                      </Switch>
-                    </Tabs.Content>
                     <Tabs.Content value="git" class="bg-background-base px-3 py-0">
                       <Show
                         when={gitStatus().length > 0}
