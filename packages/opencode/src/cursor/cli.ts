@@ -28,6 +28,10 @@ function textLength(input: unknown) {
   return textFromContent(input).length
 }
 
+function oneLine(text: string) {
+  return text.replace(/\s+/g, " ").trim()
+}
+
 type StreamEvent =
   | { type: "start" }
   | { type: "start-step" }
@@ -198,6 +202,26 @@ function textFromContent(content: any): string {
   return JSON.stringify(content)
 }
 
+function previewValue(input: unknown, max = 200) {
+  const text = oneLine(textFromContent(input))
+  return text ? truncate(text, max) : ""
+}
+
+function toolInput(update: any) {
+  return (
+    update.rawInput ??
+    update.input ??
+    update.arguments ??
+    update.params?.arguments ??
+    update.toolInput ??
+    update.call?.arguments
+  )
+}
+
+function toolOutput(update: any) {
+  return update.content ?? update.rawOutput ?? update.output ?? update.result
+}
+
 function toolName(update: any) {
   const raw = update.rawInput
   if (raw && typeof raw === "object") {
@@ -233,6 +257,22 @@ type CursorStreamLog = {
   info(message: string, extra?: Record<string, unknown>): void
 }
 
+type ToolTrace = {
+  startedAt?: number
+  updatedAt?: number
+  status?: string
+  title?: string
+  rawInputKeys?: string
+  inputPreview?: string
+  contentPreview?: string
+  rawOutputPreview?: string
+  contentLen?: number
+  rawOutputLen?: number
+  updateCount?: number
+}
+
+type ToolWaiter = () => void
+
 class Rpc {
   private nextId = 1
   private pending = new Map<number, RpcPending>()
@@ -256,22 +296,6 @@ class Rpc {
         this.slog.warn("acp stdout not json", { preview: truncate(line, 240) })
         return
       }
-      if (msg.id !== undefined && msg.id !== null && this.pending.has(msg.id)) {
-        const pending = this.pending.get(msg.id)!
-        this.pending.delete(msg.id)
-        if (msg.error) {
-          const detail = msg.error.message ?? JSON.stringify(msg.error)
-          this.slog.warn("acp rpc response error", {
-            rpcMethod: pending.method,
-            rpcError: truncate(detail, 480),
-            failureKind: classifyCursorFailure(detail),
-          })
-          pending.reject(new Error(detail))
-          return
-        }
-        pending.resolve(msg.result)
-        return
-      }
       if (msg.method === "session/request_permission" && msg.id !== undefined && msg.id !== null) {
         this.slog.info("acp permission requested", {
           requestID: String(msg.id),
@@ -293,6 +317,22 @@ class Rpc {
               }
             : { outcome: "cancelled" },
         })
+        return
+      }
+      if ((msg.result !== undefined || msg.error !== undefined) && msg.id !== undefined && msg.id !== null && this.pending.has(msg.id)) {
+        const pending = this.pending.get(msg.id)!
+        this.pending.delete(msg.id)
+        if (msg.error) {
+          const detail = msg.error.message ?? JSON.stringify(msg.error)
+          this.slog.warn("acp rpc response error", {
+            rpcMethod: pending.method,
+            rpcError: truncate(detail, 480),
+            failureKind: classifyCursorFailure(detail),
+          })
+          pending.reject(new Error(detail))
+          return
+        }
+        pending.resolve(msg.result)
         return
       }
       this.onUpdate(msg)
@@ -400,33 +440,120 @@ export namespace CursorCLI {
         slog.warn("cursor agent stderr", { stderrLine: stderrLines, text: truncate(t, 500) })
       })
     }
-    proc.on("exit", (code, signal) => {
-      if (code !== 0 && code !== null) {
-        slog.warn("cursor agent process exited", { exitCode: code, signal: signal ?? "" })
-      }
-    })
     let textOpen = false
     let reasoningOpen = false
     let textChars = 0
     let reasoningChars = 0
+    const streamStartedAt = Date.now()
+    let promptReturnedAt = 0
+    let closeStartedAt = 0
+    let abortStartedAt = 0
     const seenToolInput = new Set<string>()
     const seenToolCall = new Set<string>()
     const settledToolCalls = new Set<string>()
     const toolInputs = new Map<string, unknown>()
     const toolNames = new Map<string, string>()
+    const toolTrace = new Map<string, ToolTrace>()
     const seenUpdateKinds = new Set<string>()
     const toolUpdateCounts = new Map<string, number>()
     const toolLastStatus = new Map<string, string>()
+    const toolWaiters = new Set<ToolWaiter>()
+    const recentUpdates: string[] = []
+
+    function trace(id: string) {
+      const item = toolTrace.get(id) ?? {}
+      toolTrace.set(id, item)
+      return item
+    }
+
+    function traceSummary(id: string) {
+      const item = toolTrace.get(id)
+      if (!item) return undefined
+      return {
+        toolName: toolNames.get(id) ?? "cursor_tool",
+        status: item.status ?? "",
+        title: item.title ?? "",
+        updates: item.updateCount ?? 0,
+        rawInputKeys: item.rawInputKeys ?? "",
+        inputPreview: item.inputPreview ?? "",
+        contentPreview: item.contentPreview ?? "",
+        rawOutputPreview: item.rawOutputPreview ?? "",
+        contentLen: item.contentLen ?? 0,
+        rawOutputLen: item.rawOutputLen ?? 0,
+        openForMs: item.startedAt ? Date.now() - item.startedAt : undefined,
+        idleForMs: item.updatedAt ? Date.now() - item.updatedAt : undefined,
+      }
+    }
+
+    function unsettledToolIDs() {
+      return [...seenToolCall].filter((id) => !settledToolCalls.has(id))
+    }
+
+    function unsettledToolDetails() {
+      return unsettledToolIDs().map((id) => ({ toolCallId: id, ...traceSummary(id) }))
+    }
+
+    function rememberUpdate(update: any) {
+      recentUpdates.push(
+        JSON.stringify({
+          kind: String(update.sessionUpdate ?? "unknown"),
+          toolCallId: update.toolCallId ?? "",
+          toolName: update.toolName ?? toolName(update),
+          status: update.status ?? "",
+          title: update.title ?? "",
+          input: previewValue(toolInput(update), 120),
+          output: previewValue(toolOutput(update), 120),
+        }),
+      )
+      if (recentUpdates.length > 12) recentUpdates.shift()
+    }
+
+    function notifyToolWaiters() {
+      for (const item of [...toolWaiters]) item()
+    }
+
+    async function waitForTrailingToolUpdates(reason: string, quietMs = 2000, maxWaitMs = 6000) {
+      const initial = unsettledToolIDs()
+      if (initial.length === 0) return
+      slog.warn("cursor-cli waiting for trailing tool updates", {
+        reason,
+        quietMs,
+        maxWaitMs,
+        unsettledTools: unsettledToolDetails(),
+      })
+      const startedAt = Date.now()
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(timer)
+          toolWaiters.delete(check)
+          resolve()
+        }
+        const check = () => {
+          if (initial.every((id) => settledToolCalls.has(id))) done()
+        }
+        const timer = setTimeout(done, maxWaitMs)
+        toolWaiters.add(check)
+        check()
+      })
+      slog.info("cursor-cli trailing tool wait completed", {
+        reason,
+        waitedMs: Date.now() - startedAt,
+        unsettledTools: unsettledToolDetails(),
+        recentUpdates,
+      })
+    }
 
     function settleOpenToolCalls(reason: string) {
       for (const id of seenToolCall) {
         if (settledToolCalls.has(id)) continue
         settledToolCalls.add(id)
         const name = toolNames.get(id) ?? "cursor_tool"
+        const trace = traceSummary(id)
         slog.warn("cursor-cli unfinished tool settled", {
           toolCallId: id,
           toolName: name,
           reason: truncate(reason, 200),
+          trace,
         })
         queue.push({
           type: "tool-error",
@@ -439,6 +566,7 @@ export namespace CursorCLI {
 
     function logSessionUpdate(update: any) {
       const kind = String(update.sessionUpdate ?? "unknown")
+      rememberUpdate(update)
       if (!seenUpdateKinds.has(kind)) {
         seenUpdateKinds.add(kind)
         slog.info("cursor session update kind", {
@@ -460,7 +588,19 @@ export namespace CursorCLI {
       const id = String(update.toolCallId ?? "")
       const count = (toolUpdateCounts.get(id) ?? 0) + 1
       toolUpdateCounts.set(id, count)
+      const item = trace(id)
+      item.updateCount = count
+      item.updatedAt = Date.now()
       const status = typeof update.status === "string" ? update.status : ""
+      if (!item.startedAt) item.startedAt = item.updatedAt
+      if (status) item.status = status
+      if (typeof update.title === "string" && update.title) item.title = update.title
+      item.rawInputKeys = listKeys(toolInput(update))
+      item.contentLen = textLength(update.content)
+      item.rawOutputLen = textLength(toolOutput(update))
+      item.contentPreview = previewValue(update.content)
+      item.rawOutputPreview = previewValue(toolOutput(update))
+      if (toolInput(update) !== undefined) item.inputPreview = previewValue(toolInput(update))
       const lastStatus = toolLastStatus.get(id)
       const shouldLog =
         kind === "tool_call" ||
@@ -479,11 +619,28 @@ export namespace CursorCLI {
         status,
         count,
         title: update.title ?? "",
-        rawInputKeys: listKeys(update.rawInput),
-        contentLen: textLength(update.content),
-        rawOutputLen: textLength(update.rawOutput),
+        rawInputKeys: item.rawInputKeys ?? "",
+        inputPreview: item.inputPreview ?? "",
+        contentPreview: item.contentPreview ?? "",
+        rawOutputPreview: item.rawOutputPreview ?? "",
+        contentLen: item.contentLen ?? 0,
+        rawOutputLen: item.rawOutputLen ?? 0,
       })
     }
+    proc.on("exit", (code, signal) => {
+      const unsettled = [...seenToolCall].filter((id) => !settledToolCalls.has(id))
+      if (code === 0 || code === null) {
+        if (unsettled.length === 0) return
+      }
+      slog.warn("cursor agent process exited", {
+        exitCode: code ?? "",
+        signal: signal ?? "",
+        duration: Date.now() - streamStartedAt,
+        textOpen,
+        reasoningOpen,
+        unsettledTools: unsettled.map((id) => ({ toolCallId: id, ...traceSummary(id) })),
+      })
+    })
     const textId = "cursor-text"
     const reasoningId = "cursor-reasoning"
     const rpc = new Rpc(proc, (msg) => {
@@ -519,12 +676,18 @@ export namespace CursorCLI {
           const id = update.toolCallId as string
           const name = toolName(update)
           toolNames.set(id, name)
+          const item = trace(id)
+          item.startedAt = item.startedAt ?? Date.now()
+          item.updatedAt = Date.now()
+          item.title = typeof update.title === "string" && update.title ? update.title : item.title
+          item.rawInputKeys = listKeys(toolInput(update))
           if (!seenToolInput.has(id)) {
             seenToolInput.add(id)
             queue.push({ type: "tool-input-start", id, toolName: name })
           }
-          if (update.rawInput !== undefined) {
-            toolInputs.set(id, update.rawInput)
+          if (toolInput(update) !== undefined) {
+            toolInputs.set(id, toolInput(update))
+            item.inputPreview = previewValue(toolInput(update))
           }
           return
         }
@@ -532,7 +695,7 @@ export namespace CursorCLI {
           const id = update.toolCallId as string
           const name = toolNames.get(id) ?? toolName(update)
           toolNames.set(id, name)
-          if (!seenToolCall.has(id) && !toolInputs.has(id) && update.rawInput === undefined) {
+          if (!seenToolCall.has(id) && !toolInputs.has(id) && toolInput(update) === undefined) {
             slog.warn("cursor tool update missing initial input", {
               toolCallId: id,
               toolName: name,
@@ -543,8 +706,8 @@ export namespace CursorCLI {
             seenToolInput.add(id)
             queue.push({ type: "tool-input-start", id, toolName: name })
           }
-          if (update.rawInput !== undefined) {
-            toolInputs.set(id, update.rawInput)
+          if (toolInput(update) !== undefined) {
+            toolInputs.set(id, toolInput(update))
           }
           if (!seenToolCall.has(id) && toolInputs.has(id)) {
             seenToolCall.add(id)
@@ -557,21 +720,23 @@ export namespace CursorCLI {
           }
           if (update.status === "completed") {
             settledToolCalls.add(id)
+            notifyToolWaiters()
             queue.push({
               type: "tool-result",
               toolCallId: id,
               input: toolInputs.get(id),
               output: {
                 title: update.title ?? name,
-                output: textFromContent(update.content) || textFromContent(update.rawOutput),
+                output: textFromContent(update.content) || textFromContent(toolOutput(update)),
                 metadata: {},
               },
             })
           }
           if (update.status === "failed") {
             settledToolCalls.add(id)
+            notifyToolWaiters()
             const toolErrMsg =
-              textFromContent(update.content) || textFromContent(update.rawOutput) || "Tool failed"
+              textFromContent(update.content) || textFromContent(toolOutput(update)) || "Tool failed"
             slog.warn("cursor tool_call_update failed", {
               toolCallId: id,
               toolName: name,
@@ -660,14 +825,19 @@ export namespace CursorCLI {
             },
           ],
         })
+        promptReturnedAt = Date.now()
+        await waitForTrailingToolUpdates("session_prompt_completed")
+        const unsettled = unsettledToolIDs()
         slog.info("cursor session prompt completed", {
           cursorSessionID: sessionId,
           stopReason: response?.stopReason ?? "",
           finishReason: finishReason(response?.stopReason ?? "end_turn"),
+          duration: Date.now() - streamStartedAt,
           textChars,
           reasoningChars,
           toolCalls: seenToolCall.size,
-          unsettledTools: [...seenToolCall].filter((id) => !settledToolCalls.has(id)).join(","),
+          unsettledTools: unsettled.join(","),
+          unsettledDetails: unsettledToolDetails(),
         })
         if (reasoningOpen) {
           reasoningOpen = false
@@ -713,7 +883,13 @@ export namespace CursorCLI {
     input.abort.addEventListener(
       "abort",
       () => {
-        slog.info("cursor-cli stream aborted by client")
+        slog.info("cursor-cli stream aborted by client", {
+          duration: Date.now() - streamStartedAt,
+          unsettledTools: [...seenToolCall].filter((id) => !settledToolCalls.has(id)).map((id) => ({
+            toolCallId: id,
+            ...traceSummary(id),
+          })),
+        })
         rpc.close()
       },
       { once: true },
