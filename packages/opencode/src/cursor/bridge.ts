@@ -1,5 +1,7 @@
 import { createInterface } from "readline"
 import { fileURLToPath } from "url"
+import os from "os"
+import path from "path"
 import { Identifier } from "@/id/id"
 import { MCP } from "@/mcp"
 import { Agent } from "@/agent/agent"
@@ -211,6 +213,7 @@ export function bridgeCommand(input: { cwd: string; sessionID: string; agent: st
     OPENCODE_CURSOR_ALLOWED_TOOLS: JSON.stringify(input.allowedTools),
     OPENCODE_CURSOR_SESSION_ID: input.sessionID,
     OPENCODE_CURSOR_AGENT: input.agent,
+    XDG_STATE_HOME: process.env.XDG_STATE_HOME || path.join(os.tmpdir(), "opencode-cursor-xdg"),
   }
   const script = fileURLToPath(new URL("../index.ts", import.meta.url))
   if (process.env.OPENCODE_CURSOR_BRIDGE_COMMAND) {

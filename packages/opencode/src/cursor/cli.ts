@@ -2,8 +2,10 @@ import { createInterface } from "readline"
 import { spawn } from "child_process"
 import type { ModelMessage } from "ai"
 import { Log } from "@/util/log"
-import { bridgeCommand, bridgeToolNames } from "./bridge"
+import { bridgeCommand } from "./bridge"
 import { Installation } from "@/installation"
+import { CursorToolCall, instructions, parse, surface, toolPrompt } from "./toolcall"
+import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "cursor-cli" })
 
@@ -149,26 +151,18 @@ function renderContent(content: ModelMessage["content"]): string {
     .join("\n")
 }
 
-async function serializePrompt(input: { system: string[]; messages: ModelMessage[]; agent: string; allowedTools: string[] }) {
-  const bridged = await bridgeToolNames({
-    agent: input.agent,
-    allowedTools: input.allowedTools,
-  }).catch(() => [])
+async function serializePrompt(input: {
+  system: string[]
+  messages: ModelMessage[]
+  tools: string
+}) {
   const prompt = [] as string[]
   if (input.system.length > 0) {
     prompt.push("<system>")
     prompt.push(input.system.join("\n\n"))
     prompt.push("</system>")
   }
-  if (bridged.length > 0) {
-    prompt.push(
-      [
-        "Additional OpenCode tools are available through MCP.",
-        "Their names are prefixed with `opencode_`.",
-        `Available bridged tools: ${bridged.join(", ")}`,
-      ].join("\n"),
-    )
-  }
+  if (input.tools) prompt.push(input.tools)
   prompt.push("The following transcript is the full conversation context for this turn.")
   for (const message of input.messages) {
     prompt.push(`<${message.role}>`)
@@ -396,6 +390,11 @@ export namespace CursorCLI {
       throw new Error("Cursor CLI not found. Install it and ensure the `agent` command is available.")
     }
 
+    const tools = await surface({
+      sessionID: input.sessionID,
+      agent: input.agent,
+      allowedTools: input.allowedTools,
+    })
     const bridge = bridgeCommand({
       cwd: input.cwd,
       sessionID: input.sessionID,
@@ -405,8 +404,7 @@ export namespace CursorCLI {
     const prompt = await serializePrompt({
       system: input.system,
       messages: input.messages,
-      agent: input.agent,
-      allowedTools: input.allowedTools,
+      tools: instructions(Object.values(tools)),
     })
     const proc = spawn(bin, ["acp"], {
       cwd: input.cwd,
@@ -459,6 +457,8 @@ export namespace CursorCLI {
     const toolLastStatus = new Map<string, string>()
     const toolWaiters = new Set<ToolWaiter>()
     const recentUpdates: string[] = []
+    let roundText = ""
+    let roundReasoning = ""
 
     function trace(id: string) {
       const item = toolTrace.get(id) ?? {}
@@ -652,24 +652,13 @@ export namespace CursorCLI {
         case "agent_message_chunk": {
           const text = textFromContent(update.content)
           if (!text) return
-          if (!textOpen) {
-            textOpen = true
-            queue.push({ type: "text-start", id: textId })
-          }
-          textChars += text.length
-          chunks.push(text)
-          queue.push({ type: "text-delta", id: textId, text })
+          roundText += text
           return
         }
         case "agent_thought_chunk": {
           const text = textFromContent(update.content)
           if (!text) return
-          if (!reasoningOpen) {
-            reasoningOpen = true
-            queue.push({ type: "reasoning-start", id: reasoningId })
-          }
-          reasoningChars += text.length
-          queue.push({ type: "reasoning-delta", id: reasoningId, text })
+          roundReasoning += text
           return
         }
         case "tool_call": {
@@ -759,6 +748,42 @@ export namespace CursorCLI {
 
     const text = (async () => {
       try {
+        function emitReasoning(text: string) {
+          if (!text) return
+          queue.push({ type: "reasoning-start", id: reasoningId })
+          queue.push({ type: "reasoning-delta", id: reasoningId, text })
+          queue.push({ type: "reasoning-end", id: reasoningId })
+          reasoningChars += text.length
+        }
+
+        function emitText(text: string) {
+          if (!text) return
+          queue.push({ type: "text-start", id: textId })
+          queue.push({ type: "text-delta", id: textId, text })
+          queue.push({ type: "text-end", id: textId })
+          textChars += text.length
+          chunks.push(text)
+        }
+
+        function finish(done: string, reason = "stop") {
+          settleOpenToolCalls(
+            "Cursor ended the turn before this tool finished (common with terminal commands or disconnect).",
+          )
+          queue.push({
+            type: "finish-step",
+            finishReason: reason,
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+              reasoningTokens: 0,
+            },
+          })
+          queue.push({ type: "finish" })
+          queue.finish()
+          return done
+        }
+
         queue.push({ type: "start" })
         queue.push({ type: "start-step" })
         const init = await rpc.request("initialize", {
@@ -812,57 +837,129 @@ export namespace CursorCLI {
             modeId: target.id,
           })
         }
-        slog.info("cursor session prompt start", {
-          cursorSessionID: sessionId,
-          promptChars: prompt.length,
-        })
-        const response = await rpc.request("session/prompt", {
-          sessionId,
-          prompt: [
-            {
-              type: "text",
-              text: prompt,
-            },
-          ],
-        })
-        promptReturnedAt = Date.now()
-        await waitForTrailingToolUpdates("session_prompt_completed")
-        const unsettled = unsettledToolIDs()
-        slog.info("cursor session prompt completed", {
-          cursorSessionID: sessionId,
-          stopReason: response?.stopReason ?? "",
-          finishReason: finishReason(response?.stopReason ?? "end_turn"),
-          duration: Date.now() - streamStartedAt,
-          textChars,
-          reasoningChars,
-          toolCalls: seenToolCall.size,
-          unsettledTools: unsettled.join(","),
-          unsettledDetails: unsettledToolDetails(),
-        })
-        if (reasoningOpen) {
-          reasoningOpen = false
-          queue.push({ type: "reasoning-end", id: reasoningId })
+        let next = prompt
+        let steps = 0
+        while (true) {
+          roundText = ""
+          roundReasoning = ""
+          const toolCount = seenToolCall.size
+          if (steps > 0) {
+            queue.push({ type: "start-step" })
+          }
+          slog.info("cursor session prompt start", {
+            cursorSessionID: sessionId,
+            promptChars: next.length,
+            localSteps: steps,
+          })
+          const response = await rpc.request("session/prompt", {
+            sessionId,
+            prompt: [
+              {
+                type: "text",
+                text: next,
+              },
+            ],
+          })
+          promptReturnedAt = Date.now()
+          await waitForTrailingToolUpdates("session_prompt_completed")
+          const parsed = seenToolCall.size === toolCount ? parse(roundText) : { text: roundText.trim(), calls: [], errors: [] }
+          emitReasoning(roundReasoning)
+          if (seenToolCall.size === toolCount && (parsed.calls.length > 0 || parsed.errors.length > 0)) {
+            const results = [] as Array<{ name: string; output: string; error?: boolean }>
+            for (const item of parsed.errors) {
+              const id = Identifier.ascending("tool")
+              queue.push({ type: "tool-input-start", id, toolName: item.name })
+              queue.push({
+                type: "tool-error",
+                toolCallId: id,
+                input: undefined,
+                error: new Error(item.error),
+              })
+              results.push({
+                name: item.name,
+                output: item.error,
+                error: true,
+              })
+            }
+            for (const item of parsed.calls) {
+              const id = Identifier.ascending("tool")
+              const tool = tools[item.name]
+              queue.push({ type: "tool-input-start", id, toolName: item.name })
+              queue.push({
+                type: "tool-call",
+                toolCallId: id,
+                toolName: item.name,
+                input: item.args,
+              })
+              if (!tool) {
+                const error = new Error(`Unknown tool: ${item.name}`)
+                queue.push({
+                  type: "tool-error",
+                  toolCallId: id,
+                  input: item.args,
+                  error,
+                })
+                results.push({
+                  name: item.name,
+                  output: error.message,
+                  error: true,
+                })
+                continue
+              }
+              try {
+                const result = await tool.execute(item.args, input.abort)
+                queue.push({
+                  type: "tool-result",
+                  toolCallId: id,
+                  input: item.args,
+                  output: {
+                    title: result.title || item.name,
+                    output: result.output,
+                    metadata: result.metadata,
+                  },
+                })
+                results.push({
+                  name: item.name,
+                  output: result.output,
+                })
+              } catch (error) {
+                const err = error instanceof Error ? error : new Error(String(error))
+                queue.push({
+                  type: "tool-error",
+                  toolCallId: id,
+                  input: item.args,
+                  error: err,
+                })
+                results.push({
+                  name: item.name,
+                  output: err.message,
+                  error: true,
+                })
+              }
+            }
+            steps += 1
+            if (steps >= CursorToolCall.STEP_MAX) {
+              emitText("Cursor CLI tool loop reached the maximum number of tool steps.")
+              return finish(chunks.join(""), "length")
+            }
+            next = toolPrompt(results)
+            continue
+          }
+          const unsettled = unsettledToolIDs()
+          slog.info("cursor session prompt completed", {
+            cursorSessionID: sessionId,
+            stopReason: response?.stopReason ?? "",
+            finishReason: finishReason(response?.stopReason ?? "end_turn"),
+            duration: Date.now() - streamStartedAt,
+            textChars,
+            reasoningChars,
+            toolCalls: seenToolCall.size,
+            unsettledTools: unsettled.join(","),
+            unsettledDetails: unsettledToolDetails(),
+          })
+          emitText(parsed.text)
+          return finish(chunks.join(""), finishReason(response?.stopReason ?? "end_turn"))
         }
-        if (textOpen) {
-          textOpen = false
-          queue.push({ type: "text-end", id: textId })
-        }
-        settleOpenToolCalls(
-          "Cursor ended the turn before this tool finished (common with terminal commands or disconnect).",
-        )
-        queue.push({
-          type: "finish-step",
-          finishReason: finishReason(response?.stopReason ?? "end_turn"),
-          usage: {
-            inputTokens: 0,
-            outputTokens: 0,
-            totalTokens: 0,
-            reasoningTokens: 0,
-          },
-        })
-        queue.push({ type: "finish" })
-        queue.finish()
-        return chunks.join("")
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error))
         settleOpenToolCalls(
