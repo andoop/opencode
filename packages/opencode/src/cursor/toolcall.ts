@@ -244,14 +244,17 @@ export async function surface(input: { sessionID: string; agent: string; allowed
 export function instructions(tools: CursorTool[]) {
   if (tools.length === 0) return ""
   return [
-    "You can call OpenCode tools by emitting XML blocks.",
-    `When you need a tool, reply with one or more <${TAG} name="tool_name">...</${TAG}> blocks and no other prose.`,
-    "Arguments inside each block must be valid JSON.",
-    `After tool execution you will receive <${RESULT}> or <${ERROR}> blocks and should continue from there.`,
-    "Never claim that these tools are unavailable unless a tool error explicitly tells you so.",
+    "CRITICAL — OpenCode tool calling protocol:",
+    `These tools are ONLY callable via XML blocks. DO NOT run them as shell commands. DO NOT use bash or execute.`,
+    `Before calling a tool, briefly describe what you are about to do in one short sentence.`,
+    `Then emit the XML block: <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
+    "Arguments must be valid JSON. Use {} when no arguments are needed.",
+    `After execution you receive <${RESULT}> or <${ERROR}> blocks — continue from there.`,
+    "Never claim these tools are unavailable unless an error block tells you so.",
+    "",
     "Available tools:",
-    ...tools.map((item) => `${item.name}: ${item.description}\nSchema: ${stringifySchema(item.inputSchema)}`),
-  ].join("\n\n")
+    ...tools.map((item) => `- ${item.name}: ${item.description}\n  Schema: ${stringifySchema(item.inputSchema)}`),
+  ].join("\n")
 }
 
 export function parse(text: string): ParsedToolCalls {

@@ -3,7 +3,6 @@ import { fileURLToPath } from "url"
 import os from "os"
 import path from "path"
 import { Identifier } from "@/id/id"
-import { MCP } from "@/mcp"
 import { Agent } from "@/agent/agent"
 import { ToolRegistry } from "@/tool/registry"
 import { Tool } from "@/tool/tool"
@@ -140,9 +139,8 @@ async function nativeTools(ctx: BridgeContext) {
 }
 
 async function buildTools(ctx: BridgeContext): Promise<BridgeTool[]> {
-  const abort = new AbortController()
   const base = await nativeTools(ctx)
-  const native = base.map(
+  return base.map(
     (item): BridgeTool => ({
       name: prefixTool(item.id),
       description: item.description,
@@ -163,38 +161,6 @@ async function buildTools(ctx: BridgeContext): Promise<BridgeTool[]> {
       },
     }),
   )
-
-  const mcp = await MCP.tools()
-  const wrapped = Object.entries(mcp)
-    .filter(([key]) => ctx.allowed.size === 0 || ctx.allowed.has(key))
-    .map(
-      ([key, item]): BridgeTool => ({
-        name: prefixTool(key),
-        description: item.description ?? key,
-        inputSchema: (item.inputSchema as { jsonSchema?: Record<string, unknown> })?.jsonSchema ?? {
-          type: "object",
-          properties: {},
-          additionalProperties: false,
-        },
-        async execute(args) {
-          const result = await item.execute?.(args, {
-            toolCallId: Identifier.ascending("tool"),
-            abortSignal: abort.signal,
-            messages: [],
-          })
-          const content =
-            result?.content?.length && Array.isArray(result.content)
-              ? result.content.map((entry: unknown) => entry as Record<string, unknown>)
-              : [{ type: "text", text: "Tool completed." }]
-          return {
-            content,
-            isError: result?.isError,
-          }
-        },
-      }),
-    )
-
-  return [...native, ...wrapped]
 }
 
 export async function bridgeToolNames(input: { agent: string; allowedTools: string[] }) {
@@ -254,13 +220,15 @@ export async function startBridgeServer(input: { cwd: string; sessionID: string;
     },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    })),
-  }))
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return {
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      })),
+    }
+  })
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const tool = byName[req.params.name]

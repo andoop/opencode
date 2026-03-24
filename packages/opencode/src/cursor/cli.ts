@@ -2,10 +2,11 @@ import { createInterface } from "readline"
 import { spawn } from "child_process"
 import type { ModelMessage } from "ai"
 import { Log } from "@/util/log"
-import { bridgeCommand } from "./bridge"
+import { bridgeCommand, bridgeToolNames, prefixTool } from "./bridge"
 import { Installation } from "@/installation"
 import { CursorToolCall, instructions, parse, surface, toolPrompt } from "./toolcall"
 import { Identifier } from "@/id/id"
+import { MCP } from "@/mcp"
 
 const log = Log.create({ service: "cursor-cli" })
 
@@ -154,7 +155,8 @@ function renderContent(content: ModelMessage["content"]): string {
 async function serializePrompt(input: {
   system: string[]
   messages: ModelMessage[]
-  tools: string
+  bridged: string[]
+  localTools: string
 }) {
   const prompt = [] as string[]
   if (input.system.length > 0) {
@@ -162,15 +164,16 @@ async function serializePrompt(input: {
     prompt.push(input.system.join("\n\n"))
     prompt.push("</system>")
   }
-  if (input.tools) prompt.push(input.tools)
   prompt.push("The following transcript is the full conversation context for this turn.")
   for (const message of input.messages) {
     prompt.push(`<${message.role}>`)
     prompt.push(renderContent(message.content))
     prompt.push(`</${message.role}>`)
   }
+  if (input.localTools) prompt.push(input.localTools)
   prompt.push("Continue the conversation from the latest user request.")
-  return prompt.join("\n\n")
+  const out = prompt.join("\n\n")
+  return out
 }
 
 function textFromContent(content: any): string {
@@ -390,11 +393,25 @@ export namespace CursorCLI {
       throw new Error("Cursor CLI not found. Install it and ensure the `agent` command is available.")
     }
 
-    const tools = await surface({
+    const bridged = await bridgeToolNames({
+      agent: input.agent,
+      allowedTools: input.allowedTools,
+    }).catch(() => [])
+    const local = await surface({
       sessionID: input.sessionID,
       agent: input.agent,
       allowedTools: input.allowedTools,
     })
+    const mcp = await MCP.tools()
+    const localMcpTools = Object.fromEntries(
+      Object.keys(mcp)
+        .filter((key) => key in local)
+        .map((key) => {
+          const item = local[key]!
+          const name = prefixTool(key)
+          return [name, { ...item, name }]
+        }),
+    )
     const bridge = bridgeCommand({
       cwd: input.cwd,
       sessionID: input.sessionID,
@@ -404,7 +421,8 @@ export namespace CursorCLI {
     const prompt = await serializePrompt({
       system: input.system,
       messages: input.messages,
-      tools: instructions(Object.values(tools)),
+      bridged,
+      localTools: instructions(Object.values(localMcpTools)),
     })
     const proc = spawn(bin, ["acp"], {
       cwd: input.cwd,
@@ -459,7 +477,9 @@ export namespace CursorCLI {
     const recentUpdates: string[] = []
     let roundText = ""
     let roundReasoning = ""
-
+    let roundNativeToolActivity = false
+    let textBuffered = false
+    let streamedUpTo = 0
     function trace(id: string) {
       const item = toolTrace.get(id) ?? {}
       toolTrace.set(id, item)
@@ -653,15 +673,49 @@ export namespace CursorCLI {
           const text = textFromContent(update.content)
           if (!text) return
           roundText += text
+          if (!textBuffered && roundText.includes(`<${CursorToolCall.TAG}`)) {
+            textBuffered = true
+            if (textOpen) {
+              queue.push({ type: "text-end", id: textId })
+              textOpen = false
+            }
+            return
+          }
+          if (textBuffered) return
+          const tagOpen = `<${CursorToolCall.TAG}`
+          let safe = roundText.length
+          for (let i = Math.max(streamedUpTo, roundText.length - tagOpen.length); i < roundText.length; i++) {
+            if (roundText[i] !== "<") continue
+            if (tagOpen.startsWith(roundText.slice(i))) {
+              safe = i
+              break
+            }
+          }
+          const delta = roundText.slice(streamedUpTo, safe)
+          if (!delta) return
+          streamedUpTo = safe
+          if (!textOpen) {
+            textOpen = true
+            queue.push({ type: "text-start", id: textId })
+          }
+          queue.push({ type: "text-delta", id: textId, text: delta })
+          textChars += delta.length
           return
         }
         case "agent_thought_chunk": {
           const text = textFromContent(update.content)
           if (!text) return
           roundReasoning += text
+          if (!reasoningOpen) {
+            reasoningOpen = true
+            queue.push({ type: "reasoning-start", id: reasoningId })
+          }
+          queue.push({ type: "reasoning-delta", id: reasoningId, text })
+          reasoningChars += text.length
           return
         }
         case "tool_call": {
+          roundNativeToolActivity = true
           const id = update.toolCallId as string
           const name = toolName(update)
           toolNames.set(id, name)
@@ -681,6 +735,7 @@ export namespace CursorCLI {
           return
         }
         case "tool_call_update": {
+          roundNativeToolActivity = true
           const id = update.toolCallId as string
           const name = toolNames.get(id) ?? toolName(update)
           toolNames.set(id, name)
@@ -842,7 +897,11 @@ export namespace CursorCLI {
         while (true) {
           roundText = ""
           roundReasoning = ""
-          const toolCount = seenToolCall.size
+          roundNativeToolActivity = false
+          textBuffered = false
+          textOpen = false
+          reasoningOpen = false
+          streamedUpTo = 0
           if (steps > 0) {
             queue.push({ type: "start-step" })
           }
@@ -862,9 +921,28 @@ export namespace CursorCLI {
           })
           promptReturnedAt = Date.now()
           await waitForTrailingToolUpdates("session_prompt_completed")
-          const parsed = seenToolCall.size === toolCount ? parse(roundText) : { text: roundText.trim(), calls: [], errors: [] }
-          emitReasoning(roundReasoning)
-          if (seenToolCall.size === toolCount && (parsed.calls.length > 0 || parsed.errors.length > 0)) {
+          if (!textBuffered && streamedUpTo < roundText.length) {
+            const remaining = roundText.slice(streamedUpTo)
+            if (remaining) {
+              if (!textOpen) {
+                textOpen = true
+                queue.push({ type: "text-start", id: textId })
+              }
+              queue.push({ type: "text-delta", id: textId, text: remaining })
+              textChars += remaining.length
+            }
+          }
+          if (reasoningOpen) {
+            queue.push({ type: "reasoning-end", id: reasoningId })
+            reasoningOpen = false
+          }
+          if (textOpen) {
+            queue.push({ type: "text-end", id: textId })
+            textOpen = false
+          }
+          const parsed = roundNativeToolActivity ? { text: roundText.trim(), calls: [], errors: [] } : parse(roundText)
+          if (!roundNativeToolActivity && (parsed.calls.length > 0 || parsed.errors.length > 0)) {
+            if (parsed.text) chunks.push(parsed.text)
             const results = [] as Array<{ name: string; output: string; error?: boolean }>
             for (const item of parsed.errors) {
               const id = Identifier.ascending("tool")
@@ -883,7 +961,7 @@ export namespace CursorCLI {
             }
             for (const item of parsed.calls) {
               const id = Identifier.ascending("tool")
-              const tool = tools[item.name]
+              const tool = localMcpTools[item.name]
               queue.push({ type: "tool-input-start", id, toolName: item.name })
               queue.push({
                 type: "tool-call",
@@ -945,6 +1023,54 @@ export namespace CursorCLI {
             next = toolPrompt(results)
             continue
           }
+          if (roundNativeToolActivity) {
+            const retries = [] as Array<{ name: string; args: Record<string, unknown> }>
+            for (const [id] of toolInputs) {
+              if (!settledToolCalls.has(id)) continue
+              const raw = toolInputs.get(id)
+              const cmd =
+                raw && typeof raw === "object" && "command" in (raw as Record<string, unknown>)
+                  ? String((raw as Record<string, unknown>).command)
+                  : ""
+              const cmdTool = cmd.split(/\s+/)[0]
+              if (!cmdTool || !localMcpTools[cmdTool]) continue
+              const t = toolTrace.get(id)
+              const preview = (t?.rawOutputPreview ?? "") + (t?.contentPreview ?? "")
+              if (preview.includes("command not found") || preview.includes("not recognized")) {
+                retries.push({ name: cmdTool, args: {} })
+              }
+            }
+            if (retries.length > 0) {
+              const results = [] as Array<{ name: string; output: string; error?: boolean }>
+              for (const item of retries) {
+                const id = Identifier.ascending("tool")
+                const tool = localMcpTools[item.name]!
+                queue.push({ type: "tool-input-start", id, toolName: item.name })
+                queue.push({ type: "tool-call", toolCallId: id, toolName: item.name, input: item.args })
+                try {
+                  const result = await tool.execute(item.args, input.abort)
+                  queue.push({
+                    type: "tool-result",
+                    toolCallId: id,
+                    input: item.args,
+                    output: { title: result.title || item.name, output: result.output, metadata: result.metadata },
+                  })
+                  results.push({ name: item.name, output: result.output })
+                } catch (error) {
+                  const err = error instanceof Error ? error : new Error(String(error))
+                  queue.push({ type: "tool-error", toolCallId: id, input: item.args, error: err })
+                  results.push({ name: item.name, output: err.message, error: true })
+                }
+              }
+              steps += 1
+              if (steps >= CursorToolCall.STEP_MAX) {
+                emitText("Cursor CLI tool loop reached the maximum number of tool steps.")
+                return finish(chunks.join(""), "length")
+              }
+              next = toolPrompt(results)
+              continue
+            }
+          }
           const unsettled = unsettledToolIDs()
           slog.info("cursor session prompt completed", {
             cursorSessionID: sessionId,
@@ -957,7 +1083,11 @@ export namespace CursorCLI {
             unsettledTools: unsettled.join(","),
             unsettledDetails: unsettledToolDetails(),
           })
-          emitText(parsed.text)
+          if (textBuffered) {
+            emitText(parsed.text)
+          } else if (roundText) {
+            chunks.push(roundText)
+          }
           return finish(chunks.join(""), finishReason(response?.stopReason ?? "end_turn"))
         }
       } catch (error) {
