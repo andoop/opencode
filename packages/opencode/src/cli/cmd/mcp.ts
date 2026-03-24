@@ -12,7 +12,6 @@ import { Instance } from "../../project/instance"
 import { Installation } from "../../installation"
 import path from "path"
 import { Global } from "../../global"
-import { modify, applyEdits } from "jsonc-parser"
 import { Bus } from "../../bus"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
@@ -379,43 +378,6 @@ export const McpLogoutCommand = cmd({
   },
 })
 
-async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files (prefer .jsonc over .json, check .opencode/ subdirectory too)
-  const candidates = [path.join(baseDir, "opencode.json"), path.join(baseDir, "opencode.jsonc")]
-
-  if (!global) {
-    candidates.push(path.join(baseDir, ".opencode", "opencode.json"), path.join(baseDir, ".opencode", "opencode.jsonc"))
-  }
-
-  for (const candidate of candidates) {
-    if (await Bun.file(candidate).exists()) {
-      return candidate
-    }
-  }
-
-  // Default to opencode.json if none exist
-  return candidates[0]
-}
-
-async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
-  const file = Bun.file(configPath)
-
-  let text = "{}"
-  if (await file.exists()) {
-    text = await file.text()
-  }
-
-  // Use jsonc-parser to modify while preserving comments
-  const edits = modify(text, ["mcp", name], mcpConfig, {
-    formattingOptions: { tabSize: 2, insertSpaces: true },
-  })
-  const result = applyEdits(text, edits)
-
-  await Bun.write(configPath, result)
-
-  return configPath
-}
-
 export const McpAddCommand = cmd({
   command: "add",
   describe: "add an MCP server",
@@ -430,30 +392,30 @@ export const McpAddCommand = cmd({
 
         // Resolve config paths eagerly for hints
         const [projectConfigPath, globalConfigPath] = await Promise.all([
-          resolveConfigPath(Instance.worktree),
-          resolveConfigPath(Global.Path.config, true),
+          Promise.resolve(Config.mcpConfigFile("project")),
+          Promise.resolve(Config.mcpConfigFile("global")),
         ])
 
         // Determine scope
-        let configPath = globalConfigPath
+        let scope: Config.McpScope = "global"
         if (project.vcs === "git") {
           const scopeResult = await prompts.select({
             message: "Location",
             options: [
               {
                 label: "Current project",
-                value: projectConfigPath,
+                value: "project",
                 hint: projectConfigPath,
               },
               {
                 label: "Global",
-                value: globalConfigPath,
+                value: "global",
                 hint: globalConfigPath,
               },
             ],
           })
           if (prompts.isCancel(scopeResult)) throw new UI.CancelledError()
-          configPath = scopeResult
+          scope = scopeResult
         }
 
         const name = await prompts.text({
@@ -492,8 +454,8 @@ export const McpAddCommand = cmd({
             command: command.split(" "),
           }
 
-          await addMcpToConfig(name, mcpConfig, configPath)
-          prompts.log.success(`MCP server "${name}" added to ${configPath}`)
+          const result = await Config.upsertMcp(scope, name, mcpConfig)
+          prompts.log.success(`MCP server "${name}" added to ${result.path}`)
           prompts.outro("MCP server added successfully")
           return
         }
@@ -570,8 +532,8 @@ export const McpAddCommand = cmd({
             }
           }
 
-          await addMcpToConfig(name, mcpConfig, configPath)
-          prompts.log.success(`MCP server "${name}" added to ${configPath}`)
+          const result = await Config.upsertMcp(scope, name, mcpConfig)
+          prompts.log.success(`MCP server "${name}" added to ${result.path}`)
         }
 
         prompts.outro("MCP server added successfully")

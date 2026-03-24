@@ -1330,6 +1330,11 @@ export namespace Config {
     await Instance.dispose()
   }
 
+  export const McpScope = z.enum(["project", "global"]).meta({
+    ref: "McpScope",
+  })
+  export type McpScope = z.infer<typeof McpScope>
+
   function globalConfigFile() {
     const candidates = ["opencode.jsonc", "opencode.json", "config.json"].map((file) =>
       path.join(Global.Path.config, file),
@@ -1340,19 +1345,41 @@ export namespace Config {
     return candidates[0]
   }
 
+  function projectConfigFile() {
+    const candidates = [
+      path.join(Instance.worktree, "opencode.json"),
+      path.join(Instance.worktree, "opencode.jsonc"),
+      path.join(Instance.worktree, ".opencode", "opencode.json"),
+      path.join(Instance.worktree, ".opencode", "opencode.jsonc"),
+    ]
+    for (const file of candidates) {
+      if (existsSync(file)) return file
+    }
+    return candidates[0]
+  }
+
+  export function mcpConfigFile(scope: McpScope) {
+    if (scope === "global") return globalConfigFile()
+    return projectConfigFile()
+  }
+
   function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === "object" && !Array.isArray(value)
   }
 
+  function editJson(input: string, target: string[], value: unknown) {
+    const edits = modify(input, target, value, {
+      formattingOptions: {
+        insertSpaces: true,
+        tabSize: 2,
+      },
+    })
+    return applyEdits(input, edits)
+  }
+
   function patchJsonc(input: string, patch: unknown, path: string[] = []): string {
     if (!isRecord(patch)) {
-      const edits = modify(input, path, patch, {
-        formattingOptions: {
-          insertSpaces: true,
-          tabSize: 2,
-        },
-      })
-      return applyEdits(input, edits)
+      return editJson(input, path, patch)
     }
 
     return Object.entries(patch).reduce((result, [key, value]) => {
@@ -1395,6 +1422,120 @@ export namespace Config {
     })
   }
 
+  type ScopedConfigResult = {
+    path: string
+    config: Info
+  }
+
+  async function scopedConfig(scope: McpScope): Promise<ScopedConfigResult> {
+    const filepath = mcpConfigFile(scope)
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+
+    return {
+      path: filepath,
+      config: parseConfig(before, filepath),
+    }
+  }
+
+  async function refreshScope(scope: McpScope) {
+    if (scope === "project") {
+      await Instance.dispose()
+      return
+    }
+
+    global.reset()
+
+    void Instance.disposeAll()
+      .catch(() => undefined)
+      .finally(() => {
+        GlobalBus.emit("event", {
+          directory: "global",
+          payload: {
+            type: Event.Disposed.type,
+            properties: {},
+          },
+        })
+      })
+  }
+
+  export async function getMcp(scope: McpScope) {
+    const result = await scopedConfig(scope)
+    return {
+      path: result.path,
+      mcp: result.config.mcp ?? {},
+    }
+  }
+
+  export async function getPermission(scope: McpScope) {
+    const result = await scopedConfig(scope)
+    return {
+      path: result.path,
+      permission: result.config.permission ?? {},
+    }
+  }
+
+  export async function upsertMcp(scope: McpScope, name: string, entry: NonNullable<Info["mcp"]>[string]) {
+    const filepath = mcpConfigFile(scope)
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+    const updated = editJson(before, ["mcp", name], entry)
+    await fs.mkdir(path.dirname(filepath), { recursive: true })
+    await Bun.write(filepath, updated)
+    const config = parseConfig(updated, filepath)
+    await refreshScope(scope)
+    return {
+      path: filepath,
+      mcp: config.mcp ?? {},
+    }
+  }
+
+  export async function removeMcp(scope: McpScope, name: string) {
+    const filepath = mcpConfigFile(scope)
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+    const updated = editJson(before, ["mcp", name], undefined)
+    await fs.mkdir(path.dirname(filepath), { recursive: true })
+    await Bun.write(filepath, updated)
+    const config = parseConfig(updated, filepath)
+    await refreshScope(scope)
+    return {
+      path: filepath,
+      mcp: config.mcp ?? {},
+    }
+  }
+
+  export async function upsertPermission(scope: McpScope, name: string, action: PermissionAction) {
+    const filepath = mcpConfigFile(scope)
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+    const updated = editJson(before, ["permission", name], action)
+    await fs.mkdir(path.dirname(filepath), { recursive: true })
+    await Bun.write(filepath, updated)
+    const config = parseConfig(updated, filepath)
+    await refreshScope(scope)
+    return {
+      path: filepath,
+      permission: config.permission ?? {},
+    }
+  }
+
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
     const before = await Bun.file(filepath)
@@ -1418,19 +1559,7 @@ export namespace Config {
       return merged
     })()
 
-    global.reset()
-
-    void Instance.disposeAll()
-      .catch(() => undefined)
-      .finally(() => {
-        GlobalBus.emit("event", {
-          directory: "global",
-          payload: {
-            type: Event.Disposed.type,
-            properties: {},
-          },
-        })
-      })
+    await refreshScope("global")
 
     return next
   }

@@ -9,6 +9,7 @@ import { SettingsGeneral } from "./settings-general"
 import { SettingsKeybinds } from "./settings-keybinds"
 import { SettingsProviders } from "./settings-providers"
 import { SettingsModels } from "./settings-models"
+import { SettingsMcp } from "./settings-mcp"
 
 export const DialogSettings: Component = () => {
   const language = useLanguage()
@@ -51,6 +52,12 @@ export const DialogSettings: Component = () => {
                         {language.t("settings.models.title")}
                       </Tabs.Trigger>
                     </Show>
+                    <Show when={auth.canFeature("mcp")}>
+                      <Tabs.Trigger value="mcp">
+                        <Icon name="providers" />
+                        {language.t("settings.mcp.title")}
+                      </Tabs.Trigger>
+                    </Show>
                   </div>
                 </div>
               </div>
@@ -77,14 +84,16 @@ export const DialogSettings: Component = () => {
             <SettingsModels />
           </Tabs.Content>
         </Show>
+        <Show when={auth.canFeature("mcp")}>
+          <Tabs.Content value="mcp" class="no-scrollbar">
+            <SettingsMcp />
+          </Tabs.Content>
+        </Show>
         {/* <Tabs.Content value="agents" class="no-scrollbar"> */}
         {/*   <SettingsAgents /> */}
         {/* </Tabs.Content> */}
         {/* <Tabs.Content value="commands" class="no-scrollbar"> */}
         {/*   <SettingsCommands /> */}
-        {/* </Tabs.Content> */}
-        {/* <Tabs.Content value="mcp" class="no-scrollbar"> */}
-        {/*   <SettingsMcp /> */}
         {/* </Tabs.Content> */}
       </Tabs>
     </Dialog>

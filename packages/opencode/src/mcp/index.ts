@@ -28,6 +28,16 @@ export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
 
+  export const ToolInfo = z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      client: z.string(),
+      description: z.string().optional(),
+    })
+    .meta({ ref: "McpToolInfo" })
+  export type ToolInfo = z.infer<typeof ToolInfo>
+
   export const Resource = z
     .object({
       name: z.string(),
@@ -599,6 +609,55 @@ export namespace MCP {
         result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, timeout)
       }
     }
+    return result
+  }
+
+  export async function listTools() {
+    const result: Record<string, ToolInfo[]> = {}
+    const s = await state()
+    const cfg = await Config.get()
+    const config = cfg.mcp ?? {}
+    const clientsSnapshot = await clients()
+
+    for (const [clientName, entry] of Object.entries(config)) {
+      if (!isMcpConfigured(entry)) continue
+      result[clientName] = []
+
+      if (s.status[clientName]?.status !== "connected") {
+        continue
+      }
+
+      const client = clientsSnapshot[clientName]
+      if (!client) {
+        continue
+      }
+
+      const toolsResult = await client.listTools().catch((e) => {
+        log.error("failed to get tools", { clientName, error: e.message })
+        const failedStatus = {
+          status: "failed" as const,
+          error: e instanceof Error ? e.message : String(e),
+        }
+        s.status[clientName] = failedStatus
+        delete s.clients[clientName]
+        return undefined
+      })
+      if (!toolsResult) {
+        continue
+      }
+
+      result[clientName] = toolsResult.tools.map((item) => {
+        const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
+        const sanitizedToolName = item.name.replace(/[^a-zA-Z0-9_-]/g, "_")
+        return {
+          id: sanitizedClientName + "_" + sanitizedToolName,
+          name: item.name,
+          client: clientName,
+          description: item.description,
+        }
+      })
+    }
+
     return result
   }
 

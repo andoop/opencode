@@ -7838,6 +7838,442 @@
         ]
       }
     },
+    "/mcp/config": {
+      "get": {
+        "operationId": "mcp.config.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "$ref": "#/components/schemas/McpScope"
+            }
+          }
+        ],
+        "summary": "List MCP config",
+        "description": "List persisted MCP server configuration for the selected scope.",
+        "responses": {
+          "200": {
+            "description": "Persisted MCP configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "mcp": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "remote"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "oauth": {
+                            "type": "boolean",
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "mcp"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.config.list({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "mcp.config.create",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "$ref": "#/components/schemas/McpScope"
+            }
+          }
+        ],
+        "summary": "Create MCP config",
+        "description": "Create a persisted remote MCP server configuration for the selected scope.",
+        "responses": {
+          "200": {
+            "description": "Persisted MCP configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "mcp": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "remote"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "oauth": {
+                            "type": "boolean",
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "mcp"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "config": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "description": "URL of the remote MCP server",
+                        "type": "string"
+                      },
+                      "enabled": {
+                        "description": "Enable or disable the MCP server on startup",
+                        "type": "boolean"
+                      },
+                      "oauth": {
+                        "description": "Explicitly disable OAuth for this remote MCP server",
+                        "type": "boolean",
+                        "const": false
+                      }
+                    },
+                    "required": [
+                      "url"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "name",
+                  "config"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.config.create({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/mcp/config/{name}": {
+      "patch": {
+        "operationId": "mcp.config.update",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "$ref": "#/components/schemas/McpScope"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Update MCP config",
+        "description": "Update a persisted remote MCP server configuration for the selected scope.",
+        "responses": {
+          "200": {
+            "description": "Persisted MCP configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "mcp": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "remote"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "oauth": {
+                            "type": "boolean",
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "mcp"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "config": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "description": "URL of the remote MCP server",
+                        "type": "string"
+                      },
+                      "enabled": {
+                        "description": "Enable or disable the MCP server on startup",
+                        "type": "boolean"
+                      },
+                      "oauth": {
+                        "description": "Explicitly disable OAuth for this remote MCP server",
+                        "type": "boolean",
+                        "const": false
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "config"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.config.update({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "mcp.config.delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "$ref": "#/components/schemas/McpScope"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Delete MCP config",
+        "description": "Delete a persisted MCP server configuration for the selected scope.",
+        "responses": {
+          "200": {
+            "description": "Persisted MCP configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "mcp": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "remote"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "oauth": {
+                            "type": "boolean",
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "mcp"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.config.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/mcp/{name}/auth": {
       "post": {
         "operationId": "mcp.auth.start",
@@ -16676,6 +17112,13 @@
           }
         ]
       },
+      "McpScope": {
+        "type": "string",
+        "enum": [
+          "project",
+          "global"
+        ]
+      },
       "Path": {
         "type": "object",
         "properties": {
@@ -16718,7 +17161,7 @@
           "submodules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/VcsSubmoduleInfo"
+              "$ref": "#/components/schemas/__schema0"
             }
           },
           "recentBranches": {
@@ -16756,7 +17199,7 @@
           "submodules": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/VcsSubmoduleInfo"
+              "$ref": "#/components/schemas/__schema0"
             }
           },
           "branches": {
@@ -16768,7 +17211,12 @@
         },
         "required": [
           "branch"
-        ]
+        ],
+        "$defs": {
+          "__schema0": {
+            "$ref": "#/components/schemas/VcsSubmoduleInfo"
+          }
+        }
       },
       "Command": {
         "type": "object",

@@ -55,6 +55,16 @@ import type {
   McpAuthRemoveResponses,
   McpAuthStartErrors,
   McpAuthStartResponses,
+  McpConfigCreateErrors,
+  McpConfigCreateResponses,
+  McpConfigDeleteErrors,
+  McpConfigDeleteResponses,
+  McpConfigListResponses,
+  McpConfigToolsListResponses,
+  McpConfigToolsUpdateErrors,
+  McpConfigToolsUpdateResponses,
+  McpConfigUpdateErrors,
+  McpConfigUpdateResponses,
   McpConnectResponses,
   McpDisconnectResponses,
   McpLocalConfig,
@@ -3469,6 +3479,11 @@ export class Mcp extends HeyApiClient {
     })
   }
 
+  private _config?: McpConfig2
+  get config(): McpConfig2 {
+    return (this._config ??= new McpConfig2({ client: this.client }))
+  }
+
   /**
    * Connect an MCP server
    */
@@ -3528,6 +3543,225 @@ export class Mcp extends HeyApiClient {
   private _auth?: Auth2
   get auth(): Auth2 {
     return (this._auth ??= new Auth2({ client: this.client }))
+  }
+}
+
+export class McpConfig2 extends HeyApiClient {
+  /**
+   * List MCP config
+   *
+   * List persisted MCP server configuration for the selected scope.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: "project" | "global"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpConfigListResponses, unknown, ThrowOnError>({
+      url: "/mcp/config",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create MCP config
+   *
+   * Create a persisted remote MCP server configuration for the selected scope.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: "project" | "global"
+      name?: string
+      config?: {
+        url: string
+        enabled?: boolean
+        oauth?: false
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+            { in: "body", key: "name" },
+            { in: "body", key: "config" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<McpConfigCreateResponses, McpConfigCreateErrors, ThrowOnError>({
+      url: "/mcp/config",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Update MCP config
+   *
+   * Update a persisted remote MCP server configuration for the selected scope.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      scope?: "project" | "global"
+      config?: {
+        url?: string
+        enabled?: boolean
+        oauth?: false
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+            { in: "body", key: "config" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<McpConfigUpdateResponses, McpConfigUpdateErrors, ThrowOnError>({
+      url: "/mcp/config/{name}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete MCP config
+   *
+   * Delete a persisted MCP server configuration for the selected scope.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      scope?: "project" | "global"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<McpConfigDeleteResponses, McpConfigDeleteErrors, ThrowOnError>({
+      url: "/mcp/config/{name}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List MCP tools
+   *
+   * List connected MCP tools and their scoped permission actions.
+   */
+  public tools<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: "project" | "global"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpConfigToolsListResponses, unknown, ThrowOnError>({
+      url: "/mcp/config/tools",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update MCP tool permission
+   *
+   * Update the scoped permission action for an individual MCP tool.
+   */
+  public updateTool<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      scope?: "project" | "global"
+      action?: "allow" | "ask" | "deny"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+            { in: "body", key: "action" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<McpConfigToolsUpdateResponses, McpConfigToolsUpdateErrors, ThrowOnError>({
+      url: "/mcp/config/tools/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 

@@ -5846,6 +5846,207 @@ export type McpAddResponses = {
 
 export type McpAddResponse = McpAddResponses[keyof McpAddResponses]
 
+export type McpScope = "project" | "global"
+
+export type McpConfigRemote = {
+  type: "remote"
+  url: string
+  enabled?: boolean
+  oauth?: false
+}
+
+export type McpConfigList = {
+  path: string
+  mcp: {
+    [key: string]: McpConfigRemote
+  }
+}
+
+export type McpConfigListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config"
+}
+
+export type McpConfigListResponses = {
+  /**
+   * Persisted MCP configuration
+   */
+  200: McpConfigList
+}
+
+export type McpConfigListResponse = McpConfigListResponses[keyof McpConfigListResponses]
+
+export type McpConfigCreateData = {
+  body?: {
+    name: string
+    config: {
+      url: string
+      enabled?: boolean
+      oauth?: false
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config"
+}
+
+export type McpConfigCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type McpConfigCreateError = McpConfigCreateErrors[keyof McpConfigCreateErrors]
+
+export type McpConfigCreateResponses = {
+  /**
+   * Persisted MCP configuration
+   */
+  200: McpConfigList
+}
+
+export type McpConfigCreateResponse = McpConfigCreateResponses[keyof McpConfigCreateResponses]
+
+export type McpConfigUpdateData = {
+  body?: {
+    config: {
+      url?: string
+      enabled?: boolean
+      oauth?: false
+    }
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config/{name}"
+}
+
+export type McpConfigUpdateErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type McpConfigUpdateError = McpConfigUpdateErrors[keyof McpConfigUpdateErrors]
+
+export type McpConfigUpdateResponses = {
+  /**
+   * Persisted MCP configuration
+   */
+  200: McpConfigList
+}
+
+export type McpConfigUpdateResponse = McpConfigUpdateResponses[keyof McpConfigUpdateResponses]
+
+export type McpConfigDeleteData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config/{name}"
+}
+
+export type McpConfigDeleteErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type McpConfigDeleteError = McpConfigDeleteErrors[keyof McpConfigDeleteErrors]
+
+export type McpConfigDeleteResponses = {
+  /**
+   * Persisted MCP configuration
+   */
+  200: McpConfigList
+}
+
+export type McpConfigDeleteResponse = McpConfigDeleteResponses[keyof McpConfigDeleteResponses]
+
+export type McpToolRule = {
+  id: string
+  name: string
+  description?: string
+  action: PermissionActionConfig
+}
+
+export type McpToolList = {
+  path: string
+  tools: {
+    [key: string]: Array<McpToolRule>
+  }
+}
+
+export type McpConfigToolsListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config/tools"
+}
+
+export type McpConfigToolsListResponses = {
+  /**
+   * Scoped MCP tool permissions
+   */
+  200: McpToolList
+}
+
+export type McpConfigToolsListResponse = McpConfigToolsListResponses[keyof McpConfigToolsListResponses]
+
+export type McpConfigToolsUpdateData = {
+  body?: {
+    action: PermissionActionConfig
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config/tools/{id}"
+}
+
+export type McpConfigToolsUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type McpConfigToolsUpdateError = McpConfigToolsUpdateErrors[keyof McpConfigToolsUpdateErrors]
+
+export type McpConfigToolsUpdateResponses = {
+  /**
+   * Scoped MCP tool permissions
+   */
+  200: McpToolList
+}
+
+export type McpConfigToolsUpdateResponse = McpConfigToolsUpdateResponses[keyof McpConfigToolsUpdateResponses]
+
 export type McpAuthRemoveData = {
   body?: never
   path: {
