@@ -66,7 +66,10 @@ export namespace SessionProcessor {
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
-            const stream = await LLM.stream(streamInput)
+            const stream = await LLM.stream({
+              ...streamInput,
+              assistantMessageID: input.assistantMessage.id,
+            })
 
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()

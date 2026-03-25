@@ -32,6 +32,7 @@ const BRIDGED = new Set([
   "webfetch",
   "websearch",
   "codesearch",
+  "question",
   "ls",
 ])
 

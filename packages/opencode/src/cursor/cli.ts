@@ -2,11 +2,10 @@ import { createInterface } from "readline"
 import { spawn } from "child_process"
 import type { ModelMessage } from "ai"
 import { Log } from "@/util/log"
-import { bridgeCommand, prefixTool } from "./bridge"
+import { bridgeCommand, bridgeToolNames, prefixTool } from "./bridge"
 import { Installation } from "@/installation"
 import { CursorToolCall, instructions, parse, surface, toolPrompt } from "./toolcall"
 import { Identifier } from "@/id/id"
-import { MCP } from "@/mcp"
 
 const log = Log.create({ service: "cursor-cli" })
 
@@ -378,6 +377,7 @@ export namespace CursorCLI {
 
   export async function stream(input: {
     sessionID: string
+    assistantMessageID?: string
     modelID: string
     agent: string
     cwd: string
@@ -399,15 +399,19 @@ export namespace CursorCLI {
       agent: input.agent,
       allowedTools: input.allowedTools,
     })
-    const mcp = await MCP.tools()
+    const bridged = new Set(
+      await bridgeToolNames({
+        agent: input.agent,
+        allowedTools: input.allowedTools,
+      }),
+    )
     const localMcpTools = Object.fromEntries(
-      Object.keys(mcp)
-        .filter((key) => key in local)
-        .map((key) => {
-          const item = local[key]!
+      Object.entries(local)
+        .map(([key, item]) => {
           const name = prefixTool(key)
-          return [name, { ...item, name }]
-        }),
+          return [name, { ...item, name, toolName: key }] as const
+        })
+        .filter(([name]) => bridged.has(name)),
     )
     const bridge = bridgeCommand({
       cwd: input.cwd,
@@ -964,7 +968,7 @@ export namespace CursorCLI {
               queue.push({
                 type: "tool-call",
                 toolCallId: id,
-                toolName: item.name,
+                toolName: tool?.toolName ?? item.name,
                 input: item.args,
               })
               if (!tool) {
@@ -983,7 +987,10 @@ export namespace CursorCLI {
                 continue
               }
               try {
-                const result = await tool.execute(item.args, input.abort)
+                const result = await tool.execute(item.args, input.abort, {
+                  callID: id,
+                  messageID: input.assistantMessageID,
+                })
                 queue.push({
                   type: "tool-result",
                   toolCallId: id,
@@ -1046,7 +1053,10 @@ export namespace CursorCLI {
                 queue.push({ type: "tool-input-start", id, toolName: item.name })
                 queue.push({ type: "tool-call", toolCallId: id, toolName: item.name, input: item.args })
                 try {
-                  const result = await tool.execute(item.args, input.abort)
+                  const result = await tool.execute(item.args, input.abort, {
+                    callID: id,
+                    messageID: input.assistantMessageID,
+                  })
                   queue.push({
                     type: "tool-result",
                     toolCallId: id,

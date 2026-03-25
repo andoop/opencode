@@ -21,6 +21,7 @@ const NATIVE = new Set([
   "webfetch",
   "websearch",
   "codesearch",
+  "question",
   "ls",
 ])
 
@@ -33,7 +34,11 @@ export type CursorTool = {
   name: string
   description: string
   inputSchema: Record<string, unknown>
-  execute(args: Record<string, unknown>, abort: AbortSignal): Promise<{
+  execute(
+    args: Record<string, unknown>,
+    abort: AbortSignal,
+    refs?: { callID?: string; messageID?: string },
+  ): Promise<{
     title: string
     output: string
     metadata: Record<string, unknown>
@@ -126,9 +131,9 @@ export async function surface(input: { sessionID: string; agent: string; allowed
       name: item.id,
       description: item.description,
       inputSchema: z.toJSONSchema(item.parameters) as Record<string, unknown>,
-      async execute(args, abort) {
-        const callID = Identifier.ascending("tool")
-        const messageID = Identifier.ascending("message")
+      async execute(args, abort, refs) {
+        const callID = refs?.callID ?? Identifier.ascending("tool")
+        const messageID = refs?.messageID ?? Identifier.ascending("message")
         await Plugin.trigger(
           "tool.execute.before",
           { tool: item.id, sessionID: input.sessionID, callID },
@@ -168,9 +173,9 @@ export async function surface(input: { sessionID: string; agent: string; allowed
       name: "ls",
       description: info.description,
       inputSchema: z.toJSONSchema(info.parameters) as Record<string, unknown>,
-      async execute(args, abort) {
-        const callID = Identifier.ascending("tool")
-        const messageID = Identifier.ascending("message")
+      async execute(args, abort, refs) {
+        const callID = refs?.callID ?? Identifier.ascending("tool")
+        const messageID = refs?.messageID ?? Identifier.ascending("message")
         const result = await info.execute(args, {
           sessionID: input.sessionID,
           messageID,
@@ -199,9 +204,9 @@ export async function surface(input: { sessionID: string; agent: string; allowed
       name: key,
       description: item.description ?? key,
       inputSchema: schema,
-      async execute(args, abort) {
-        const callID = Identifier.ascending("tool")
-        const messageID = Identifier.ascending("message")
+      async execute(args, abort, refs) {
+        const callID = refs?.callID ?? Identifier.ascending("tool")
+        const messageID = refs?.messageID ?? Identifier.ascending("message")
         await Plugin.trigger(
           "tool.execute.before",
           { tool: key, sessionID: input.sessionID, callID },

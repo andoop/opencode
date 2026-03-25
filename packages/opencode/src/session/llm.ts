@@ -32,6 +32,7 @@ export namespace LLM {
   export type StreamInput = {
     user: MessageV2.User
     sessionID: string
+    assistantMessageID?: string
     model: Provider.Model
     agent: Agent.Info
     system: string[]
@@ -156,6 +157,7 @@ export namespace LLM {
     if (provider.id === "cursor-cli") {
       return CursorCLI.stream({
         sessionID: input.sessionID,
+        assistantMessageID: input.assistantMessageID,
         modelID: input.model.id,
         agent: input.agent.name,
         cwd: Instance.directory,
