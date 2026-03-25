@@ -7,13 +7,13 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { createStore } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useLanguage } from "@/context/language"
-import type { McpConfigRemote } from "@opencode-ai/sdk/v2/client"
+import type { McpRemoteConfig } from "@opencode-ai/sdk/v2/client"
 
 type Props = {
   scope: "project" | "global"
   directory?: string
   name?: string
-  config?: McpConfigRemote
+  config?: McpRemoteConfig
   onSaved?: () => Promise<void> | void
 }
 

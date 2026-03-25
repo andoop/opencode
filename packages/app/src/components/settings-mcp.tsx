@@ -6,7 +6,13 @@ import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useParams } from "@solidjs/router"
-import type { McpConfigRemote, McpToolRule, PermissionActionConfig } from "@opencode-ai/sdk/v2/client"
+import type {
+  McpConfigToolsListResponses,
+  McpRemoteConfig,
+  PermissionActionConfig,
+} from "@opencode-ai/sdk/v2/client"
+
+type McpToolRule = NonNullable<McpConfigToolsListResponses[200]["tools"][string]>[number]
 import { createEffect, createMemo, For, Show, type Component } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useAuth } from "@/context/auth"
@@ -41,7 +47,7 @@ export const SettingsMcp: Component = () => {
     loading: true,
     busy: null as string | null,
     refreshing: null as string | null,
-    items: [] as Array<{ name: string; config: McpConfigRemote }>,
+    items: [] as Array<{ name: string; config: McpRemoteConfig }>,
     tools: {} as Record<string, McpToolRule[]>,
     expanded: {} as Record<string, boolean>,
   })
@@ -78,7 +84,7 @@ export const SettingsMcp: Component = () => {
     try {
       const [result, toolsResult] = await Promise.all([
         globalSDK.client.mcp.config.list({ scope: store.scope, directory: directory() || undefined }),
-        globalSDK.client.mcp.config.tools({ scope: store.scope, directory: directory() || undefined }),
+        globalSDK.client.mcp.config.tools.list({ scope: store.scope, directory: directory() || undefined }),
       ])
       const data = result.data
       setStore("path", data?.path ?? toolsResult.data?.path ?? "")
@@ -125,7 +131,7 @@ export const SettingsMcp: Component = () => {
     dialog.show(() => <DialogEditMcp scope={store.scope} directory={directory()} onSaved={refresh} />)
   }
 
-  const openEdit = (item: { name: string; config: McpConfigRemote }) => {
+  const openEdit = (item: { name: string; config: McpRemoteConfig }) => {
     dialog.show(() => (
       <DialogEditMcp scope={store.scope} directory={directory()} name={item.name} config={item.config} onSaved={refresh} />
     ))
@@ -188,7 +194,7 @@ export const SettingsMcp: Component = () => {
     if (store.busy || store.refreshing) return
     setStore("busy", id)
     try {
-      const result = await globalSDK.client.mcp.config.updateTool({
+      const result = await globalSDK.client.mcp.config.tools.update({
         id,
         action,
         scope: store.scope,

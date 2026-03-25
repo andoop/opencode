@@ -14,8 +14,15 @@ import type {
   AuthSetErrors,
   AuthSetResponses,
   BrowseListResponses,
+  CommandConfigCreateErrors,
+  CommandConfigCreateResponses,
+  CommandConfigDeleteErrors,
+  CommandConfigDeleteResponses,
+  CommandConfigListResponses,
+  CommandConfigUpdateErrors,
+  CommandConfigUpdateResponses,
   CommandListResponses,
-  Config as Config3,
+  Config as Config5,
   ConfigGetResponses,
   ConfigProvidersResponses,
   ConfigUpdateErrors,
@@ -69,6 +76,7 @@ import type {
   McpDisconnectResponses,
   McpLocalConfig,
   McpRemoteConfig,
+  McpScope,
   McpStatusResponses,
   Part as Part2,
   PartDeleteErrors,
@@ -76,6 +84,7 @@ import type {
   PartUpdateErrors,
   PartUpdateResponses,
   PathGetResponses,
+  PermissionActionConfig,
   PermissionListResponses,
   PermissionReplyErrors,
   PermissionReplyResponses,
@@ -83,6 +92,13 @@ import type {
   PermissionRespondResponses,
   PermissionRuleset,
   ProjectCurrentResponses,
+  ProjectGroupCreateErrors,
+  ProjectGroupCreateResponses,
+  ProjectGroupDeleteErrors,
+  ProjectGroupDeleteResponses,
+  ProjectGroupListResponses,
+  ProjectGroupUpdateErrors,
+  ProjectGroupUpdateResponses,
   ProjectListResponses,
   ProjectRegistryCreateErrors,
   ProjectRegistryCreateResponses,
@@ -324,7 +340,7 @@ export class Config extends HeyApiClient {
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      config?: Config3
+      config?: Config5
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -391,7 +407,7 @@ export class Config2 extends HeyApiClient {
    */
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
-      config?: Config3
+      config?: Config5
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -471,6 +487,7 @@ export class Workspace extends HeyApiClient {
       name?: string
       directories?: Array<string>
       primaryProjectID?: string
+      selected_group_ids?: Array<string>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -482,6 +499,7 @@ export class Workspace extends HeyApiClient {
             { in: "body", key: "name" },
             { in: "body", key: "directories" },
             { in: "body", key: "primaryProjectID" },
+            { in: "body", key: "selected_group_ids" },
           ],
         },
       ],
@@ -1036,6 +1054,139 @@ export class Browse extends HeyApiClient {
   }
 }
 
+export class Group extends HeyApiClient {
+  /**
+   * List project groups
+   *
+   * List groups used to organize projects.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProjectGroupListResponses, unknown, ThrowOnError>({
+      url: "/project/group",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create project group
+   *
+   * Create a group used to organize projects.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name?: string
+      description?: string
+      profile_markdown?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "profile_markdown" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectGroupCreateResponses, ProjectGroupCreateErrors, ThrowOnError>({
+      url: "/project/group",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete project group
+   *
+   * Delete a project group.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<ProjectGroupDeleteResponses, ProjectGroupDeleteErrors, ThrowOnError>(
+      {
+        url: "/project/group/{id}",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
+   * Update project group
+   *
+   * Update a project group.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      name?: string
+      description?: string
+      profile_markdown?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "profile_markdown" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<ProjectGroupUpdateResponses, ProjectGroupUpdateErrors, ThrowOnError>({
+      url: "/project/group/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Registry extends HeyApiClient {
   /**
    * List registered projects
@@ -1067,7 +1218,8 @@ export class Registry extends HeyApiClient {
       body_directory?: string
       name?: string
       description?: string
-      groups?: Array<string>
+      profile_markdown?: string
+      group_ids?: Array<string>
       visibility?: {
         mode?: "all" | "include" | "exclude"
         user_ids?: Array<string>
@@ -1092,7 +1244,8 @@ export class Registry extends HeyApiClient {
             },
             { in: "body", key: "name" },
             { in: "body", key: "description" },
-            { in: "body", key: "groups" },
+            { in: "body", key: "profile_markdown" },
+            { in: "body", key: "group_ids" },
             { in: "body", key: "visibility" },
           ],
         },
@@ -1159,7 +1312,8 @@ export class Registry extends HeyApiClient {
       directory?: string
       name?: string
       description?: string
-      groups?: Array<string>
+      profile_markdown?: string
+      group_ids?: Array<string>
       visibility?: {
         mode?: "all" | "include" | "exclude"
         user_ids?: Array<string>
@@ -1176,7 +1330,8 @@ export class Registry extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "name" },
             { in: "body", key: "description" },
-            { in: "body", key: "groups" },
+            { in: "body", key: "profile_markdown" },
+            { in: "body", key: "group_ids" },
             { in: "body", key: "visibility" },
           ],
         },
@@ -1286,6 +1441,11 @@ export class Project extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _group?: Group
+  get group(): Group {
+    return (this._group ??= new Group({ client: this.client }))
   }
 
   private _registry?: Registry
@@ -3291,6 +3451,254 @@ export class File extends HeyApiClient {
   }
 }
 
+export class Tools extends HeyApiClient {
+  /**
+   * List MCP tools
+   *
+   * List connected MCP tools and their scoped permission actions.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: McpScope
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpConfigToolsListResponses, unknown, ThrowOnError>({
+      url: "/mcp/config/tools",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update MCP tool permission
+   *
+   * Update the scoped permission action for an individual MCP tool.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      scope?: McpScope
+      action?: PermissionActionConfig
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+            { in: "body", key: "action" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      McpConfigToolsUpdateResponses,
+      McpConfigToolsUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/mcp/config/tools/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Config3 extends HeyApiClient {
+  /**
+   * List MCP config
+   *
+   * List persisted MCP server configuration for the selected scope.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: McpScope
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpConfigListResponses, unknown, ThrowOnError>({
+      url: "/mcp/config",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create MCP config
+   *
+   * Create a persisted remote MCP server configuration for the selected scope.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: McpScope
+      name?: string
+      config?: {
+        /**
+         * URL of the remote MCP server
+         */
+        url: string
+        /**
+         * Enable or disable the MCP server on startup
+         */
+        enabled?: boolean
+        /**
+         * Explicitly disable OAuth for this remote MCP server
+         */
+        oauth?: false
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+            { in: "body", key: "name" },
+            { in: "body", key: "config" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<McpConfigCreateResponses, McpConfigCreateErrors, ThrowOnError>({
+      url: "/mcp/config",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete MCP config
+   *
+   * Delete a persisted MCP server configuration for the selected scope.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      scope?: McpScope
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<McpConfigDeleteResponses, McpConfigDeleteErrors, ThrowOnError>({
+      url: "/mcp/config/{name}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update MCP config
+   *
+   * Update a persisted remote MCP server configuration for the selected scope.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      scope?: McpScope
+      config?: {
+        /**
+         * URL of the remote MCP server
+         */
+        url?: string
+        /**
+         * Enable or disable the MCP server on startup
+         */
+        enabled?: boolean
+        /**
+         * Explicitly disable OAuth for this remote MCP server
+         */
+        oauth?: false
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
+            { in: "body", key: "config" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<McpConfigUpdateResponses, McpConfigUpdateErrors, ThrowOnError>({
+      url: "/mcp/config/{name}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  private _tools?: Tools
+  get tools(): Tools {
+    return (this._tools ??= new Tools({ client: this.client }))
+  }
+}
+
 export class Auth2 extends HeyApiClient {
   /**
    * Remove MCP OAuth
@@ -3479,11 +3887,6 @@ export class Mcp extends HeyApiClient {
     })
   }
 
-  private _config?: McpConfig2
-  get config(): McpConfig2 {
-    return (this._config ??= new McpConfig2({ client: this.client }))
-  }
-
   /**
    * Connect an MCP server
    */
@@ -3540,228 +3943,14 @@ export class Mcp extends HeyApiClient {
     })
   }
 
+  private _config?: Config3
+  get config(): Config3 {
+    return (this._config ??= new Config3({ client: this.client }))
+  }
+
   private _auth?: Auth2
   get auth(): Auth2 {
     return (this._auth ??= new Auth2({ client: this.client }))
-  }
-}
-
-export class McpConfig2 extends HeyApiClient {
-  /**
-   * List MCP config
-   *
-   * List persisted MCP server configuration for the selected scope.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      scope?: "project" | "global"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "scope" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<McpConfigListResponses, unknown, ThrowOnError>({
-      url: "/mcp/config",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Create MCP config
-   *
-   * Create a persisted remote MCP server configuration for the selected scope.
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      scope?: "project" | "global"
-      name?: string
-      config?: {
-        url: string
-        enabled?: boolean
-        oauth?: false
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "scope" },
-            { in: "body", key: "name" },
-            { in: "body", key: "config" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<McpConfigCreateResponses, McpConfigCreateErrors, ThrowOnError>({
-      url: "/mcp/config",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Update MCP config
-   *
-   * Update a persisted remote MCP server configuration for the selected scope.
-   */
-  public update<ThrowOnError extends boolean = false>(
-    parameters: {
-      name: string
-      directory?: string
-      scope?: "project" | "global"
-      config?: {
-        url?: string
-        enabled?: boolean
-        oauth?: false
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "name" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "scope" },
-            { in: "body", key: "config" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).patch<McpConfigUpdateResponses, McpConfigUpdateErrors, ThrowOnError>({
-      url: "/mcp/config/{name}",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Delete MCP config
-   *
-   * Delete a persisted MCP server configuration for the selected scope.
-   */
-  public delete<ThrowOnError extends boolean = false>(
-    parameters: {
-      name: string
-      directory?: string
-      scope?: "project" | "global"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "name" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "scope" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).delete<McpConfigDeleteResponses, McpConfigDeleteErrors, ThrowOnError>({
-      url: "/mcp/config/{name}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List MCP tools
-   *
-   * List connected MCP tools and their scoped permission actions.
-   */
-  public tools<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      scope?: "project" | "global"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "scope" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<McpConfigToolsListResponses, unknown, ThrowOnError>({
-      url: "/mcp/config/tools",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Update MCP tool permission
-   *
-   * Update the scoped permission action for an individual MCP tool.
-   */
-  public updateTool<ThrowOnError extends boolean = false>(
-    parameters: {
-      id: string
-      directory?: string
-      scope?: "project" | "global"
-      action?: "allow" | "ask" | "deny"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "id" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "scope" },
-            { in: "body", key: "action" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).patch<McpConfigToolsUpdateResponses, McpConfigToolsUpdateErrors, ThrowOnError>({
-      url: "/mcp/config/tools/{id}",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
   }
 }
 
@@ -4186,6 +4375,153 @@ export class Vcs extends HeyApiClient {
   }
 }
 
+export class Config4 extends HeyApiClient {
+  /**
+   * List command config
+   *
+   * List persisted global command configuration.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<CommandConfigListResponses, unknown, ThrowOnError>({
+      url: "/command/config",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create command config
+   *
+   * Create a new global command configuration.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name?: string
+      config?: {
+        template: string
+        description?: string
+        agent?: string
+        model?: string
+        subtask?: boolean
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "config" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CommandConfigCreateResponses, CommandConfigCreateErrors, ThrowOnError>(
+      {
+        url: "/command/config",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Delete command config
+   *
+   * Delete a global command configuration.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      CommandConfigDeleteResponses,
+      CommandConfigDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/command/config/{name}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update command config
+   *
+   * Update an existing global command configuration.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      config?: {
+        template?: string
+        description?: string
+        agent?: string
+        model?: string
+        subtask?: boolean
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "config" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      CommandConfigUpdateResponses,
+      CommandConfigUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/command/config/{name}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Command extends HeyApiClient {
   /**
    * List commands
@@ -4204,6 +4540,11 @@ export class Command extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _config?: Config4
+  get config(): Config4 {
+    return (this._config ??= new Config4({ client: this.client }))
   }
 }
 

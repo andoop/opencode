@@ -1536,6 +1536,59 @@ export namespace Config {
     }
   }
 
+  export async function getCommand() {
+    const filepath = globalConfigFile()
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+    const config = parseConfig(before, filepath)
+    return {
+      path: filepath,
+      command: config.command ?? {},
+    }
+  }
+
+  export async function upsertCommand(name: string, entry: Command) {
+    const filepath = globalConfigFile()
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+    const updated = editJson(before, ["command", name], entry)
+    await fs.mkdir(path.dirname(filepath), { recursive: true })
+    await Bun.write(filepath, updated)
+    const config = parseConfig(updated, filepath)
+    await refreshScope("global")
+    return {
+      path: filepath,
+      command: config.command ?? {},
+    }
+  }
+
+  export async function removeCommand(name: string) {
+    const filepath = globalConfigFile()
+    const before = await Bun.file(filepath)
+      .text()
+      .catch((err) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+    const updated = editJson(before, ["command", name], undefined)
+    await fs.mkdir(path.dirname(filepath), { recursive: true })
+    await Bun.write(filepath, updated)
+    const config = parseConfig(updated, filepath)
+    await refreshScope("global")
+    return {
+      path: filepath,
+      command: config.command ?? {},
+    }
+  }
+
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
     const before = await Bun.file(filepath)

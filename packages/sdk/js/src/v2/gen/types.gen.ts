@@ -195,75 +195,6 @@ export type EventUserDeleted = {
   }
 }
 
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
 export type PermissionRequest = {
   id: string
   sessionID: string
@@ -306,15 +237,6 @@ export type EventLspUpdated = {
   properties: {
     [key: string]: unknown
   }
-}
-
-export type FileDiff = {
-  file: string
-  before: string
-  after: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
 }
 
 export type UserMessage = {
@@ -995,6 +917,75 @@ export type EventTaskRecoveryPending = {
   }
 }
 
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.share"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -1164,12 +1155,6 @@ export type Event =
   | EventUserCreated
   | EventUserUpdated
   | EventUserDeleted
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
   | EventPermissionAsked
   | EventPermissionReplied
   | EventLspClientDiagnostics
@@ -1192,6 +1177,12 @@ export type Event =
   | EventTaskCompleted
   | EventTaskFailed
   | EventTaskRecoveryPending
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
   | EventCommandExecuted
   | EventWorktreeReady
   | EventWorktreeFailed
@@ -2050,6 +2041,10 @@ export type Config = {
    * Additional instruction files or patterns to include
    */
   instructions?: Array<string>
+  /**
+   * Global system prompt for workspace and worktree editing boundaries
+   */
+  workspace_boundary_prompt?: string
   layout?: LayoutConfig
   permission?: PermissionConfig
   tools?: {
@@ -2215,6 +2210,19 @@ export type FileNode = {
   absolute: string
   type: "file" | "directory"
   ignored: boolean
+}
+
+export type ProjectGroup = {
+  id: string
+  slug: string
+  name: string
+  description?: string
+  profile_markdown?: string
+  created_by?: string
+  time: {
+    created: number
+    updated: number
+  }
 }
 
 export type ProjectRegistry = {
@@ -2499,6 +2507,15 @@ export type File = {
   status: "added" | "deleted" | "modified"
 }
 
+export type FileDiff = {
+  file: string
+  before: string
+  after: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
 export type McpStatusConnected = {
   status: "connected"
 }
@@ -2527,6 +2544,8 @@ export type McpStatus =
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
+
+export type McpScope = "project" | "global"
 
 export type Path = {
   home: string
@@ -2775,6 +2794,7 @@ export type WorkspaceCreateData = {
     name?: string
     directories: Array<string>
     primaryProjectID?: string
+    selected_group_ids?: Array<string>
   }
   path?: never
   query?: never
@@ -3575,6 +3595,135 @@ export type ProjectListResponses = {
 
 export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
 
+export type ProjectGroupListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/project/group"
+}
+
+export type ProjectGroupListResponses = {
+  /**
+   * Project groups
+   */
+  200: Array<ProjectGroup>
+}
+
+export type ProjectGroupListResponse = ProjectGroupListResponses[keyof ProjectGroupListResponses]
+
+export type ProjectGroupCreateData = {
+  body?: {
+    name: string
+    description?: string
+    profile_markdown?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/project/group"
+}
+
+export type ProjectGroupCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type ProjectGroupCreateError = ProjectGroupCreateErrors[keyof ProjectGroupCreateErrors]
+
+export type ProjectGroupCreateResponses = {
+  /**
+   * Created project group
+   */
+  200: ProjectGroup
+}
+
+export type ProjectGroupCreateResponse = ProjectGroupCreateResponses[keyof ProjectGroupCreateResponses]
+
+export type ProjectGroupDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/project/group/{id}"
+}
+
+export type ProjectGroupDeleteErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectGroupDeleteError = ProjectGroupDeleteErrors[keyof ProjectGroupDeleteErrors]
+
+export type ProjectGroupDeleteResponses = {
+  /**
+   * Deleted project group
+   */
+  200: {
+    success: boolean
+  }
+}
+
+export type ProjectGroupDeleteResponse = ProjectGroupDeleteResponses[keyof ProjectGroupDeleteResponses]
+
+export type ProjectGroupUpdateData = {
+  body?: {
+    name?: string
+    description?: string
+    profile_markdown?: string
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/project/group/{id}"
+}
+
+export type ProjectGroupUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectGroupUpdateError = ProjectGroupUpdateErrors[keyof ProjectGroupUpdateErrors]
+
+export type ProjectGroupUpdateResponses = {
+  /**
+   * Updated project group
+   */
+  200: ProjectGroup
+}
+
+export type ProjectGroupUpdateResponse = ProjectGroupUpdateResponses[keyof ProjectGroupUpdateResponses]
+
 export type ProjectRegistryListData = {
   body?: never
   path?: never
@@ -3607,7 +3756,8 @@ export type ProjectRegistryCreateData = {
     directory: string
     name?: string
     description?: string
-    groups?: Array<string>
+    profile_markdown?: string
+    group_ids?: Array<string>
     visibility?: {
       mode?: "all" | "include" | "exclude"
       user_ids?: Array<string>
@@ -3681,7 +3831,8 @@ export type ProjectRegistryUpdateData = {
   body?: {
     name?: string
     description?: string
-    groups?: Array<string>
+    profile_markdown?: string
+    group_ids?: Array<string>
     visibility?: {
       mode?: "all" | "include" | "exclude"
       user_ids?: Array<string>
@@ -5846,22 +5997,6 @@ export type McpAddResponses = {
 
 export type McpAddResponse = McpAddResponses[keyof McpAddResponses]
 
-export type McpScope = "project" | "global"
-
-export type McpConfigRemote = {
-  type: "remote"
-  url: string
-  enabled?: boolean
-  oauth?: false
-}
-
-export type McpConfigList = {
-  path: string
-  mcp: {
-    [key: string]: McpConfigRemote
-  }
-}
-
 export type McpConfigListData = {
   body?: never
   path?: never
@@ -5876,7 +6011,17 @@ export type McpConfigListResponses = {
   /**
    * Persisted MCP configuration
    */
-  200: McpConfigList
+  200: {
+    path: string
+    mcp: {
+      [key: string]: {
+        type: "remote"
+        url: string
+        enabled?: boolean
+        oauth?: false
+      }
+    }
+  }
 }
 
 export type McpConfigListResponse = McpConfigListResponses[keyof McpConfigListResponses]
@@ -5885,8 +6030,17 @@ export type McpConfigCreateData = {
   body?: {
     name: string
     config: {
+      /**
+       * URL of the remote MCP server
+       */
       url: string
+      /**
+       * Enable or disable the MCP server on startup
+       */
       enabled?: boolean
+      /**
+       * Explicitly disable OAuth for this remote MCP server
+       */
       oauth?: false
     }
   }
@@ -5911,46 +6065,20 @@ export type McpConfigCreateResponses = {
   /**
    * Persisted MCP configuration
    */
-  200: McpConfigList
+  200: {
+    path: string
+    mcp: {
+      [key: string]: {
+        type: "remote"
+        url: string
+        enabled?: boolean
+        oauth?: false
+      }
+    }
+  }
 }
 
 export type McpConfigCreateResponse = McpConfigCreateResponses[keyof McpConfigCreateResponses]
-
-export type McpConfigUpdateData = {
-  body?: {
-    config: {
-      url?: string
-      enabled?: boolean
-      oauth?: false
-    }
-  }
-  path: {
-    name: string
-  }
-  query?: {
-    directory?: string
-    scope?: McpScope
-  }
-  url: "/mcp/config/{name}"
-}
-
-export type McpConfigUpdateErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type McpConfigUpdateError = McpConfigUpdateErrors[keyof McpConfigUpdateErrors]
-
-export type McpConfigUpdateResponses = {
-  /**
-   * Persisted MCP configuration
-   */
-  200: McpConfigList
-}
-
-export type McpConfigUpdateResponse = McpConfigUpdateResponses[keyof McpConfigUpdateResponses]
 
 export type McpConfigDeleteData = {
   body?: never
@@ -5977,24 +6105,75 @@ export type McpConfigDeleteResponses = {
   /**
    * Persisted MCP configuration
    */
-  200: McpConfigList
+  200: {
+    path: string
+    mcp: {
+      [key: string]: {
+        type: "remote"
+        url: string
+        enabled?: boolean
+        oauth?: false
+      }
+    }
+  }
 }
 
 export type McpConfigDeleteResponse = McpConfigDeleteResponses[keyof McpConfigDeleteResponses]
 
-export type McpToolRule = {
-  id: string
-  name: string
-  description?: string
-  action: PermissionActionConfig
+export type McpConfigUpdateData = {
+  body?: {
+    config: {
+      /**
+       * URL of the remote MCP server
+       */
+      url?: string
+      /**
+       * Enable or disable the MCP server on startup
+       */
+      enabled?: boolean
+      /**
+       * Explicitly disable OAuth for this remote MCP server
+       */
+      oauth?: false
+    }
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    scope?: McpScope
+  }
+  url: "/mcp/config/{name}"
 }
 
-export type McpToolList = {
-  path: string
-  tools: {
-    [key: string]: Array<McpToolRule>
+export type McpConfigUpdateErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type McpConfigUpdateError = McpConfigUpdateErrors[keyof McpConfigUpdateErrors]
+
+export type McpConfigUpdateResponses = {
+  /**
+   * Persisted MCP configuration
+   */
+  200: {
+    path: string
+    mcp: {
+      [key: string]: {
+        type: "remote"
+        url: string
+        enabled?: boolean
+        oauth?: false
+      }
+    }
   }
 }
+
+export type McpConfigUpdateResponse = McpConfigUpdateResponses[keyof McpConfigUpdateResponses]
 
 export type McpConfigToolsListData = {
   body?: never
@@ -6010,7 +6189,17 @@ export type McpConfigToolsListResponses = {
   /**
    * Scoped MCP tool permissions
    */
-  200: McpToolList
+  200: {
+    path: string
+    tools: {
+      [key: string]: Array<{
+        id: string
+        name: string
+        description?: string
+        action: PermissionActionConfig
+      }>
+    }
+  }
 }
 
 export type McpConfigToolsListResponse = McpConfigToolsListResponses[keyof McpConfigToolsListResponses]
@@ -6042,7 +6231,17 @@ export type McpConfigToolsUpdateResponses = {
   /**
    * Scoped MCP tool permissions
    */
-  200: McpToolList
+  200: {
+    path: string
+    tools: {
+      [key: string]: Array<{
+        id: string
+        name: string
+        description?: string
+        action: PermissionActionConfig
+      }>
+    }
+  }
 }
 
 export type McpConfigToolsUpdateResponse = McpConfigToolsUpdateResponses[keyof McpConfigToolsUpdateResponses]
@@ -6592,6 +6791,170 @@ export type CommandListResponses = {
 }
 
 export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
+
+export type CommandConfigListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/command/config"
+}
+
+export type CommandConfigListResponses = {
+  /**
+   * Persisted command configuration
+   */
+  200: {
+    path: string
+    command: {
+      [key: string]: {
+        template: string
+        description?: string
+        agent?: string
+        model?: string
+        subtask?: boolean
+      }
+    }
+  }
+}
+
+export type CommandConfigListResponse = CommandConfigListResponses[keyof CommandConfigListResponses]
+
+export type CommandConfigCreateData = {
+  body?: {
+    name: string
+    config: {
+      template: string
+      description?: string
+      agent?: string
+      model?: string
+      subtask?: boolean
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/command/config"
+}
+
+export type CommandConfigCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CommandConfigCreateError = CommandConfigCreateErrors[keyof CommandConfigCreateErrors]
+
+export type CommandConfigCreateResponses = {
+  /**
+   * Persisted command configuration
+   */
+  200: {
+    path: string
+    command: {
+      [key: string]: {
+        template: string
+        description?: string
+        agent?: string
+        model?: string
+        subtask?: boolean
+      }
+    }
+  }
+}
+
+export type CommandConfigCreateResponse = CommandConfigCreateResponses[keyof CommandConfigCreateResponses]
+
+export type CommandConfigDeleteData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/command/config/{name}"
+}
+
+export type CommandConfigDeleteErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CommandConfigDeleteError = CommandConfigDeleteErrors[keyof CommandConfigDeleteErrors]
+
+export type CommandConfigDeleteResponses = {
+  /**
+   * Persisted command configuration
+   */
+  200: {
+    path: string
+    command: {
+      [key: string]: {
+        template: string
+        description?: string
+        agent?: string
+        model?: string
+        subtask?: boolean
+      }
+    }
+  }
+}
+
+export type CommandConfigDeleteResponse = CommandConfigDeleteResponses[keyof CommandConfigDeleteResponses]
+
+export type CommandConfigUpdateData = {
+  body?: {
+    config: {
+      template?: string
+      description?: string
+      agent?: string
+      model?: string
+      subtask?: boolean
+    }
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/command/config/{name}"
+}
+
+export type CommandConfigUpdateErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CommandConfigUpdateError = CommandConfigUpdateErrors[keyof CommandConfigUpdateErrors]
+
+export type CommandConfigUpdateResponses = {
+  /**
+   * Persisted command configuration
+   */
+  200: {
+    path: string
+    command: {
+      [key: string]: {
+        template: string
+        description?: string
+        agent?: string
+        model?: string
+        subtask?: boolean
+      }
+    }
+  }
+}
+
+export type CommandConfigUpdateResponse = CommandConfigUpdateResponses[keyof CommandConfigUpdateResponses]
 
 export type AppLogData = {
   body?: {

@@ -20,7 +20,6 @@ import { Agent } from "../agent/agent"
 import { Skill } from "../skill/skill"
 import { Auth } from "../auth"
 import { Flag } from "../flag/flag"
-import { Command } from "../command"
 import { Global } from "../global"
 import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
@@ -47,6 +46,7 @@ import { UserAuth } from "../user/auth"
 import { UserAuthRoutes } from "./routes/user-auth"
 import { UserRoutes } from "./routes/user"
 import { BrowseRoutes } from "./routes/browse"
+import { CommandRoutes } from "./routes/command"
 import { WorkspaceRoutes } from "./routes/workspace"
 import { Workspace } from "@/workspace"
 
@@ -491,28 +491,7 @@ export namespace Server {
             })
           },
         )
-        .get(
-          "/command",
-          describeRoute({
-            summary: "List commands",
-            description: "Get a list of all available commands in the OpenCode system.",
-            operationId: "command.list",
-            responses: {
-              200: {
-                description: "List of commands",
-                content: {
-                  "application/json": {
-                    schema: resolver(Command.Info.array()),
-                  },
-                },
-              },
-            },
-          }),
-          async (c) => {
-            const commands = await Command.list()
-            return c.json(commands)
-          },
-        )
+        .route("/command", CommandRoutes())
         .post(
           "/log",
           describeRoute({
