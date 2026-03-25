@@ -163,21 +163,37 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
+      if (!await Filesystem.isDir(cwd)) {
+        throw new Error(
+          `Working directory does not exist: ${cwd}\nEnsure the path is absolute and the directory exists before running commands.`,
+        )
+      }
+
       const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
-      const proc = spawn(params.command, {
-        shell,
-        cwd,
-        env: {
-          ...process.env,
-          ...shellEnv.env,
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-        detached: process.platform !== "win32",
-      })
+      let proc: ReturnType<typeof spawn>
+      try {
+        proc = spawn(params.command, {
+          shell,
+          cwd,
+          env: {
+            ...process.env,
+            ...shellEnv.env,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+          detached: process.platform !== "win32",
+        })
+      } catch (error: any) {
+        if (error?.code === "ENOENT") {
+          throw new Error(
+            `Failed to spawn shell "${shell}" in directory "${cwd}". ` +
+              `Verify the shell exists and the working directory is valid.`,
+          )
+        }
+        throw error
+      }
 
       let output = ""
 
-      // Initialize metadata with empty output
       ctx.metadata({
         metadata: {
           output: "",
@@ -189,7 +205,6 @@ export const BashTool = Tool.define("bash", async () => {
         output += chunk.toString()
         ctx.metadata({
           metadata: {
-            // truncate the metadata to avoid GIANT blobs of data (has nothing to do w/ what agent can access)
             output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
             description: params.description,
           },
@@ -234,9 +249,18 @@ export const BashTool = Tool.define("bash", async () => {
           resolve()
         })
 
-        proc.once("error", (error) => {
+        proc.once("error", (error: any) => {
           exited = true
           cleanup()
+          if (error?.code === "ENOENT") {
+            reject(
+              new Error(
+                `Failed to spawn shell "${shell}" in directory "${cwd}". ` +
+                  `Verify the shell exists and the working directory is valid.`,
+              ),
+            )
+            return
+          }
           reject(error)
         })
       })

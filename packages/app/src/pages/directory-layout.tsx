@@ -58,6 +58,17 @@ export default function Layout(props: ParentProps) {
 
             const rejectQuestion = (input: { requestID: string }) => sdk.client.question.reject(input)
 
+            const replyToSelect = (input: { requestID: string; value: string; source?: "option" | "custom" }) =>
+              sdk.client.select.reply({
+                requestID: input.requestID,
+                selectReply: {
+                  value: input.value,
+                  source: input.source,
+                },
+              })
+
+            const rejectSelect = (input: { requestID: string }) => sdk.client.select.reject(input)
+
             const navigateToSession = (sessionID: string) => {
               navigate(`/${params.dir}/session/${sessionID}`)
             }
@@ -88,6 +99,8 @@ export default function Layout(props: ParentProps) {
                 onPermissionRespond={respond}
                 onQuestionReply={replyToQuestion}
                 onQuestionReject={rejectQuestion}
+                onSelectReply={replyToSelect}
+                onSelectReject={rejectSelect}
                 onNavigateToSession={navigateToSession}
                 onTaskRetry={onTaskRetry}
                 onTaskCancel={onTaskCancel}

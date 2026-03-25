@@ -26,6 +26,7 @@ import {
   QuestionRequest,
   QuestionAnswer,
   QuestionInfo,
+  SelectRequest,
 } from "@opencode-ai/sdk/v2"
 import { createStore } from "solid-js/store"
 import { copyText } from "../copy"
@@ -48,6 +49,7 @@ import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/util/pa
 import { checksum } from "@opencode-ai/util/encode"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
+import { List } from "./list"
 import { createAutoScroll } from "../hooks"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 
@@ -261,6 +263,12 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       return {
         icon: "bubble-5",
         title: i18n.t("ui.tool.questions"),
+      }
+    case "select":
+      return {
+        icon: "bullet-list",
+        title: "Selection",
+        subtitle: typeof input.title === "string" ? input.title : undefined,
       }
     default:
       return {
@@ -559,8 +567,16 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
     return next
   })
 
+  const selectRequest = createMemo(() => {
+    return data.store.select?.[props.message.sessionID]?.find((item) => {
+      if (!item?.tool) return false
+      return item.tool.callID === part.callID && item.tool.messageID === props.message.id
+    })
+  })
+
   const [showPermission, setShowPermission] = createSignal(false)
   const [showQuestion, setShowQuestion] = createSignal(false)
+  const [showSelect, setShowSelect] = createSignal(false)
 
   createEffect(() => {
     const perm = visiblePermission()
@@ -582,9 +598,19 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
     }
   })
 
+  createEffect(() => {
+    const request = selectRequest()
+    if (request) {
+      const timeout = setTimeout(() => setShowSelect(true), 50)
+      onCleanup(() => clearTimeout(timeout))
+    } else {
+      setShowSelect(false)
+    }
+  })
+
   const [forceOpen, setForceOpen] = createSignal(false)
   createEffect(() => {
-    if (visiblePermission() || questionRequest()) setForceOpen(true)
+    if (visiblePermission() || questionRequest() || selectRequest()) setForceOpen(true)
   })
 
   const respond = (response: "once" | "always" | "reject") => {
@@ -624,6 +650,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
       data-component="tool-part-wrapper"
       data-permission={showPermission()}
       data-question={showQuestion()}
+      data-select={showSelect()}
       data-background-task={isBackgroundTask()}
       data-task-status={taskStatus()}
     >
@@ -663,7 +690,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
             status={part.state.status}
             hideDetails={props.hideDetails}
             forceOpen={forceOpen()}
-            locked={showPermission() || showQuestion()}
+            locked={showPermission() || showQuestion() || showSelect()}
             defaultOpen={props.defaultOpen}
           />
         </Match>
@@ -684,6 +711,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
         </div>
       </Show>
       <Show when={showQuestion() && questionRequest()}>{(request) => <QuestionPrompt request={request()} />}</Show>
+      <Show when={showSelect() && selectRequest()}>{(request) => <SelectPrompt request={request()} />}</Show>
     </div>
   )
 }
@@ -1405,6 +1433,34 @@ ToolRegistry.register({
 })
 
 ToolRegistry.register({
+  name: "select",
+  render(props) {
+    const value = () => (typeof props.metadata.value === "string" ? (props.metadata.value as string) : "")
+
+    return (
+      <BasicTool
+        {...props}
+        defaultOpen={!!value()}
+        icon="bullet-list"
+        trigger={{
+          title: "Selection",
+          subtitle: value() || (typeof props.input.title === "string" ? props.input.title : ""),
+        }}
+      >
+        <Show when={value()}>
+          <div data-component="select-value">
+            <div data-slot="question-answer-item">
+              <div data-slot="question-text">{typeof props.input.title === "string" ? props.input.title : "Selected value"}</div>
+              <div data-slot="answer-text">{value()}</div>
+            </div>
+          </div>
+        </Show>
+      </BasicTool>
+    )
+  },
+})
+
+ToolRegistry.register({
   name: "question",
   render(props) {
     const i18n = useI18n()
@@ -1448,6 +1504,133 @@ ToolRegistry.register({
     )
   },
 })
+
+function SelectPrompt(props: { request: SelectRequest }) {
+  const data = useData()
+  const i18n = useI18n()
+  const [filter, setFilter] = createSignal("")
+  const [store, setStore] = createStore({
+    value: "",
+    source: undefined as "option" | "custom" | undefined,
+  })
+  const options = createMemo(() =>
+    props.request.options.map((option, index) => ({
+      ...option,
+      id: `${index}:${option.label}`,
+      search: (option.keywords ?? []).join(" "),
+    })),
+  )
+  const canUseCustom = createMemo(() => props.request.custom === true && filter().trim().length > 0)
+  const customSelected = createMemo(() => {
+    const value = filter().trim().toLowerCase()
+    if (!value) return false
+    return options().some((option) => option.label.toLowerCase() === value)
+  })
+  const selectedOption = createMemo(() => {
+    if (store.source !== "option") return undefined
+    return options().find((option) => option.label === store.value)
+  })
+  const hasSelection = createMemo(() => !!store.value)
+
+  const pick = (value: string, source: "option" | "custom") => {
+    setStore({
+      value,
+      source,
+    })
+  }
+
+  const reply = (value: string, source: "option" | "custom") => {
+    data.replyToSelect?.({
+      requestID: props.request.id,
+      value,
+      source,
+    })
+  }
+
+  const reject = () => {
+    data.rejectSelect?.({
+      requestID: props.request.id,
+    })
+  }
+
+  const submit = () => {
+    if (!store.value || !store.source) return
+    reply(store.value, store.source)
+  }
+
+  return (
+    <div data-component="select-prompt">
+      <Show when={props.request.title}>
+        <div data-slot="question-text">{props.request.title}</div>
+      </Show>
+      <List
+        class="mt-2 w-full min-w-0 max-h-56 overflow-hidden [&_[data-slot=list-scroll]]:max-h-56 [&_[data-slot=list-scroll]]:overflow-y-auto"
+        search={{
+          placeholder: props.request.placeholder ?? "Search or choose",
+          autofocus: true,
+        }}
+        items={options}
+        key={(item) => item.id}
+        current={selectedOption()}
+        filterKeys={["label", "description", "search"]}
+        emptyMessage={i18n.t("ui.list.empty")}
+        filter={filter()}
+        onFilter={setFilter}
+        onSelect={(item) => {
+          if (!item) return
+          pick(item.label, "option")
+        }}
+        add={
+          canUseCustom() && !customSelected()
+            ? {
+                render: () => (
+                  <button
+                    type="button"
+                    class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-13-regular"
+                    data-picked={store.source === "custom" && store.value === filter().trim()}
+                    onClick={() => pick(filter().trim(), "custom")}
+                  >
+                    <span class="truncate">Use &quot;{filter().trim()}&quot;</span>
+                    <span class="opacity-60 text-12-medium">Custom</span>
+                    <Show when={store.source === "custom" && store.value === filter().trim()}>
+                      <Icon name="check-small" size="normal" />
+                    </Show>
+                  </button>
+                ),
+              }
+            : undefined
+        }
+      >
+        {(item) => (
+          <div class="w-full flex flex-col gap-0.5 py-0.5">
+            <span class="truncate">{item.label}</span>
+            <Show when={item.description}>
+              <span class="text-12-regular opacity-70">{item.description}</span>
+            </Show>
+          </div>
+        )}
+      </List>
+      <Show when={hasSelection()}>
+        <div data-slot="question-review" class="mt-2">
+          <div data-slot="review-item">
+            <span data-slot="review-label">Current selection</span>
+            <span data-slot="review-value" data-answered="true">
+              {store.value}
+            </span>
+          </div>
+        </div>
+      </Show>
+      <div data-slot="question-actions">
+        <Button variant="ghost" size="small" onClick={reject}>
+          {i18n.t("ui.common.dismiss")}
+        </Button>
+        <Button variant="primary" size="small" onClick={submit} disabled={!hasSelection()}>
+          {i18n.t("ui.common.submit")}
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 function QuestionPrompt(props: { request: QuestionRequest }) {
   const data = useData()

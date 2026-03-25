@@ -6,6 +6,8 @@ import type {
   PermissionRequest,
   QuestionRequest,
   QuestionAnswer,
+  SelectRequest,
+  SelectReply,
 } from "@opencode-ai/sdk/v2"
 import { createSimpleContext } from "./helper"
 
@@ -19,6 +21,9 @@ type Data = {
   }
   question?: {
     [sessionID: string]: QuestionRequest[]
+  }
+  select?: {
+    [sessionID: string]: SelectRequest[]
   }
   message: {
     [sessionID: string]: Message[]
@@ -38,6 +43,10 @@ export type QuestionReplyFn = (input: { requestID: string; answers: QuestionAnsw
 
 export type QuestionRejectFn = (input: { requestID: string }) => void
 
+export type SelectReplyFn = (input: SelectReply & { requestID: string }) => void
+
+export type SelectRejectFn = (input: { requestID: string }) => void
+
 export type NavigateToSessionFn = (sessionID: string) => void
 
 export type OnTaskRetryFn = (taskId: string) => Promise<void>
@@ -51,6 +60,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     onPermissionRespond?: PermissionRespondFn
     onQuestionReply?: QuestionReplyFn
     onQuestionReject?: QuestionRejectFn
+    onSelectReply?: SelectReplyFn
+    onSelectReject?: SelectRejectFn
     onNavigateToSession?: NavigateToSessionFn
     onTaskRetry?: OnTaskRetryFn
     onTaskCancel?: OnTaskCancelFn
@@ -65,6 +76,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       respondToPermission: props.onPermissionRespond,
       replyToQuestion: props.onQuestionReply,
       rejectQuestion: props.onQuestionReject,
+      replyToSelect: props.onSelectReply,
+      rejectSelect: props.onSelectReject,
       navigateToSession: props.onNavigateToSession,
       onTaskRetry: props.onTaskRetry,
       onTaskCancel: props.onTaskCancel,

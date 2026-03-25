@@ -1,0 +1,13 @@
+Use this tool when you need the user to choose a single value from a searchable list during execution. This allows you to:
+1. Present a list of possible values chosen by the AI
+2. Let the user search the list before choosing
+3. Optionally allow the user to type a custom value
+4. Pause execution until the user makes a choice
+
+Usage notes:
+- Prefer concise labels so the list is easy to scan
+- Use `keywords` to improve searchability without cluttering the visible UI
+- Set `custom: true` only when a user-supplied value is genuinely useful
+- Do NOT truncate the option list just because it is long. The UI supports scrolling and search, so pass the complete set of relevant options whenever possible
+- Do NOT replace a long option list with a textual summary. If the user needs to choose from the list, provide the full list in the tool call
+- Return enough options for choice, but avoid adding irrelevant options

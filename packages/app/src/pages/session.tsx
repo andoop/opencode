@@ -2463,6 +2463,16 @@ export default function Page() {
                             sessionClient().question.reply(input)
                           const rejectQuestion = (input: { requestID: string }) =>
                             sessionClient().question.reject(input)
+                          const replyToSelect = (input: { requestID: string; value: string; source?: "option" | "custom" }) =>
+                            sessionClient().select.reply({
+                              requestID: input.requestID,
+                              selectReply: {
+                                value: input.value,
+                                source: input.source,
+                              },
+                            })
+                          const rejectSelect = (input: { requestID: string }) =>
+                            sessionClient().select.reject(input)
                           const navigateToSession = (sessionID: string) => {
                             navigate(`/${params.dir}/session/${sessionID}`)
                           }
@@ -2508,6 +2518,8 @@ export default function Page() {
                               onPermissionRespond={respond}
                               onQuestionReply={replyToQuestion}
                               onQuestionReject={rejectQuestion}
+                              onSelectReply={replyToSelect}
+                              onSelectReject={rejectSelect}
                               onNavigateToSession={navigateToSession}
                               onTaskRetry={onTaskRetry}
                               onTaskCancel={onTaskCancel}

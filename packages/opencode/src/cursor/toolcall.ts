@@ -22,6 +22,7 @@ const NATIVE = new Set([
   "websearch",
   "codesearch",
   "question",
+  "select",
   "ls",
 ])
 

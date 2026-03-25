@@ -570,7 +570,8 @@
     gap: 12px;
   }
 
-  [data-slot="session-turn-question-parts"] {
+  [data-slot="session-turn-question-parts"],
+  [data-slot="session-turn-select-parts"] {
     width: 100%;
     min-width: 0;
     display: flex;
@@ -578,7 +579,8 @@
     gap: 12px;
   }
 
-  [data-slot="session-turn-answered-question-parts"] {
+  [data-slot="session-turn-answered-question-parts"],
+  [data-slot="session-turn-answered-select-parts"] {
     width: 100%;
     min-width: 0;
     display: flex;

@@ -16,6 +16,7 @@ import {
   type VcsInfo,
   type PermissionRequest,
   type QuestionRequest,
+  type SelectRequest,
   createOpencodeClient,
 } from "@opencode-ai/sdk/v2/client"
 import { createStore, produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
@@ -82,6 +83,9 @@ type State = {
   }
   question: {
     [sessionID: string]: QuestionRequest[]
+  }
+  select: {
+    [sessionID: string]: SelectRequest[]
   }
   mcp: {
     [name: string]: McpStatus
@@ -465,6 +469,7 @@ function createGlobalSync() {
           todo: {},
           permission: {},
           question: {},
+          select: {},
           mcp: {},
           lsp: [],
           vcs: vcsStore.value,
@@ -690,6 +695,35 @@ function createGlobalSync() {
             }
           })
         }),
+        sdk.select.list().then((x) => {
+          const grouped: Record<string, SelectRequest[]> = {}
+          for (const item of x.data ?? []) {
+            if (!item?.id || !item.sessionID) continue
+            const existing = grouped[item.sessionID]
+            if (existing) {
+              existing.push(item)
+              continue
+            }
+            grouped[item.sessionID] = [item]
+          }
+
+          batch(() => {
+            for (const sessionID of Object.keys(store.select)) {
+              if (grouped[sessionID]) continue
+              setStore("select", sessionID, [])
+            }
+            for (const [sessionID, items] of Object.entries(grouped)) {
+              setStore(
+                "select",
+                sessionID,
+                reconcile(
+                  items.filter((item) => !!item?.id).sort((a, b) => cmp(a.id, b.id)),
+                  { key: "id" },
+                ),
+              )
+            }
+          })
+        }),
       ]).then(() => {
         setStore("status", "complete")
       })
@@ -773,6 +807,7 @@ function createGlobalSync() {
         store.todo[sessionID] !== undefined ||
         store.permission[sessionID] !== undefined ||
         store.question[sessionID] !== undefined ||
+        store.select[sessionID] !== undefined ||
         store.session_status[sessionID] !== undefined
 
       if (!hasAny) return
@@ -792,6 +827,7 @@ function createGlobalSync() {
           delete draft.todo[sessionID]
           delete draft.permission[sessionID]
           delete draft.question[sessionID]
+          delete draft.select[sessionID]
           delete draft.session_status[sessionID]
         }),
       )
@@ -1026,6 +1062,44 @@ function createGlobalSync() {
         if (!result.found) break
         setStore(
           "question",
+          event.properties.sessionID,
+          produce((draft) => {
+            draft.splice(result.index, 1)
+          }),
+        )
+        break
+      }
+      case "select.asked": {
+        const sessionID = event.properties.sessionID
+        const items = store.select[sessionID]
+        if (!items) {
+          setStore("select", sessionID, [event.properties])
+          break
+        }
+
+        const result = Binary.search(items, event.properties.id, (item) => item.id)
+        if (result.found) {
+          setStore("select", sessionID, result.index, reconcile(event.properties))
+          break
+        }
+
+        setStore(
+          "select",
+          sessionID,
+          produce((draft) => {
+            draft.splice(result.index, 0, event.properties)
+          }),
+        )
+        break
+      }
+      case "select.replied":
+      case "select.rejected": {
+        const items = store.select[event.properties.sessionID]
+        if (!items) break
+        const result = Binary.search(items, event.properties.requestID, (item) => item.id)
+        if (!result.found) break
+        setStore(
+          "select",
           event.properties.sessionID,
           produce((draft) => {
             draft.splice(result.index, 1)

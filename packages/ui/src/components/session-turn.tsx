@@ -5,6 +5,7 @@ import {
   Part as PartType,
   type PermissionRequest,
   type QuestionRequest,
+  type SelectRequest,
   TextPart,
   ToolPart,
 } from "@opencode-ai/sdk/v2/client"
@@ -145,6 +146,8 @@ export function SessionTurn(
   const emptyPermissionParts: { part: ToolPart; message: AssistantMessage }[] = []
   const emptyQuestions: QuestionRequest[] = []
   const emptyQuestionParts: { part: ToolPart; message: AssistantMessage }[] = []
+  const emptySelects: SelectRequest[] = []
+  const emptySelectParts: { part: ToolPart; message: AssistantMessage }[] = []
   const idle = { type: "idle" as const }
 
   const allMessages = createMemo(() => data.store.message[props.sessionID] ?? emptyMessages)
@@ -280,6 +283,29 @@ export function SessionTurn(
   const questions = createMemo(() => data.store.question?.[props.sessionID] ?? emptyQuestions)
   const nextQuestion = createMemo(() => questions()[0])
 
+  const selectParts = createMemo(() => {
+    if (props.stepsExpanded) return emptySelectParts
+
+    const result: { part: ToolPart; message: AssistantMessage }[] = []
+    for (const next of data.store.select?.[props.sessionID] ?? emptySelects) {
+      if (!next?.tool) continue
+      const message = findLast(assistantMessages(), (m) => m.id === next.tool!.messageID)
+      if (!message) continue
+
+      const parts = data.store.part[message.id] ?? emptyParts
+      for (const part of parts) {
+        if (part?.type !== "tool") continue
+        const tool = part as ToolPart
+        if (tool.callID === next.tool.callID) {
+          result.push({ part: tool, message })
+          break
+        }
+      }
+    }
+
+    return result.length > 0 ? result : emptySelectParts
+  })
+
   const questionParts = createMemo(() => {
     if (props.stepsExpanded) return emptyQuestionParts
 
@@ -314,6 +340,29 @@ export function SessionTurn(
         // @ts-expect-error metadata may not exist on all tool states
         const answers = tool.state?.metadata?.answers
         if (answers && answers.length > 0) {
+          result.push({ part: tool, message: msg })
+        }
+      }
+    }
+
+    return result
+  })
+
+  const answeredSelectParts = createMemo(() => {
+    if (props.stepsExpanded) return emptySelectParts
+    if ((data.store.select?.[props.sessionID]?.length ?? 0) > 0) return emptySelectParts
+
+    const result: { part: ToolPart; message: AssistantMessage }[] = []
+
+    for (const msg of assistantMessages()) {
+      const parts = data.store.part[msg.id] ?? emptyParts
+      for (const part of parts) {
+        if (part?.type !== "tool") continue
+        const tool = part as ToolPart
+        if (tool.tool !== "select") continue
+        // @ts-expect-error metadata may not exist on all tool states
+        const value = tool.state?.metadata?.value
+        if (typeof value === "string" && value) {
           result.push({ part: tool, message: msg })
         }
       }
@@ -734,9 +783,23 @@ export function SessionTurn(
                         </For>
                       </div>
                     </Show>
+                    <Show when={!props.stepsExpanded && selectParts().length > 0}>
+                      <div data-slot="session-turn-select-parts">
+                        <For each={selectParts()}>
+                          {({ part, message }) => <Part part={part} message={message} />}
+                        </For>
+                      </div>
+                    </Show>
                     <Show when={!props.stepsExpanded && questionParts().length > 0}>
                       <div data-slot="session-turn-question-parts">
                         <For each={questionParts()}>
+                          {({ part, message }) => <Part part={part} message={message} />}
+                        </For>
+                      </div>
+                    </Show>
+                    <Show when={!props.stepsExpanded && answeredSelectParts().length > 0}>
+                      <div data-slot="session-turn-answered-select-parts">
+                        <For each={answeredSelectParts()}>
                           {({ part, message }) => <Part part={part} message={message} />}
                         </For>
                       </div>

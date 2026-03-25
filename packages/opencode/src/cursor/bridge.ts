@@ -33,6 +33,7 @@ const BRIDGED = new Set([
   "websearch",
   "codesearch",
   "question",
+  "select",
   "ls",
 ])
 
@@ -176,7 +177,12 @@ export async function bridgeToolNames(input: { agent: string; allowedTools: stri
 }
 
 export function bridgeCommand(input: { cwd: string; sessionID: string; agent: string; allowedTools: string[] }) {
+  const inherited: Record<string, string> = {}
+  for (const key of ["PATH", "HOME", "SHELL", "USER", "LANG", "TERM", "TMPDIR", "EDITOR"]) {
+    if (process.env[key]) inherited[key] = process.env[key]!
+  }
   const env = {
+    ...inherited,
     OPENCODE_CURSOR_ALLOWED_TOOLS: JSON.stringify(input.allowedTools),
     OPENCODE_CURSOR_SESSION_ID: input.sessionID,
     OPENCODE_CURSOR_AGENT: input.agent,

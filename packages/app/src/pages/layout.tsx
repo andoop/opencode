@@ -510,12 +510,14 @@ export default function Layout(props: ParentProps) {
         return
       }
 
-      if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked") return
+      if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked" && e.details?.type !== "select.asked")
+        return
       const title =
         e.details.type === "permission.asked"
           ? language.t("notification.permission.title")
           : language.t("notification.question.title")
-      const icon = e.details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
+      const icon =
+        e.details.type === "permission.asked" ? ("checklist" as const) : e.details.type === "select.asked" ? ("bullet-list" as const) : ("bubble-5" as const)
       const directory = e.name
       const props = e.details.properties
       if (e.details.type === "permission.asked" && permission.autoResponds(e.details.properties, directory)) return
@@ -544,7 +546,7 @@ export default function Layout(props: ParentProps) {
         }
       }
 
-      if (e.details.type === "question.asked") {
+      if (e.details.type === "question.asked" || e.details.type === "select.asked") {
         if (settings.notifications.agent()) {
           void platform.notify(title, description, href)
         }

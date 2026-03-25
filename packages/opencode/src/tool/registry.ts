@@ -1,4 +1,5 @@
 import { QuestionTool } from "./question"
+import { SelectTool } from "./select"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
@@ -105,7 +106,7 @@ export namespace ToolRegistry {
 
     return [
       InvalidTool,
-      ...(["app", "cli", "desktop", "acp"].includes(Flag.OPENCODE_CLIENT) ? [QuestionTool] : []),
+      ...(["app", "cli", "desktop", "acp"].includes(Flag.OPENCODE_CLIENT) ? [QuestionTool, SelectTool] : []),
       BashTool,
       ReadTool,
       GlobTool,

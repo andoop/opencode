@@ -740,6 +740,69 @@ export type EventSessionCompacted = {
   }
 }
 
+export type SelectOption = {
+  /**
+   * Display text for the option
+   */
+  label: string
+  /**
+   * Optional explanation shown under the option
+   */
+  description?: string
+  /**
+   * Optional extra search keywords
+   */
+  keywords?: Array<string>
+}
+
+export type SelectRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Optional title shown above the selector
+   */
+  title?: string
+  /**
+   * Optional search placeholder
+   */
+  placeholder?: string
+  /**
+   * Available options to search and choose from
+   */
+  options: Array<SelectOption>
+  /**
+   * Allow typing a custom value
+   */
+  custom?: boolean
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventSelectAsked = {
+  type: "select.asked"
+  properties: SelectRequest
+}
+
+export type EventSelectReplied = {
+  type: "select.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    value: string
+    source?: "option" | "custom"
+  }
+}
+
+export type EventSelectRejected = {
+  type: "select.rejected"
+  properties: {
+    sessionID: string
+    requestID: string
+  }
+}
+
 export type EventFileEdited = {
   type: "file.edited"
   properties: {
@@ -1169,6 +1232,9 @@ export type Event =
   | EventQuestionReplied
   | EventQuestionRejected
   | EventSessionCompacted
+  | EventSelectAsked
+  | EventSelectReplied
+  | EventSelectRejected
   | EventFileEdited
   | EventFileWatcherUpdated
   | EventTodoUpdated
@@ -2456,6 +2522,17 @@ export type SubtaskPartInput = {
     modelID: string
   }
   command?: string
+}
+
+export type SelectReply = {
+  /**
+   * Selected or typed value
+   */
+  value: string
+  /**
+   * Where the value came from
+   */
+  source?: "option" | "custom"
 }
 
 export type ProviderAuthMethod = {
@@ -5612,6 +5689,90 @@ export type QuestionRejectResponses = {
 }
 
 export type QuestionRejectResponse = QuestionRejectResponses[keyof QuestionRejectResponses]
+
+export type SelectListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/select"
+}
+
+export type SelectListResponses = {
+  /**
+   * List of pending select requests
+   */
+  200: Array<SelectRequest>
+}
+
+export type SelectListResponse = SelectListResponses[keyof SelectListResponses]
+
+export type SelectReplyData = {
+  body?: SelectReply
+  path: {
+    requestID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/select/{requestID}/reply"
+}
+
+export type SelectReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SelectReplyError = SelectReplyErrors[keyof SelectReplyErrors]
+
+export type SelectReplyResponses = {
+  /**
+   * Selection submitted successfully
+   */
+  200: boolean
+}
+
+export type SelectReplyResponse = SelectReplyResponses[keyof SelectReplyResponses]
+
+export type SelectRejectData = {
+  body?: never
+  path: {
+    requestID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/select/{requestID}/reject"
+}
+
+export type SelectRejectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SelectRejectError = SelectRejectErrors[keyof SelectRejectErrors]
+
+export type SelectRejectResponses = {
+  /**
+   * Selection rejected successfully
+   */
+  200: boolean
+}
+
+export type SelectRejectResponse = SelectRejectResponses[keyof SelectRejectResponses]
 
 export type ProviderListData = {
   body?: never
