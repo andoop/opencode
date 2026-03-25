@@ -241,18 +241,40 @@ export async function surface(input: { sessionID: string; agent: string; allowed
   return out
 }
 
-export function instructions(tools: CursorTool[]) {
+export function instructions(tools: CursorTool[], mode: "full" | "reminder" = "full") {
   if (tools.length === 0) return ""
+  const names = tools.map((t) => t.name).join(", ")
+  if (mode === "reminder") {
+    return [
+      `REMINDER: The following tools are ONLY callable via <${TAG}> XML blocks: ${names}`,
+      `They are NOT available as native function calls, MCP calls, or shell commands. You MUST use the XML protocol.`,
+      `Format: <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
+    ].join("\n")
+  }
   return [
-    "CRITICAL — OpenCode tool calling protocol:",
-    `These tools are ONLY callable via XML blocks. DO NOT run them as shell commands. DO NOT use bash or execute.`,
-    `Before calling a tool, briefly describe what you are about to do in one short sentence.`,
-    `Then emit the XML block: <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
-    "Arguments must be valid JSON. Use {} when no arguments are needed.",
-    `After execution you receive <${RESULT}> or <${ERROR}> blocks — continue from there.`,
+    "## CRITICAL — OpenCode Tool Calling Protocol",
+    "",
+    `The following tools are provided by OpenCode and are ONLY callable via XML blocks.`,
+    `They are NOT native function calls. They are NOT MCP tools you can call directly. They are NOT shell commands.`,
+    `Any attempt to call them via function calling, MCP protocol, or bash will FAIL.`,
+    "",
+    `### How to call:`,
+    `1. Briefly describe what you are about to do in one short sentence.`,
+    `2. Emit an XML block:`,
+    `   <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
+    `3. Arguments must be valid JSON. Use {} when no arguments are needed.`,
+    `4. After execution you receive <${RESULT}> or <${ERROR}> blocks — continue from there.`,
+    "",
+    `### WRONG (will fail):`,
+    `- bash: \`opencode_android____android_history\` ← NOT a shell command`,
+    `- Native function call / tool_use / MCP call to these tool names ← NOT supported`,
+    "",
+    `### CORRECT:`,
+    `<${TAG} name="opencode_example_tool">{}</${TAG}>`,
+    "",
     "Never claim these tools are unavailable unless an error block tells you so.",
     "",
-    "Available tools:",
+    "### Available tools:",
     ...tools.map((item) => `- ${item.name}: ${item.description}\n  Schema: ${stringifySchema(item.inputSchema)}`),
   ].join("\n")
 }

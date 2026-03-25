@@ -2,7 +2,7 @@ import { createInterface } from "readline"
 import { spawn } from "child_process"
 import type { ModelMessage } from "ai"
 import { Log } from "@/util/log"
-import { bridgeCommand, bridgeToolNames, prefixTool } from "./bridge"
+import { bridgeCommand, prefixTool } from "./bridge"
 import { Installation } from "@/installation"
 import { CursorToolCall, instructions, parse, surface, toolPrompt } from "./toolcall"
 import { Identifier } from "@/id/id"
@@ -155,13 +155,14 @@ function renderContent(content: ModelMessage["content"]): string {
 async function serializePrompt(input: {
   system: string[]
   messages: ModelMessage[]
-  bridged: string[]
-  localTools: string
+  localToolsFull: string
+  localToolsReminder: string
 }) {
   const prompt = [] as string[]
-  if (input.system.length > 0) {
+  if (input.system.length > 0 || input.localToolsFull) {
     prompt.push("<system>")
-    prompt.push(input.system.join("\n\n"))
+    if (input.system.length > 0) prompt.push(input.system.join("\n\n"))
+    if (input.localToolsFull) prompt.push(input.localToolsFull)
     prompt.push("</system>")
   }
   prompt.push("The following transcript is the full conversation context for this turn.")
@@ -170,10 +171,9 @@ async function serializePrompt(input: {
     prompt.push(renderContent(message.content))
     prompt.push(`</${message.role}>`)
   }
-  if (input.localTools) prompt.push(input.localTools)
+  if (input.localToolsReminder) prompt.push(input.localToolsReminder)
   prompt.push("Continue the conversation from the latest user request.")
-  const out = prompt.join("\n\n")
-  return out
+  return prompt.join("\n\n")
 }
 
 function textFromContent(content: any): string {
@@ -393,10 +393,7 @@ export namespace CursorCLI {
       throw new Error("Cursor CLI not found. Install it and ensure the `agent` command is available.")
     }
 
-    const bridged = await bridgeToolNames({
-      agent: input.agent,
-      allowedTools: input.allowedTools,
-    }).catch(() => [])
+
     const local = await surface({
       sessionID: input.sessionID,
       agent: input.agent,
@@ -418,11 +415,12 @@ export namespace CursorCLI {
       agent: input.agent,
       allowedTools: input.allowedTools,
     })
+    const mcpTools = Object.values(localMcpTools)
     const prompt = await serializePrompt({
       system: input.system,
       messages: input.messages,
-      bridged,
-      localTools: instructions(Object.values(localMcpTools)),
+      localToolsFull: instructions(mcpTools, "full"),
+      localToolsReminder: instructions(mcpTools, "reminder"),
     })
     const proc = spawn(bin, ["acp"], {
       cwd: input.cwd,
