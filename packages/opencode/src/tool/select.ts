@@ -21,6 +21,7 @@ export const SelectTool = Tool.define("select", {
       options: params.options,
       custom: params.custom,
       tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
+      abort: ctx.abort,
     })
 
     return {

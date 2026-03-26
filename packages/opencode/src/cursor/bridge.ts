@@ -148,9 +148,12 @@ async function buildTools(ctx: BridgeContext): Promise<BridgeTool[]> {
       description: item.description,
       inputSchema: z.toJSONSchema(item.parameters) as Record<string, unknown>,
       async execute(args, signal) {
+        const callID = Identifier.ascending("tool")
+        const messageID = Identifier.ascending("message")
         const result = await item.execute(args, {
           sessionID: ctx.sessionID,
-          messageID: Identifier.ascending("message"),
+          messageID,
+          callID,
           agent: ctx.agent,
           abort: signal,
           messages: [],

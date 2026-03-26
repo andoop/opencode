@@ -98,6 +98,7 @@ export namespace Question {
     sessionID: string
     questions: Info[]
     tool?: { messageID: string; callID: string }
+    abort?: AbortSignal
   }): Promise<Answer[]> {
     const s = await state()
     const id = Identifier.ascending("question")
@@ -105,6 +106,11 @@ export namespace Question {
     log.info("asking", { id, questions: input.questions.length })
 
     return new Promise<Answer[]>((resolve, reject) => {
+      if (input.abort?.aborted) {
+        reject(new RejectedError())
+        return
+      }
+
       const info: Request = {
         id,
         sessionID: input.sessionID,
@@ -116,6 +122,20 @@ export namespace Question {
         resolve,
         reject,
       }
+
+      const cleanup = () => {
+        if (!s.pending[id]) return
+        delete s.pending[id]
+        log.info("aborted", { id })
+        Bus.publish(Event.Rejected, {
+          sessionID: info.sessionID,
+          requestID: info.id,
+        })
+        reject(new RejectedError())
+      }
+
+      input.abort?.addEventListener("abort", cleanup, { once: true })
+
       Bus.publish(Event.Asked, info)
     })
   }

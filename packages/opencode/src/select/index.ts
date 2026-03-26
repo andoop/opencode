@@ -91,6 +91,7 @@ export namespace Select {
     options: Option[]
     custom?: boolean
     tool?: { messageID: string; callID: string }
+    abort?: AbortSignal
   }): Promise<Reply> {
     const s = await state()
     const id = Identifier.ascending("select")
@@ -98,6 +99,11 @@ export namespace Select {
     log.info("asking", { id, options: input.options.length })
 
     return new Promise<Reply>((resolve, reject) => {
+      if (input.abort?.aborted) {
+        reject(new RejectedError())
+        return
+      }
+
       const info: Request = {
         id,
         sessionID: input.sessionID,
@@ -112,6 +118,20 @@ export namespace Select {
         resolve,
         reject,
       }
+
+      const cleanup = () => {
+        if (!s.pending[id]) return
+        delete s.pending[id]
+        log.info("aborted", { id })
+        Bus.publish(Event.Rejected, {
+          sessionID: info.sessionID,
+          requestID: info.id,
+        })
+        reject(new RejectedError())
+      }
+
+      input.abort?.addEventListener("abort", cleanup, { once: true })
+
       Bus.publish(Event.Asked, info)
     })
   }
