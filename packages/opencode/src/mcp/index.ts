@@ -14,6 +14,7 @@ import { Log } from "../util/log"
 import { NamedError } from "@opencode-ai/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
+import { State } from "../project/state"
 import { Installation } from "../installation"
 import { withTimeout } from "@/util/timeout"
 import { McpOAuthProvider } from "./oauth-provider"
@@ -170,7 +171,8 @@ export namespace MCP {
     return typeof entry === "object" && entry !== null && "type" in entry
   }
 
-  const state = Instance.state(
+  const state = State.create(
+    () => Instance.project.worktree,
     async () => {
       const cfg = await Config.get()
       const config = cfg.mcp ?? {}
@@ -417,7 +419,7 @@ export namespace MCP {
 
     if (mcp.type === "local") {
       const [cmd, ...args] = mcp.command
-      const cwd = Instance.directory
+      const cwd = Instance.project.worktree
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: cmd,

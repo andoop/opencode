@@ -6,20 +6,25 @@ description: "切换工作空间中所有项目到指定 feature 分支"
 
 1. `git -C <项目绝对路径> fetch --all --prune` 拉取远程
 2. 获取包含 feature 的远程分支（按提交时间倒序，最多 50 个）
-3. 调用 `select` 工具让用户选择分支（见下方说明），等工具返回结果后再继续
-4. 每个项目选完再处理下一个，没有 feature 分支的跳过
+3. 调用 select 工具让用户选择分支（**必须按下面的格式调用，不要跳过**）
+4. 等 select 返回结果后再处理下一个项目，没有 feature 分支的跳过
 
-## 让用户选择分支
+## 调用 select 的具体方式
 
-优先使用 `select` 工具（通过工具调用，**不要**直接输出 JSON）：
-- `title`: 项目名称
-- `options`: 分支列表，每项 `label` 为远程分支名，`description` 为提交时间
-- 不要截断列表，完整传入所有匹配的分支
-- 调用后**必须等待工具返回结果**再处理下一个项目
+**必须**通过工具调用让用户选择，**禁止**跳过工具、输出 JSON、或让用户手动回复。
 
-如果 `select` 工具不可用，改用 `question` 工具：把每个分支作为一个 option 传入。
+如果工具名叫 `select`，直接调用 `select`。
+如果工具名叫 `opencode_select`，按 XML 协议调用，格式如下：
 
-如果两个工具都不可用，直接列出分支编号列表，让用户回复编号。
+```
+<opencode_tool_call name="opencode_select">{"title":"capture-android","options":[{"label":"origin/feature/3.63","description":"2025-06-15 14:30"},{"label":"origin/feature/3.62","description":"2025-06-10 09:20"}]}</opencode_tool_call>
+```
+
+参数说明：
+- `title`：项目名称
+- `options`：完整分支列表（不要截断），每项 `label` 为远程分支全名，`description` 为提交时间
+
+调用后**阻塞等待**用户选择结果，拿到结果后再处理下一个项目。
 
 ## 切换规则
 

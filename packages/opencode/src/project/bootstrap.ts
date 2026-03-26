@@ -14,6 +14,7 @@ import { ShareNext } from "@/share/share-next"
 import { Snapshot } from "../snapshot"
 import { Truncate } from "../tool/truncation"
 import { init as TaskRecoveryInit } from "../task/recovery"
+import { MCP } from "../mcp"
 
 export async function InstanceBootstrap() {
   using _ = Log.Default.time("bootstrapping", { directory: Instance.directory })
@@ -28,6 +29,8 @@ export async function InstanceBootstrap() {
   Vcs.init()
   Snapshot.init()
   Truncate.init()
+
+  void MCP.status()
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {
