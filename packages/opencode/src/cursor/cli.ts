@@ -942,8 +942,8 @@ export namespace CursorCLI {
             queue.push({ type: "text-end", id: textId })
             textOpen = false
           }
-          const parsed = roundNativeToolActivity ? { text: roundText.trim(), calls: [], errors: [] } : parse(roundText)
-          if (!roundNativeToolActivity && (parsed.calls.length > 0 || parsed.errors.length > 0)) {
+          const parsed = parse(roundText)
+          if (parsed.calls.length > 0 || parsed.errors.length > 0) {
             if (parsed.text) chunks.push(parsed.text)
             const results = [] as Array<{ name: string; output: string; error?: boolean }>
             for (const item of parsed.errors) {
