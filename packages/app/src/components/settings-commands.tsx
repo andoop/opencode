@@ -1,10 +1,12 @@
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, For, Show, type Component } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
+import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import type { Command } from "@opencode-ai/sdk/v2/client"
 import { DialogEditCommand } from "./dialog-edit-command"
@@ -17,10 +19,41 @@ type CommandConfig = {
   subtask?: boolean
 }
 
+type CommandItem = {
+  name: string
+  description?: string
+  source: "builtin" | "command" | "mcp" | "skill"
+}
+
+const BUILTIN_COMMANDS = new Set([
+  "new",
+  "open",
+  "terminal",
+  "steps",
+  "model",
+  "mcp",
+  "agent",
+  "share",
+  "unshare",
+  "undo",
+  "redo",
+  "compact",
+  "fork",
+  "workspace",
+])
+
+const SYSTEM_COMMANDS: CommandItem[] = [...BUILTIN_COMMANDS]
+  .map((name) => ({
+    name,
+    source: "builtin" as const,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
 export const SettingsCommands: Component = () => {
   const dialog = useDialog()
   const language = useLanguage()
   const sdk = useGlobalSDK()
+  const globalSync = useGlobalSync()
 
   const [store, setStore] = createStore({
     path: "",
@@ -30,9 +63,47 @@ export const SettingsCommands: Component = () => {
     allCommands: [] as Command[],
   })
 
+  const commandStates = createMemo(() => globalSync.data.config.commands ?? {})
+  const globalNames = createMemo(() => new Set(store.globalItems.map((item) => item.name)))
+
+  const allItems = createMemo(() => {
+    const map = new Map<string, CommandItem>()
+
+    for (const item of SYSTEM_COMMANDS) {
+      map.set(item.name, item)
+    }
+
+    for (const cmd of store.allCommands) {
+      map.set(cmd.name, {
+        name: cmd.name,
+        description: cmd.description,
+        source: BUILTIN_COMMANDS.has(cmd.name) ? "builtin" : (cmd.source ?? "builtin"),
+      })
+    }
+
+    for (const item of store.globalItems) {
+      const existing = map.get(item.name)
+      map.set(item.name, {
+        name: item.name,
+        description: item.config.description ?? existing?.description,
+        source: BUILTIN_COMMANDS.has(item.name) ? "builtin" : "command",
+      })
+    }
+
+    for (const name of Object.keys(commandStates())) {
+      const existing = map.get(name)
+      map.set(name, {
+        name,
+        description: existing?.description,
+        source: existing?.source ?? (BUILTIN_COMMANDS.has(name) ? "builtin" : "command"),
+      })
+    }
+
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  })
+
   const otherCommands = createMemo(() => {
-    const globalNames = new Set(store.globalItems.map((i) => i.name))
-    return store.allCommands.filter((cmd) => !globalNames.has(cmd.name))
+    return allItems().filter((item) => !globalNames().has(item.name))
   })
 
   const load = async () => {
@@ -95,9 +166,39 @@ export const SettingsCommands: Component = () => {
     }
   }
 
-  const sourceLabel = (cmd: Command) => {
-    if (!cmd.source) return language.t("settings.commands.source.builtin")
-    return language.t(`settings.commands.source.${cmd.source}` as any)
+  const sourceLabel = (cmd: CommandItem) => {
+    return language.t(`settings.commands.source.${cmd.source}` as const)
+  }
+
+  const enabled = (name: string) => {
+    return commandStates()[name] !== false
+  }
+
+  const toggle = async (name: string, value: boolean) => {
+    if (store.busy) return
+
+    const before = globalSync.data.config.commands
+    const next = {
+      ...(before ?? {}),
+      [name]: value,
+    }
+
+    setStore("busy", name)
+    globalSync.set("config", "commands", next)
+
+    try {
+      await globalSync.updateConfig({ commands: { [name]: value } })
+      await load()
+    } catch (err) {
+      globalSync.set("config", "commands", before)
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setStore("busy", null)
+    }
   }
 
   createEffect(() => {
@@ -145,7 +246,12 @@ export const SettingsCommands: Component = () => {
                   {(item) => (
                     <div class="flex flex-wrap items-center justify-between gap-4 min-h-16 py-3 border-b border-border-weak-base last:border-none">
                       <div class="flex flex-col min-w-0 gap-1">
-                        <span class="text-14-medium text-text-strong truncate">/{item.name}</span>
+                        <div class="flex items-center gap-2">
+                          <span class="text-14-medium text-text-strong truncate">/{item.name}</span>
+                          <span class="text-11-regular text-text-weaker px-1.5 py-0.5 rounded bg-surface-base">
+                            {sourceLabel({ name: item.name, source: BUILTIN_COMMANDS.has(item.name) ? "builtin" : "command" })}
+                          </span>
+                        </div>
                         <Show when={item.config.description}>
                           <span class="text-12-regular text-text-weak truncate">{item.config.description}</span>
                         </Show>
@@ -155,7 +261,15 @@ export const SettingsCommands: Component = () => {
                             : item.config.template}
                         </span>
                       </div>
-                      <div class="flex items-center gap-1">
+                      <div class="flex items-center gap-3">
+                        <Switch
+                          checked={enabled(item.name)}
+                          disabled={!!store.busy}
+                          onChange={(value) => void toggle(item.name, value)}
+                          hideLabel
+                        >
+                          /{item.name}
+                        </Switch>
                         <Button size="large" variant="ghost" disabled={!!store.busy} onClick={() => openEdit(item)}>
                           {language.t("common.edit")}
                         </Button>
@@ -189,6 +303,9 @@ export const SettingsCommands: Component = () => {
                           <span class="text-12-regular text-text-weak truncate">{cmd.description}</span>
                         </Show>
                       </div>
+                      <Switch checked={enabled(cmd.name)} disabled={!!store.busy} onChange={(value) => void toggle(cmd.name, value)} hideLabel>
+                        /{cmd.name}
+                      </Switch>
                     </div>
                   )}
                 </For>

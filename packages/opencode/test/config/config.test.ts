@@ -55,6 +55,30 @@ test("loads JSON config file", async () => {
   })
 })
 
+test("loads command enablement config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencode.ai/config.json",
+        commands: {
+          help: false,
+          test: true,
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.commands).toEqual({
+        help: false,
+        test: true,
+      })
+    },
+  })
+})
+
 test("loads JSONC config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

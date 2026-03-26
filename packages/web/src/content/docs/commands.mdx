@@ -73,6 +73,21 @@ Now you can run this command in the TUI:
 /test
 ```
 
+You can also disable commands through the `commands` config. This works for built-in system commands and custom commands.
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "commands": {
+    "help": false,
+    "share": false,
+    "test": false,
+  },
+}
+```
+
+Use the slash command name for built-in commands like `help` or `share`, and the command name for custom commands like `test`.
+
 ---
 
 ### Markdown

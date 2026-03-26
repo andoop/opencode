@@ -402,6 +402,21 @@ You can configure custom commands for repetitive tasks through the `command` opt
 
 You can also define commands using markdown files in `~/.config/opencode/commands/` or `.opencode/commands/`. [Learn more here](/docs/commands).
 
+Use the `commands` option to enable or disable commands by name, including built-in system commands and custom commands.
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "commands": {
+    "help": false,
+    "share": false,
+    "test": false,
+  },
+}
+```
+
+For system commands, use the slash command name like `help` or `share`. For custom commands, use the command name like `test`.
+
 ---
 
 ### Keybinds

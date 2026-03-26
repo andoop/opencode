@@ -12,6 +12,8 @@ import {
 import { useKeyboard } from "@opentui/solid"
 import { useKeybind } from "@tui/context/keybind"
 import type { KeybindsConfig } from "@opencode-ai/sdk/v2"
+import { useSync } from "../context/sync"
+import { commandEnabled } from "@/command/enabled"
 
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
@@ -34,6 +36,7 @@ function init() {
   const [suspendCount, setSuspendCount] = createSignal(0)
   const dialog = useDialog()
   const keybind = useKeybind()
+  const sync = useSync()
 
   const entries = createMemo(() => {
     const all = registrations().flatMap((x) => x())
@@ -43,7 +46,8 @@ function init() {
     }))
   })
 
-  const isEnabled = (option: CommandOption) => option.enabled !== false
+  const isEnabled = (option: CommandOption) =>
+    option.enabled !== false && commandEnabled(sync.data.config.commands, option.slash?.name ?? option.value)
   const isVisible = (option: CommandOption) => isEnabled(option) && !option.hidden
 
   const visibleOptions = createMemo(() => entries().filter((option) => isVisible(option)))

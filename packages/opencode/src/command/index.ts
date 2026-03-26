@@ -7,6 +7,7 @@ import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import { MCP } from "../mcp"
 import { Skill } from "../skill"
+import { commandEnabled } from "./enabled"
 
 export namespace Command {
   export const Event = {
@@ -137,7 +138,7 @@ export namespace Command {
       }
     }
 
-    return result
+    return Object.fromEntries(Object.entries(result).filter(([name]) => commandEnabled(cfg.commands, name)))
   })
 
   export async function get(name: string) {

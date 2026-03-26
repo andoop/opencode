@@ -624,6 +624,14 @@ export namespace Config {
   })
   export type Command = z.infer<typeof Command>
 
+  export const Commands = z
+    .record(z.string(), z.boolean())
+    .optional()
+    .describe(
+      "Enable or disable commands by name. Use slash names for system commands and command names for custom commands.",
+    )
+  export type Commands = z.infer<typeof Commands>
+
   export const Skills = z.object({
     paths: z.array(z.string()).optional().describe("Additional paths to skill folders"),
   })
@@ -972,6 +980,7 @@ export namespace Config {
         .record(z.string(), Command)
         .optional()
         .describe("Command configuration, see https://opencode.ai/docs/commands"),
+      commands: Commands,
       skills: Skills.optional().describe("Additional skill folder paths"),
       watcher: z
         .object({

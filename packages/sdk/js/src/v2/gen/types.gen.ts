@@ -1985,6 +1985,12 @@ export type Config = {
     }
   }
   /**
+   * Enable or disable commands by name. Use slash names for system commands and command names for custom commands.
+   */
+  commands?: {
+    [key: string]: boolean
+  }
+  /**
    * Additional skill folder paths
    */
   skills?: {

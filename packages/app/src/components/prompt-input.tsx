@@ -779,9 +779,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSelect: handleAtSelect,
   })
 
+  const commandEnabled = (name: string) => globalSync.data.config.commands?.[name] !== false
+
   const slashCommands = createMemo<SlashCommand[]>(() => {
     const builtin = command.options
-      .filter((opt) => !opt.disabled && !opt.id.startsWith("suggested.") && opt.slash)
+      .filter((opt) => !opt.disabled && !opt.id.startsWith("suggested.") && opt.slash && commandEnabled(opt.slash))
       .map((opt) => ({
         id: opt.id,
         trigger: opt.slash!,
@@ -791,14 +793,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         type: "builtin" as const,
       }))
 
-    const custom = sync.data.command.map((cmd) => ({
-      id: `custom.${cmd.name}`,
-      trigger: cmd.name,
-      title: cmd.name,
-      description: cmd.description,
-      type: "custom" as const,
-      source: cmd.source,
-    }))
+    const custom = sync.data.command
+      .filter((cmd) => commandEnabled(cmd.name))
+      .map((cmd) => ({
+        id: `custom.${cmd.name}`,
+        trigger: cmd.name,
+        title: cmd.name,
+        description: cmd.description,
+        type: "custom" as const,
+        source: cmd.source,
+      }))
 
     return [...custom, ...builtin]
   })
@@ -1505,7 +1509,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (text.startsWith("/")) {
       const [cmdName, ...args] = text.split(" ")
       const commandName = cmdName.slice(1)
-      const customCommand = sync.data.command.find((c) => c.name === commandName)
+      const customCommand = sync.data.command.find((c) => c.name === commandName && commandEnabled(c.name))
       if (customCommand) {
         clearInput()
         client.session
