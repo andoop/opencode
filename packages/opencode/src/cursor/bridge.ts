@@ -184,29 +184,33 @@ export function bridgeCommand(input: { cwd: string; sessionID: string; agent: st
   for (const key of ["PATH", "HOME", "SHELL", "USER", "LANG", "TERM", "TMPDIR", "EDITOR"]) {
     if (process.env[key]) inherited[key] = process.env[key]!
   }
+  const readyFile = path.join(os.tmpdir(), `opencode-bridge-ready-${input.sessionID}-${Date.now()}`)
   const env = {
     ...inherited,
     OPENCODE_CURSOR_ALLOWED_TOOLS: JSON.stringify(input.allowedTools),
     OPENCODE_CURSOR_SESSION_ID: input.sessionID,
     OPENCODE_CURSOR_AGENT: input.agent,
+    OPENCODE_BRIDGE_READY_FILE: readyFile,
     XDG_STATE_HOME: process.env.XDG_STATE_HOME || path.join(os.tmpdir(), "opencode-cursor-xdg"),
   }
   const script = fileURLToPath(new URL("../index.ts", import.meta.url))
   if (process.env.OPENCODE_CURSOR_BRIDGE_COMMAND) {
     const [command, ...args] = process.env.OPENCODE_CURSOR_BRIDGE_COMMAND.split(" ")
-    return { command, args: [...args, "--cwd", input.cwd], env }
+    return { command, args: [...args, "--cwd", input.cwd], env, readyFile }
   }
   if (process.execPath.toLowerCase().includes("bun")) {
     return {
       command: process.execPath,
       args: ["run", "--conditions=browser", script, "cursor-bridge", "--cwd", input.cwd],
       env,
+      readyFile,
     }
   }
   return {
     command: process.execPath,
     args: ["cursor-bridge", "--cwd", input.cwd],
     env,
+    readyFile,
   }
 }
 
@@ -296,6 +300,11 @@ export async function startBridgeServer(input: { cwd: string; sessionID: string;
 
   const transport = new StdioServerTransport()
   await server.connect(transport)
+
+  const readyFile = process.env.OPENCODE_BRIDGE_READY_FILE
+  if (readyFile) {
+    await Bun.write(readyFile, "1")
+  }
 
   const rl = createInterface({ input: process.stdin })
   await new Promise<void>((resolve) => {

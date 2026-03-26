@@ -894,6 +894,21 @@ export namespace CursorCLI {
             modeId: target.id,
           })
         }
+        // Wait for the MCP bridge subprocess to finish registering tools with Cursor.
+        // Without this, Cursor's AI may not see opencode tools (like select/question)
+        // because the bridge hasn't connected yet when the first prompt is sent.
+        if (bridge.readyFile) {
+          const deadline = Date.now() + 10_000
+          while (Date.now() < deadline) {
+            if (await Bun.file(bridge.readyFile).exists()) {
+              slog.info("cursor bridge ready", { waitedMs: Date.now() - (deadline - 10_000) })
+              break
+            }
+            await new Promise((r) => setTimeout(r, 100))
+          }
+          Bun.file(bridge.readyFile).unlink().catch(() => {})
+        }
+
         let next = prompt
         let steps = 0
         while (true) {
