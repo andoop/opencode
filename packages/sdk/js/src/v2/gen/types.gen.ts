@@ -6568,7 +6568,7 @@ export type McpConnectResponses = {
   /**
    * MCP server connected successfully
    */
-  200: boolean
+  200: McpStatus
 }
 
 export type McpConnectResponse = McpConnectResponses[keyof McpConnectResponses]
@@ -6588,7 +6588,7 @@ export type McpDisconnectResponses = {
   /**
    * MCP server disconnected successfully
    */
-  200: boolean
+  200: McpStatus
 }
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]

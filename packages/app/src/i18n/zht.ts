@@ -675,10 +675,11 @@ export const dict = {
   "settings.commands.toast.created": "命令已建立",
   "settings.commands.toast.updated": "命令已更新",
   "settings.commands.toast.deleted": "命令已刪除",
-  "settings.commands.delete.confirm": "刪除命令 \"{name}\"？",
+  "settings.commands.delete.confirm": '刪除命令 "{name}"？',
   "settings.commands.import": "從 Markdown 匯入",
   "settings.commands.import.placeholder": "貼上完整的 .md 檔案內容（含 frontmatter）...",
-  "settings.commands.import.description": "貼上命令 .md 檔案內容，自動擷取 frontmatter 欄位（description、model、agent、subtask）填入表單。",
+  "settings.commands.import.description":
+    "貼上命令 .md 檔案內容，自動擷取 frontmatter 欄位（description、model、agent、subtask）填入表單。",
   "settings.commands.import.apply": "套用",
   "settings.commands.import.error": "解析 Markdown 失敗，請檢查格式後重試。",
   "settings.commands.validation.nameRequired": "名稱為必填項",

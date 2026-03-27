@@ -31,7 +31,9 @@ export const TaskStatusTool = Tool.define<
     const canRetry = task.status === "manual_retry_pending"
     const output = [
       `Status: ${task.status}`,
-      task.progress ? `Progress: ${task.progress.current}${task.progress.total ? `/${task.progress.total}` : ""}${task.progress.message ? ` - ${task.progress.message}` : ""}` : "",
+      task.progress
+        ? `Progress: ${task.progress.current}${task.progress.total ? `/${task.progress.total}` : ""}${task.progress.message ? ` - ${task.progress.message}` : ""}`
+        : "",
       task.retry.lastError ? `Error: ${task.retry.lastError}` : "",
       canRetry ? "Can retry: yes" : "",
     ]

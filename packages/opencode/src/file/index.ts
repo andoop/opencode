@@ -459,7 +459,9 @@ export namespace File {
             .text()
           if (untrackedOutput.trim()) {
             for (const filepath of untrackedOutput.trim().split("\n")) {
-              const content = await Bun.file(path.join(root.sessionWorktreeDirectory, filepath)).text().catch(() => "")
+              const content = await Bun.file(path.join(root.sessionWorktreeDirectory, filepath))
+                .text()
+                .catch(() => "")
               changed.push({
                 path: prefix(filepath),
                 added: content ? content.split("\n").length : 0,
@@ -603,7 +605,9 @@ export namespace File {
           const after =
             item.status === "deleted"
               ? ""
-              : await Bun.file(full).text().catch(() => "")
+              : await Bun.file(full)
+                  .text()
+                  .catch(() => "")
           return {
             file: item.path,
             before,
@@ -732,12 +736,7 @@ export namespace File {
     })
   }
 
-  export async function browse(input: {
-    directory: string
-    path?: string
-    type?: Node["type"]
-    limit?: number
-  }) {
+  export async function browse(input: { directory: string; path?: string; type?: Node["type"]; limit?: number }) {
     using _ = log.time("browse", input)
     return listNodes({
       directory: input.directory,

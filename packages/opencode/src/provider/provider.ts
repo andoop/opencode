@@ -1052,7 +1052,9 @@ export namespace Provider {
     }
   })
 
-  function filterProviders<T extends { id: string; models: Record<string, { id: string }> }>(providers: Record<string, T>) {
+  function filterProviders<T extends { id: string; models: Record<string, { id: string }> }>(
+    providers: Record<string, T>,
+  ) {
     return Object.fromEntries(User.filterModels(Object.values(providers)).map((provider) => [provider.id, provider]))
   }
 

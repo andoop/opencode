@@ -60,7 +60,8 @@ export default function AdminConfigPage() {
         <div>
           <h2 class="text-xl font-semibold text-color-primary">全局工作空间边界提示词</h2>
           <p class="mt-1 text-sm text-color-secondary">
-            这段内容会作为全局系统提示词注入，用于约束 AI 只能在当前 session workspace 内工作，并禁止改动仓库母体或其他 workspace。
+            这段内容会作为全局系统提示词注入，用于约束 AI 只能在当前 session workspace 内工作，并禁止改动仓库母体或其他
+            workspace。
           </p>
         </div>
         <div class="flex gap-2">
@@ -106,7 +107,10 @@ export default function AdminConfigPage() {
       />
 
       <div class="flex items-center justify-between gap-4 text-xs text-color-secondary">
-        <p>输入框默认显示当前生效的边界提示词。建议只写工作空间边界、git worktree 约束、路径核验和越界处理规则，避免掺入项目业务规则。</p>
+        <p>
+          输入框默认显示当前生效的边界提示词。建议只写工作空间边界、git worktree
+          约束、路径核验和越界处理规则，避免掺入项目业务规则。
+        </p>
         <Show when={globalPromptSaved()}>
           <p class="text-auxiliary-success">{globalPromptSaved()}</p>
         </Show>

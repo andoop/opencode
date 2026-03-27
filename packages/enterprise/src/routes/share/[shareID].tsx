@@ -170,168 +170,166 @@ export default function () {
               <ClientOnlyWorkerPoolProvider>
                 <CodeComponentProvider component={ClientOnlyCode}>
                   <DataProvider data={data()} directory={info().directory}>
-                      {iife(() => {
-                        const [store, setStore] = createStore({
-                          messageId: undefined as string | undefined,
-                          expandedSteps: {} as Record<string, boolean>,
-                        })
-                        const messages = createMemo(() =>
-                          data().sessionID
-                            ? (data().message[data().sessionID]?.filter((m) => m.role === "user") ?? []).sort(
-                                (a, b) => a.time.created - b.time.created,
-                              )
-                            : [],
-                        )
-                        const firstUserMessage = createMemo(() => messages().at(0))
-                        const activeMessage = createMemo(
-                          () => messages().find((m) => m.id === store.messageId) ?? firstUserMessage(),
-                        )
-                        function setActiveMessage(message: UserMessage | undefined) {
-                          if (message) {
-                            setStore("messageId", message.id)
-                          } else {
-                            setStore("messageId", undefined)
-                          }
+                    {iife(() => {
+                      const [store, setStore] = createStore({
+                        messageId: undefined as string | undefined,
+                        expandedSteps: {} as Record<string, boolean>,
+                      })
+                      const messages = createMemo(() =>
+                        data().sessionID
+                          ? (data().message[data().sessionID]?.filter((m) => m.role === "user") ?? []).sort(
+                              (a, b) => a.time.created - b.time.created,
+                            )
+                          : [],
+                      )
+                      const firstUserMessage = createMemo(() => messages().at(0))
+                      const activeMessage = createMemo(
+                        () => messages().find((m) => m.id === store.messageId) ?? firstUserMessage(),
+                      )
+                      function setActiveMessage(message: UserMessage | undefined) {
+                        if (message) {
+                          setStore("messageId", message.id)
+                        } else {
+                          setStore("messageId", undefined)
                         }
-                        const provider = createMemo(() => activeMessage()?.model?.providerID)
-                        const modelID = createMemo(() => activeMessage()?.model?.modelID)
-                        const model = createMemo(() => data().model[data().sessionID]?.find((m) => m.id === modelID()))
-                        const title = () => (
-                          <div class="flex flex-col gap-4">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:gap-4 sm:items-center sm:h-8 justify-start self-stretch">
-                              <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base w-fit">
-                                <Mark class="shrink-0 w-3 my-0.5" />
-                                <div class="text-12-mono text-text-base">v{info().version}</div>
-                              </div>
-                              <div class="flex gap-4 items-center">
-                                <div class="flex gap-2 items-center">
-                                  <ProviderIcon
-                                    id={provider() as IconName}
-                                    class="size-3.5 shrink-0 text-icon-strong-base"
-                                  />
-                                  <div class="text-12-regular text-text-base">{model()?.name ?? modelID()}</div>
-                                </div>
-                                <div class="text-12-regular text-text-weaker">
-                                  {DateTime.fromMillis(info().time.created).toFormat("dd MMM yyyy, HH:mm")}
-                                </div>
-                              </div>
+                      }
+                      const provider = createMemo(() => activeMessage()?.model?.providerID)
+                      const modelID = createMemo(() => activeMessage()?.model?.modelID)
+                      const model = createMemo(() => data().model[data().sessionID]?.find((m) => m.id === modelID()))
+                      const title = () => (
+                        <div class="flex flex-col gap-4">
+                          <div class="flex flex-col gap-2 sm:flex-row sm:gap-4 sm:items-center sm:h-8 justify-start self-stretch">
+                            <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base w-fit">
+                              <Mark class="shrink-0 w-3 my-0.5" />
+                              <div class="text-12-mono text-text-base">v{info().version}</div>
                             </div>
-                            <div class="text-left text-16-medium text-text-strong">{info().title}</div>
-                          </div>
-                        )
-
-                        const turns = () => (
-                          <div class="relative mt-2 pb-8 min-w-0 w-full h-full overflow-y-auto no-scrollbar">
-                            <div class="px-4 py-6">{title()}</div>
-                            <div class="flex flex-col gap-15 items-start justify-start mt-4">
-                              <For each={messages()}>
-                                {(message) => (
-                                  <SessionTurn
-                                    sessionID={data().sessionID}
-                                    sessionTitle={info().title}
-                                    messageID={message.id}
-                                    stepsExpanded={store.expandedSteps[message.id] ?? false}
-                                    onStepsExpandedToggle={() => setStore("expandedSteps", message.id, (v) => !v)}
-                                    classes={{
-                                      root: "min-w-0 w-full relative",
-                                      content: "flex flex-col justify-between !overflow-visible",
-                                      container: "px-4",
-                                    }}
-                                  />
-                                )}
-                              </For>
-                            </div>
-                            <div class="px-4 flex items-center justify-center pt-20 pb-8 shrink-0">
-                              <Logo class="w-58.5 opacity-12" />
+                            <div class="flex gap-4 items-center">
+                              <div class="flex gap-2 items-center">
+                                <ProviderIcon
+                                  id={provider() as IconName}
+                                  class="size-3.5 shrink-0 text-icon-strong-base"
+                                />
+                                <div class="text-12-regular text-text-base">{model()?.name ?? modelID()}</div>
+                              </div>
+                              <div class="text-12-regular text-text-weaker">
+                                {DateTime.fromMillis(info().time.created).toFormat("dd MMM yyyy, HH:mm")}
+                              </div>
                             </div>
                           </div>
-                        )
+                          <div class="text-left text-16-medium text-text-strong">{info().title}</div>
+                        </div>
+                      )
 
-                        return (
-                          <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
-                            <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
-                              <div class="">
-                                <a href="https://opencode.ai">
-                                  <Mark />
-                                </a>
-                              </div>
-                              <div class="flex gap-3 items-center">
-                                <IconButton
-                                  as={"a"}
-                                  href="https://github.com/anomalyco/opencode"
-                                  target="_blank"
-                                  icon="github"
-                                  variant="ghost"
+                      const turns = () => (
+                        <div class="relative mt-2 pb-8 min-w-0 w-full h-full overflow-y-auto no-scrollbar">
+                          <div class="px-4 py-6">{title()}</div>
+                          <div class="flex flex-col gap-15 items-start justify-start mt-4">
+                            <For each={messages()}>
+                              {(message) => (
+                                <SessionTurn
+                                  sessionID={data().sessionID}
+                                  sessionTitle={info().title}
+                                  messageID={message.id}
+                                  stepsExpanded={store.expandedSteps[message.id] ?? false}
+                                  onStepsExpandedToggle={() => setStore("expandedSteps", message.id, (v) => !v)}
+                                  classes={{
+                                    root: "min-w-0 w-full relative",
+                                    content: "flex flex-col justify-between !overflow-visible",
+                                    container: "px-4",
+                                  }}
                                 />
-                                <IconButton
-                                  as={"a"}
-                                  href="https://opencode.ai/discord"
-                                  target="_blank"
-                                  icon="discord"
-                                  variant="ghost"
-                                />
-                              </div>
-                            </header>
-                            <div class="select-text flex flex-col flex-1 min-h-0">
+                              )}
+                            </For>
+                          </div>
+                          <div class="px-4 flex items-center justify-center pt-20 pb-8 shrink-0">
+                            <Logo class="w-58.5 opacity-12" />
+                          </div>
+                        </div>
+                      )
+
+                      return (
+                        <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
+                          <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
+                            <div class="">
+                              <a href="https://opencode.ai">
+                                <Mark />
+                              </a>
+                            </div>
+                            <div class="flex gap-3 items-center">
+                              <IconButton
+                                as={"a"}
+                                href="https://github.com/anomalyco/opencode"
+                                target="_blank"
+                                icon="github"
+                                variant="ghost"
+                              />
+                              <IconButton
+                                as={"a"}
+                                href="https://opencode.ai/discord"
+                                target="_blank"
+                                icon="discord"
+                                variant="ghost"
+                              />
+                            </div>
+                          </header>
+                          <div class="select-text flex flex-col flex-1 min-h-0">
+                            <div
+                              classList={{
+                                "hidden w-full flex-1 min-h-0 md:flex": true,
+                              }}
+                            >
                               <div
                                 classList={{
-                                  "hidden w-full flex-1 min-h-0 md:flex": true,
+                                  "@container relative shrink-0 pt-14 flex flex-col gap-10 min-h-0 w-full": true,
                                 }}
                               >
                                 <div
                                   classList={{
-                                    "@container relative shrink-0 pt-14 flex flex-col gap-10 min-h-0 w-full": true,
+                                    "w-full flex justify-start items-start min-w-0 px-6": true,
                                   }}
                                 >
-                                  <div
-                                    classList={{
-                                      "w-full flex justify-start items-start min-w-0 px-6": true,
+                                  {title()}
+                                </div>
+                                <div class="flex items-start justify-start h-full min-h-0">
+                                  <Show when={messages().length > 1}>
+                                    <MessageNav
+                                      class="sticky top-0 shrink-0 py-2 pl-4"
+                                      messages={messages()}
+                                      current={activeMessage()}
+                                      size="compact"
+                                      onMessageSelect={setActiveMessage}
+                                    />
+                                  </Show>
+                                  <SessionTurn
+                                    sessionID={data().sessionID}
+                                    messageID={store.messageId ?? firstUserMessage()!.id!}
+                                    stepsExpanded={
+                                      store.expandedSteps[store.messageId ?? firstUserMessage()!.id!] ?? false
+                                    }
+                                    onStepsExpandedToggle={() => {
+                                      const id = store.messageId ?? firstUserMessage()!.id!
+                                      setStore("expandedSteps", id, (v) => !v)
+                                    }}
+                                    classes={{
+                                      root: "grow",
+                                      content: "flex flex-col justify-between",
+                                      container: "w-full pb-20 px-6",
                                     }}
                                   >
-                                    {title()}
-                                  </div>
-                                  <div class="flex items-start justify-start h-full min-h-0">
-                                    <Show when={messages().length > 1}>
-                                      <MessageNav
-                                        class="sticky top-0 shrink-0 py-2 pl-4"
-                                        messages={messages()}
-                                        current={activeMessage()}
-                                        size="compact"
-                                        onMessageSelect={setActiveMessage}
-                                      />
-                                    </Show>
-                                    <SessionTurn
-                                      sessionID={data().sessionID}
-                                      messageID={store.messageId ?? firstUserMessage()!.id!}
-                                      stepsExpanded={
-                                        store.expandedSteps[store.messageId ?? firstUserMessage()!.id!] ?? false
-                                      }
-                                      onStepsExpandedToggle={() => {
-                                        const id = store.messageId ?? firstUserMessage()!.id!
-                                        setStore("expandedSteps", id, (v) => !v)
-                                      }}
-                                      classes={{
-                                        root: "grow",
-                                        content: "flex flex-col justify-between",
-                                        container: "w-full pb-20 px-6",
-                                      }}
-                                    >
-                                      <div
-                                        classList={{ "w-full flex items-center justify-center pb-8 shrink-0": true }}
-                                      >
-                                        <Logo class="w-58.5 opacity-12" />
-                                      </div>
-                                    </SessionTurn>
-                                  </div>
+                                    <div classList={{ "w-full flex items-center justify-center pb-8 shrink-0": true }}>
+                                      <Logo class="w-58.5 opacity-12" />
+                                    </div>
+                                  </SessionTurn>
                                 </div>
                               </div>
-                              <div class="!overflow-hidden md:hidden">{turns()}</div>
                             </div>
+                            <div class="!overflow-hidden md:hidden">{turns()}</div>
                           </div>
-                        )
-                      })}
-                    </DataProvider>
-                  </CodeComponentProvider>
+                        </div>
+                      )
+                    })}
+                  </DataProvider>
+                </CodeComponentProvider>
               </ClientOnlyWorkerPoolProvider>
             </>
           )

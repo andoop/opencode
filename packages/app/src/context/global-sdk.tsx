@@ -14,8 +14,7 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
     const auth = useAuth()
     const abort = new AbortController()
 
-    const addAuth = (client: Parameters<typeof addAuthInterceptor>[0]) =>
-      addAuthInterceptor(client, () => auth.token)
+    const addAuth = (client: Parameters<typeof addAuthInterceptor>[0]) => addAuthInterceptor(client, () => auth.token)
 
     const eventSdk = createOpencodeClient({
       baseUrl: server.url,

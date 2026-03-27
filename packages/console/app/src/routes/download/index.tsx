@@ -419,8 +419,8 @@ export default function Download() {
           <ul>
             <li>
               <Faq question="What is RealseeCode?">
-                RealseeCode is an open source agent that helps you write and run code with any AI model. It's available as
-                a terminal-based interface, desktop app, or IDE extension.
+                RealseeCode is an open source agent that helps you write and run code with any AI model. It's available
+                as a terminal-based interface, desktop app, or IDE extension.
               </Faq>
             </li>
             <li>
@@ -430,8 +430,8 @@ export default function Download() {
             </li>
             <li>
               <Faq question="Do I need extra AI subscriptions to use RealseeCode?">
-                Not necessarily, but probably. You'll need an AI subscription if you want to connect RealseeCode to a paid
-                provider, although you can work with{" "}
+                Not necessarily, but probably. You'll need an AI subscription if you want to connect RealseeCode to a
+                paid provider, although you can work with{" "}
                 <a href="/docs/providers/#lm-studio" target="_blank">
                   local models
                 </a>{" "}
@@ -447,8 +447,8 @@ export default function Download() {
             </li>
             <li>
               <Faq question="How much does RealseeCode cost?">
-                RealseeCode is 100% free to use. Any additional costs will come from your subscription to a model provider.
-                While RealseeCode works with any model provider, we recommend using <A href="/zen">Zen</A>.
+                RealseeCode is 100% free to use. Any additional costs will come from your subscription to a model
+                provider. While RealseeCode works with any model provider, we recommend using <A href="/zen">Zen</A>.
               </Faq>
             </li>
             <li>

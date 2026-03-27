@@ -125,25 +125,13 @@ export namespace User {
   }
 
   // Errors
-  export const NotFoundError = NamedError.create(
-    "UserNotFoundError",
-    z.object({ id: z.string() }),
-  )
+  export const NotFoundError = NamedError.create("UserNotFoundError", z.object({ id: z.string() }))
 
-  export const DuplicateError = NamedError.create(
-    "UserDuplicateError",
-    z.object({ username: z.string() }),
-  )
+  export const DuplicateError = NamedError.create("UserDuplicateError", z.object({ username: z.string() }))
 
-  export const InvalidCredentialsError = NamedError.create(
-    "InvalidCredentialsError",
-    z.object({ message: z.string() }),
-  )
+  export const InvalidCredentialsError = NamedError.create("InvalidCredentialsError", z.object({ message: z.string() }))
 
-  export const FeatureDisabledError = NamedError.create(
-    "UserFeatureDisabledError",
-    z.object({ feature: z.string() }),
-  )
+  export const FeatureDisabledError = NamedError.create("UserFeatureDisabledError", z.object({ feature: z.string() }))
 
   // User context for request scoping
   export interface UserContext {
@@ -397,10 +385,7 @@ export namespace User {
   }
 
   // Verify password
-  export async function verifyPassword(
-    username: string,
-    password: string,
-  ): Promise<Info | null> {
+  export async function verifyPassword(username: string, password: string): Promise<Info | null> {
     const user = await byUsername(username)
     if (!user) return null
     if (user.status !== "active") return null

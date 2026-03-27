@@ -116,7 +116,6 @@ export namespace ProjectRegistry {
     }
   }
 
-
   export async function findByDirectory(directory: string) {
     const items = await list()
     return items.find((item) => item.directory === directory)

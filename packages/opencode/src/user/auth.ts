@@ -35,21 +35,12 @@ export namespace UserAuth {
   export type LoginResponse = z.infer<typeof LoginResponse>
 
   // Errors
-  export const TokenExpiredError = NamedError.create(
-    "TokenExpiredError",
-    z.object({ expired_at: z.number() }),
-  )
+  export const TokenExpiredError = NamedError.create("TokenExpiredError", z.object({ expired_at: z.number() }))
 
-  export const InvalidTokenError = NamedError.create(
-    "InvalidTokenError",
-    z.object({ message: z.string() }),
-  )
+  export const InvalidTokenError = NamedError.create("InvalidTokenError", z.object({ message: z.string() }))
 
   // Login and return JWT token
-  export async function login(
-    username: string,
-    password: string,
-  ): Promise<LoginResponse> {
+  export async function login(username: string, password: string): Promise<LoginResponse> {
     const user = await User.verifyPassword(username, password)
     if (!user) {
       throw new User.InvalidCredentialsError({ message: "Invalid username or password" })
@@ -73,9 +64,7 @@ export namespace UserAuth {
   }
 
   // Sign a JWT token
-  export async function sign(
-    payload: Omit<Payload, "iat" | "exp">,
-  ): Promise<string> {
+  export async function sign(payload: Omit<Payload, "iat" | "exp">): Promise<string> {
     const jwt = await new SignJWT(payload)
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()

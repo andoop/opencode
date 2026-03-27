@@ -19,6 +19,7 @@
 **位置**: `packages/ui/src/components/session-turn.tsx` 第 528、542 行
 
 **问题**:
+
 - **retry 倒计时**: 每个有 retry 的 turn 会跑 `setInterval(updateSeconds, 1000)`
 - **duration 计时**: 正在工作的 turn 会跑 `setInterval(update, 1000)`
 
@@ -33,6 +34,7 @@
 **位置**: `packages/app/src/pages/session.tsx` 第 2309 行
 
 **问题**: 使用 `<For each={renderedUserMessages()}>` 渲染所有消息，没有虚拟化。50 条消息 = 50 个 SessionTurn 组件，每个都有：
+
 - createEffect
 - createResizeObserver
 - createAutoScroll
@@ -44,14 +46,14 @@
 
 ### 4. 其他定时器（影响较小）
 
-| 位置 | 间隔 | 说明 |
-|------|------|------|
-| status-popover.tsx | 10s | 健康检查 |
-| dialog-select-server.tsx | 10s | 健康检查 |
-| server.tsx | 10s | 服务检查 |
-| auth.tsx | 20min | token 刷新 |
-| layout.tsx | 10min | 更新检查 |
-| prompt-input.tsx | 6.5s | placeholder 轮换 |
+| 位置                     | 间隔  | 说明             |
+| ------------------------ | ----- | ---------------- |
+| status-popover.tsx       | 10s   | 健康检查         |
+| dialog-select-server.tsx | 10s   | 健康检查         |
+| server.tsx               | 10s   | 服务检查         |
+| auth.tsx                 | 20min | token 刷新       |
+| layout.tsx               | 10min | 更新检查         |
+| prompt-input.tsx         | 6.5s  | placeholder 轮换 |
 
 ---
 
@@ -79,9 +81,9 @@
 // 查看当前 setInterval 数量（近似）
 let count = 0
 const orig = window.setInterval
-window.setInterval = function(...args) {
+window.setInterval = function (...args) {
   count++
-  console.log('setInterval #', count, args[1])
+  console.log("setInterval #", count, args[1])
   return orig.apply(this, args)
 }
 ```

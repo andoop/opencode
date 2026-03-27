@@ -151,7 +151,10 @@ export function DialogEditCommand(props: Props) {
   }
 
   return (
-    <Dialog size="large" title={language.t(editing() ? "settings.commands.form.edit" : "settings.commands.form.create")}>
+    <Dialog
+      size="large"
+      title={language.t(editing() ? "settings.commands.form.edit" : "settings.commands.form.create")}
+    >
       <form onSubmit={save} class="flex flex-col gap-6 p-6 pt-0 overflow-y-auto">
         <div class="flex flex-col gap-4">
           {/* Import from Markdown - only in create mode */}
@@ -167,7 +170,9 @@ export function DialogEditCommand(props: Props) {
               </button>
               <Show when={store.importOpen}>
                 <div class="flex flex-col gap-3 px-4 pb-4">
-                  <span class="text-12-regular text-text-weaker">{language.t("settings.commands.import.description")}</span>
+                  <span class="text-12-regular text-text-weaker">
+                    {language.t("settings.commands.import.description")}
+                  </span>
                   <TextField
                     multiline
                     placeholder={language.t("settings.commands.import.placeholder")}
@@ -175,7 +180,13 @@ export function DialogEditCommand(props: Props) {
                     onChange={(value) => setStore("importText", value)}
                   />
                   <div class="flex justify-end">
-                    <Button type="button" size="large" variant="secondary" onClick={applyImport} disabled={!store.importText.trim()}>
+                    <Button
+                      type="button"
+                      size="large"
+                      variant="secondary"
+                      onClick={applyImport}
+                      disabled={!store.importText.trim()}
+                    >
                       {language.t("settings.commands.import.apply")}
                     </Button>
                   </div>
@@ -225,7 +236,9 @@ export function DialogEditCommand(props: Props) {
           <div class="flex items-center justify-between gap-4 rounded-lg bg-surface-raised-base px-4 py-3">
             <div class="flex flex-col gap-1 min-w-0 shrink">
               <span class="text-14-medium text-text-strong">{language.t("settings.commands.form.subtask")}</span>
-              <span class="text-12-regular text-text-weak whitespace-normal">{language.t("settings.commands.form.subtask.description")}</span>
+              <span class="text-12-regular text-text-weak whitespace-normal">
+                {language.t("settings.commands.form.subtask.description")}
+              </span>
             </div>
             <Switch checked={store.subtask} onChange={(value) => setStore("subtask", value)} hideLabel>
               {language.t("settings.commands.form.subtask")}

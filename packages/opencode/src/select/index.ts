@@ -136,7 +136,11 @@ export namespace Select {
     })
   }
 
-  export async function reply(input: { requestID: string; value: string; source?: "option" | "custom" }): Promise<void> {
+  export async function reply(input: {
+    requestID: string
+    value: string
+    source?: "option" | "custom"
+  }): Promise<void> {
     const s = await state()
     const existing = s.pending[input.requestID]
     if (!existing) {

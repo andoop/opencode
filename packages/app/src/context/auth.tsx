@@ -133,9 +133,7 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
     const storedMultiUser = localStorage.getItem("opencode_multi_user")
 
     const [token, setToken] = createSignal<string | null>(storedToken)
-    const [user, setUser] = createSignal<AuthUser | null>(
-      storedUser ? JSON.parse(storedUser) : null,
-    )
+    const [user, setUser] = createSignal<AuthUser | null>(storedUser ? JSON.parse(storedUser) : null)
     const [loading, setLoading] = createSignal(true) // Start with loading true
     const [error, setError] = createSignal<string | null>(null)
     const [multiUserEnabled, setMultiUserEnabledSignal] = createSignal(storedMultiUser === "true")
@@ -178,7 +176,7 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
             setMultiUserEnabledSignal(true)
           }
         }
-        
+
         // If we have a token, verify it
         const currentToken = storedToken
         if (currentToken) {
@@ -351,12 +349,18 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
 })
 
 // Add auth interceptor to SDK client — injects Authorization header on every request
-export function addAuthInterceptor(client: { interceptors: { request: { use: (fn: (request: Request) => Request) => number } } }, getToken: () => string | null) {
+export function addAuthInterceptor(
+  client: { interceptors: { request: { use: (fn: (request: Request) => Request) => number } } },
+  getToken: () => string | null,
+) {
   client.interceptors.request.use((request) => {
     const token = getToken()
     if (token) request.headers.set("Authorization", `Bearer ${token}`)
     // Ensure Content-Type is set for requests with body — some environments strip it
-    if (!request.headers.get("content-type") && (request.method === "POST" || request.method === "PUT" || request.method === "PATCH")) {
+    if (
+      !request.headers.get("content-type") &&
+      (request.method === "POST" || request.method === "PUT" || request.method === "PATCH")
+    ) {
       request.headers.set("Content-Type", "application/json")
     }
     return request

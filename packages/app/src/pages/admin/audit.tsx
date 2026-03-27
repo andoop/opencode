@@ -1,7 +1,14 @@
 import { Button } from "@opencode-ai/ui/button"
 import { Dialog as KobalteDialog } from "@kobalte/core/dialog"
 import { For, Show, createEffect, createMemo, createResource, createSignal } from "solid-js"
-import { type AuditPrompt, type AuditSession, type AuditSummary, type RegistryProject, type UserInfo, useAdminCommon } from "./shared"
+import {
+  type AuditPrompt,
+  type AuditSession,
+  type AuditSummary,
+  type RegistryProject,
+  type UserInfo,
+  useAdminCommon,
+} from "./shared"
 
 export default function AdminAuditPage() {
   const { authHeaders, fetchFn, language, server } = useAdminCommon()
@@ -63,8 +70,8 @@ export default function AdminAuditPage() {
   const [auditPrompts, { refetch: refetchAuditPrompts }] = createResource(selectedAuditSessionID, async (sessionID) => {
     if (!sessionID) return [] as AuditPrompt[]
     const response = await fetchFn(`${server.url}/session/admin/${sessionID}/messages`, {
-        headers: authHeaders(),
-      })
+      headers: authHeaders(),
+    })
     if (!response.ok) throw new Error("Failed to fetch session conversation")
     return response.json() as Promise<AuditPrompt[]>
   })
@@ -134,7 +141,8 @@ export default function AdminAuditPage() {
   }
 
   const projectLabel = (item: { name?: string; directory: string }) => item.name || item.directory
-  const showProjectDirectory = (item: { name?: string; directory: string }) => !!item.name && item.name !== item.directory
+  const showProjectDirectory = (item: { name?: string; directory: string }) =>
+    !!item.name && item.name !== item.directory
   const isChinese = () => language.locale() === "zh" || language.locale() === "zht"
   const auditMessageRole = (role: AuditPrompt["role"]) => (role === "assistant" ? "AI" : isChinese() ? "用户" : "User")
   const auditPartLabel = (type: string) => {
@@ -330,7 +338,8 @@ export default function AdminAuditPage() {
                         {language.t("admin.audit.promptDetail.title")}
                       </KobalteDialog.Title>
                       <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
-                        {item().user.username || item().user.id || "-"} · {projectLabel(item().project)} · {item().session.title}
+                        {item().user.username || item().user.id || "-"} · {projectLabel(item().project)} ·{" "}
+                        {item().session.title}
                       </KobalteDialog.Description>
                     </div>
                     <Button
@@ -355,7 +364,9 @@ export default function AdminAuditPage() {
 
                   <Show
                     when={(auditPrompts() ?? []).length > 0}
-                    fallback={<p class="mt-4 text-sm text-color-secondary">{language.t("admin.audit.prompts.empty")}</p>}
+                    fallback={
+                      <p class="mt-4 text-sm text-color-secondary">{language.t("admin.audit.prompts.empty")}</p>
+                    }
                   >
                     <div class="mt-4 space-y-3">
                       <For each={auditPrompts()}>
@@ -366,7 +377,9 @@ export default function AdminAuditPage() {
                               <span>{formatDate(prompt.created)}</span>
                             </div>
                             <Show when={prompt.text}>
-                              <div class="mt-2 whitespace-pre-wrap break-words text-sm text-color-primary">{prompt.text}</div>
+                              <div class="mt-2 whitespace-pre-wrap break-words text-sm text-color-primary">
+                                {prompt.text}
+                              </div>
                             </Show>
                             <Show when={prompt.parts.length > 0}>
                               <div class="mt-2 flex flex-wrap gap-2">

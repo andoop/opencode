@@ -112,7 +112,8 @@ export namespace Server {
               if (input === "tauri://localhost" || input === "http://tauri.localhost") return input
 
               // Allow private IP addresses (10.x.x.x, 192.168.x.x, 172.16-31.x.x)
-              const privateIpPattern = /^http:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+):/
+              const privateIpPattern =
+                /^http:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+):/
               if (privateIpPattern.test(input)) {
                 return input
               }
@@ -155,7 +156,7 @@ export namespace Server {
         .use(async (c, next) => {
           // Check if multi-user mode is enabled
           const multiUserEnabled = Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
-          
+
           if (!multiUserEnabled) {
             // Fall back to basic auth if configured
             const password = Flag.OPENCODE_SERVER_PASSWORD
@@ -182,12 +183,11 @@ export namespace Server {
 
           const authHeader = c.req.header("Authorization")
           const queryToken = c.req.query("access_token")
-          const bearer =
-            authHeader?.startsWith("Bearer ")
-              ? authHeader.slice(7)
-              : c.req.header("Upgrade") === "websocket" && queryToken
-                ? queryToken
-                : undefined
+          const bearer = authHeader?.startsWith("Bearer ")
+            ? authHeader.slice(7)
+            : c.req.header("Upgrade") === "websocket" && queryToken
+              ? queryToken
+              : undefined
           if (!bearer) {
             return c.json({ error: "Authentication required" }, 401)
           }
@@ -481,8 +481,16 @@ export namespace Server {
               Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))])
 
             const [submodules, branches] = await Promise.all([
-              timeout(Vcs.getSubmodules().catch(() => []), 5000, []),
-              timeout(Vcs.getBranches().catch(() => []), 5000, []),
+              timeout(
+                Vcs.getSubmodules().catch(() => []),
+                5000,
+                [],
+              ),
+              timeout(
+                Vcs.getBranches().catch(() => []),
+                5000,
+                [],
+              ),
             ])
 
             return c.json({
@@ -567,9 +575,7 @@ export namespace Server {
             const modes = await Agent.list()
             const user = User.current()
             return c.json(
-              modes.filter((agent) =>
-                User.modeEnabled(agent.name, { role: user?.role, permission: user?.permission }),
-              ),
+              modes.filter((agent) => User.modeEnabled(agent.name, { role: user?.role, permission: user?.permission })),
             )
           },
         )

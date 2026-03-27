@@ -29,7 +29,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div 
+    <div
       class="fixed inset-0 z-[9999] flex items-center justify-center bg-background-base"
       onClick={(e) => {
         // Only stop propagation if clicking outside the form

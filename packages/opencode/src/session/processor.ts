@@ -421,9 +421,7 @@ export namespace SessionProcessor {
           const err = input.assistantMessage.error as { name?: string; message?: string } | undefined
           const incompleteTools = p.filter(
             (part): part is MessageV2.ToolPart =>
-              part.type === "tool" &&
-              part.state.status !== "completed" &&
-              part.state.status !== "error",
+              part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error",
           )
           const errMsg = incompleteTurnUserMessage(err, incompleteTools)
           if (incompleteTools.length > 0) {

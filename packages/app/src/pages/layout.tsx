@@ -263,7 +263,8 @@ export default function Layout(props: ParentProps) {
         }
       : {
           title: "Creating new session",
-          description: "Preparing an isolated workspace. Interaction is temporarily blocked until the session is ready.",
+          description:
+            "Preparing an isolated workspace. Interaction is temporarily blocked until the session is ready.",
           project: "Project",
           session: "Session directory",
           failed: "Creation failed",
@@ -510,14 +511,22 @@ export default function Layout(props: ParentProps) {
         return
       }
 
-      if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked" && e.details?.type !== "select.asked")
+      if (
+        e.details?.type !== "permission.asked" &&
+        e.details?.type !== "question.asked" &&
+        e.details?.type !== "select.asked"
+      )
         return
       const title =
         e.details.type === "permission.asked"
           ? language.t("notification.permission.title")
           : language.t("notification.question.title")
       const icon =
-        e.details.type === "permission.asked" ? ("checklist" as const) : e.details.type === "select.asked" ? ("bullet-list" as const) : ("bubble-5" as const)
+        e.details.type === "permission.asked"
+          ? ("checklist" as const)
+          : e.details.type === "select.asked"
+            ? ("bullet-list" as const)
+            : ("bubble-5" as const)
       const directory = e.name
       const props = e.details.properties
       if (e.details.type === "permission.asked" && permission.autoResponds(e.details.properties, directory)) return
@@ -674,7 +683,13 @@ export default function Layout(props: ParentProps) {
 
   createEffect(
     on(
-      () => ({ ready: pageReady(), layoutReady: layoutReady(), dir: params.dir, list: layout.projects.list(), isAdmin: auth.isAdmin }),
+      () => ({
+        ready: pageReady(),
+        layoutReady: layoutReady(),
+        dir: params.dir,
+        list: layout.projects.list(),
+        isAdmin: auth.isAdmin,
+      }),
       (value) => {
         if (!value.ready) return
         if (!value.layoutReady) return
@@ -701,7 +716,8 @@ export default function Layout(props: ParentProps) {
   )
 
   const workspaceKey = (directory: string) => directory.replace(/[\\/]+$/, "")
-  const sessionInDirectory = (session: Session, directory: string) => workspaceKey(session.directory) === workspaceKey(directory)
+  const sessionInDirectory = (session: Session, directory: string) =>
+    workspaceKey(session.directory) === workspaceKey(directory)
   const currentDirectory = createMemo(() => decode64(params.dir))
   const currentDirectoryKey = createMemo(() => {
     const directory = currentDirectory()
@@ -1118,8 +1134,8 @@ export default function Layout(props: ParentProps) {
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
 
-    const result = await clientForDirectory(directory).session
-      .delete({ sessionID: session.id })
+    const result = await clientForDirectory(directory)
+      .session.delete({ sessionID: session.id })
       .then((x) => x.data)
       .catch((err) => {
         showToast({
@@ -1492,15 +1508,13 @@ export default function Layout(props: ParentProps) {
         .catch(() => undefined)
     }
 
-    dialog.show(
-      () => (
-        <DialogSelectProject
-          onSelect={(result) => {
-            resolve(result)
-          }}
-        />
-      ),
-    )
+    dialog.show(() => (
+      <DialogSelectProject
+        onSelect={(result) => {
+          resolve(result)
+        }}
+      />
+    ))
   }
 
   const errorMessage = (err: unknown) => {
@@ -2327,7 +2341,10 @@ export default function Layout(props: ParentProps) {
     })
     const open = createMemo(() => store.workspaceExpanded[props.directory] ?? local())
     const boot = createMemo(() => open() || active())
-    const booted = createMemo((prev) => prev || workspaceStore.sessionsReady || workspaceStore.status === "complete", false)
+    const booted = createMemo(
+      (prev) => prev || workspaceStore.sessionsReady || workspaceStore.status === "complete",
+      false,
+    )
     const loading = createMemo(() => open() && !booted() && sessions().length === 0)
     const hasMore = createMemo(() => workspaceStore.sessionTotal > sessions().length)
     const busy = createMemo(() => isBusy(props.directory))
@@ -2580,10 +2597,10 @@ export default function Layout(props: ParentProps) {
     const projectSessions = () => {
       const dirs = projectDirs()
       const [projectData] = globalSync.child(props.project.worktree, { bootstrap: false })
-      type Session = typeof projectData.session[number]
+      type Session = (typeof projectData.session)[number]
       const allSessions: Session[] = []
       const seenIds = new Set<string>()
-      
+
       // Load sessions from each directory (use bootstrap: false to avoid repeated git operations)
       for (const dir of dirs) {
         const [dirData] = globalSync.child(dir, { bootstrap: false })
@@ -2594,7 +2611,7 @@ export default function Layout(props: ParentProps) {
           allSessions.push(session)
         }
       }
-      
+
       // Filter sessions that belong to this project
       // Sessions created with worktrees will have directory pointing to worktree directory
       const filtered = allSessions
@@ -2752,17 +2769,22 @@ export default function Layout(props: ParentProps) {
                 <Show
                   when={workspaceEnabled()}
                   fallback={
-                    <Show when={projectSessionsLoading()} fallback={<For each={projectSessions()}>
-                      {(session) => (
-                        <SessionItem
-                          session={session}
-                          slug={base64Encode(props.project.worktree)}
-                          dense
-                          mobile={props.mobile}
-                          popover={false}
-                        />
-                      )}
-                    </For>}>
+                    <Show
+                      when={projectSessionsLoading()}
+                      fallback={
+                        <For each={projectSessions()}>
+                          {(session) => (
+                            <SessionItem
+                              session={session}
+                              slug={base64Encode(props.project.worktree)}
+                              dense
+                              mobile={props.mobile}
+                              popover={false}
+                            />
+                          )}
+                        </For>
+                      }
+                    >
                       <SessionSkeleton count={2} />
                     </Show>
                   }
@@ -2829,7 +2851,7 @@ export default function Layout(props: ParentProps) {
     const sessions = createMemo(() => {
       const dirs = projectDirs()
       const [rootStore] = globalSync.child(props.project.worktree, { bootstrap: false })
-      const allSessions: typeof rootStore.session[number][] = []
+      const allSessions: (typeof rootStore.session)[number][] = []
       const seenIds = new Set<string>()
 
       for (const dir of dirs) {
@@ -2873,7 +2895,10 @@ export default function Layout(props: ParentProps) {
     }, false)
     const loading = createMemo(() => !booted() && sessions().length === 0)
     const hasMore = createMemo(() => {
-      const total = projectDirs().reduce((sum, dir) => sum + globalSync.child(dir, { bootstrap: false })[0].sessionTotal, 0)
+      const total = projectDirs().reduce(
+        (sum, dir) => sum + globalSync.child(dir, { bootstrap: false })[0].sessionTotal,
+        0,
+      )
       return total > sessions().length
     })
     const loadMore = async () => {
@@ -2924,8 +2949,8 @@ export default function Layout(props: ParentProps) {
       setState("hoverSession", undefined)
       setState("hoverProject", undefined)
     }
-    const created = await clientForDirectory(project.worktree).worktree
-      .create({})
+    const created = await clientForDirectory(project.worktree)
+      .worktree.create({})
       .then((x) => x.data)
       .catch((err) => {
         showToast({
@@ -2982,8 +3007,8 @@ export default function Layout(props: ParentProps) {
       setState("creatingSession", "error", message)
     }
 
-    const created = await clientForDirectory(project.worktree).session
-      .create({})
+    const created = await clientForDirectory(project.worktree)
+      .session.create({})
       .then((x) => x.data)
       .catch((err) => {
         fail(errorMessage(err), "create")
@@ -3003,7 +3028,7 @@ export default function Layout(props: ParentProps) {
       setState("creatingSession", "step", "worktree")
       setBusy(sessionDirectory, true)
       WorktreeState.pending(sessionDirectory)
-      
+
       // Wait for worktree to be ready
       const timeoutMs = 5 * 60 * 1000
       const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
@@ -3012,10 +3037,7 @@ export default function Layout(props: ParentProps) {
         }, timeoutMs)
       })
 
-      const result = await Promise.race([
-        WorktreeState.wait(sessionDirectory),
-        timeout,
-      ])
+      const result = await Promise.race([WorktreeState.wait(sessionDirectory), timeout])
 
       setBusy(sessionDirectory, false)
 
@@ -3172,16 +3194,17 @@ export default function Layout(props: ParentProps) {
                           keybind={command.keybind("session.new")}
                           placement="top"
                         >
-                          <Button
-                            size="large"
-                            icon="plus-small"
-                            class="w-full"
-                            onClick={() => createSession(p())}
-                          >
+                          <Button size="large" icon="plus-small" class="w-full" onClick={() => createSession(p())}>
                             {language.t("command.session.new")}
                           </Button>
                         </TooltipKeybind>
-                        <Button variant="secondary" size="large" class="w-full" loading={refreshing()} onClick={() => refreshSessions(p())}>
+                        <Button
+                          variant="secondary"
+                          size="large"
+                          class="w-full"
+                          loading={refreshing()}
+                          onClick={() => refreshSessions(p())}
+                        >
                           {refreshLabel()}
                         </Button>
                       </div>
@@ -3202,7 +3225,13 @@ export default function Layout(props: ParentProps) {
                           {language.t("workspace.new")}
                         </Button>
                       </TooltipKeybind>
-                      <Button variant="secondary" size="large" class="w-full" loading={refreshing()} onClick={() => refreshSessions(p())}>
+                      <Button
+                        variant="secondary"
+                        size="large"
+                        class="w-full"
+                        loading={refreshing()}
+                        onClick={() => refreshSessions(p())}
+                      >
                         {refreshLabel()}
                       </Button>
                     </div>
@@ -3622,7 +3651,9 @@ export default function Layout(props: ParentProps) {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      const project = layout.projects.list().find((item) => item.worktree === state.creatingSession.projectRoot)
+                      const project = layout.projects
+                        .list()
+                        .find((item) => item.worktree === state.creatingSession.projectRoot)
                       if (!project) {
                         resetSessionOverlay()
                         return

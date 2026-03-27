@@ -48,7 +48,10 @@ type BridgeTool = {
   name: string
   description: string
   inputSchema: Record<string, unknown>
-  execute(args: Record<string, unknown>, abort: AbortSignal): Promise<{
+  execute(
+    args: Record<string, unknown>,
+    abort: AbortSignal,
+  ): Promise<{
     content: Array<Record<string, unknown>>
     isError?: boolean
   }>
@@ -117,7 +120,10 @@ async function nativeTools(ctx: BridgeContext) {
     id: string
     description: string
     parameters: z.ZodType
-    execute: (args: any, ctx: Tool.Context) => Promise<{
+    execute: (
+      args: any,
+      ctx: Tool.Context,
+    ) => Promise<{
       title: string
       metadata: Record<string, unknown>
       output: string
@@ -214,7 +220,12 @@ export function bridgeCommand(input: { cwd: string; sessionID: string; agent: st
   }
 }
 
-export async function startBridgeServer(input: { cwd: string; sessionID: string; agent: string; allowedTools: string[] }) {
+export async function startBridgeServer(input: {
+  cwd: string
+  sessionID: string
+  agent: string
+  allowedTools: string[]
+}) {
   const tools = await buildTools({
     cwd: input.cwd,
     sessionID: input.sessionID,

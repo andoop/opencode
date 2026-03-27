@@ -353,10 +353,12 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     const treeInflight = new Map<string, Promise<void>>()
 
     const search = (query: string, dirs: "true" | "false") =>
-      client().find.files({ query, dirs }).then(
-        (x) => (x.data ?? []).map(normalize),
-        () => [],
-      )
+      client()
+        .find.files({ query, dirs })
+        .then(
+          (x) => (x.data ?? []).map(normalize),
+          () => [],
+        )
 
     const [store, setStore] = createStore<{
       file: Record<string, FileState>
@@ -555,8 +557,8 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
 
       const directory = scope()
 
-      const promise = client().file
-        .list({ path: dir })
+      const promise = client()
+        .file.list({ path: dir })
         .then((x) => {
           if (scope() !== directory) return
           const nodes = x.data ?? []
@@ -660,7 +662,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     // Set up file watcher listener - must be inside createEffect to clean up on scope change
     createEffect(() => {
       const currentScope = scope()
-      
+
       // Batch file watcher events to avoid excessive listDir calls for large projects
       const pendingDirRefreshes = new Set<string>()
       const pendingFileReloads = new Set<string>()
@@ -693,7 +695,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       const stop = sdk.event.listen((e) => {
         // Only process events for current scope
         if (scope() !== currentScope) return
-        
+
         const event = e.details
         if (event.type !== "file.watcher.updated") return
         const path = normalize(event.properties.file)
@@ -701,7 +703,7 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
         if (path.startsWith(".git/")) return
 
         const kind = event.properties.event
-        
+
         // Queue file reload
         if (store.file[path]) {
           pendingFileReloads.add(path)
@@ -775,8 +777,8 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
     })
 
     const readFile = async (path: string) =>
-      client().file
-        .read({ path })
+      client()
+        .file.read({ path })
         .then((x) => x.data)
         .catch(() => undefined)
 

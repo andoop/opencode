@@ -40,22 +40,23 @@ export default function Home() {
       body: JSON.stringify(input),
     })
       .then((workspace) => {
-        sync.set("project", (prev) => [workspaceAsProject(workspace), ...prev.filter((item) => item.id !== workspace.id)])
+        sync.set("project", (prev) => [
+          workspaceAsProject(workspace),
+          ...prev.filter((item) => item.id !== workspace.id),
+        ])
         openProject(workspace.directory)
       })
       .catch(() => undefined)
   }
 
   async function chooseProject() {
-    dialog.show(
-      () => (
-        <DialogSelectProject
-          onSelect={(result) => {
-            createWorkspace(result)
-          }}
-        />
-      ),
-    )
+    dialog.show(() => (
+      <DialogSelectProject
+        onSelect={(result) => {
+          createWorkspace(result)
+        }}
+      />
+    ))
   }
 
   return (

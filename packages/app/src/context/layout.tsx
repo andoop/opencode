@@ -353,7 +353,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     const enriched = createMemo(() => {
       const list = auth.isAdmin
         ? server.projects.list()
-        : server.projects.list().filter((project) => globalSync.data.project.some((item) => item.worktree === project.worktree))
+        : server.projects
+            .list()
+            .filter((project) => globalSync.data.project.some((item) => item.worktree === project.worktree))
       return list.map(enrich)
     })
     const list = createMemo(() => {

@@ -19,18 +19,18 @@
 // 查看当前 setInterval 数量
 let count = 0
 const orig = window.setInterval
-window.setInterval = function(...args) {
+window.setInterval = function (...args) {
   count++
-  console.log('setInterval #', count, 'interval:', args[1], 'ms')
+  console.log("setInterval #", count, "interval:", args[1], "ms")
   return orig.apply(this, args)
 }
 
 // 查看当前 requestAnimationFrame 数量
 let rafCount = 0
 const origRAF = window.requestAnimationFrame
-window.requestAnimationFrame = function(...args) {
+window.requestAnimationFrame = function (...args) {
   rafCount++
-  console.log('requestAnimationFrame #', rafCount)
+  console.log("requestAnimationFrame #", rafCount)
   return origRAF.apply(this, args)
 }
 ```
@@ -53,9 +53,9 @@ window.requestAnimationFrame = function(...args) {
 ```javascript
 // 监控 SolidJS 的响应式更新
 const orig = Solid.createEffect
-Solid.createEffect = function(fn) {
+Solid.createEffect = function (fn) {
   const wrapped = () => {
-    console.trace('Effect triggered')
+    console.trace("Effect triggered")
     return fn()
   }
   return orig(wrapped)
@@ -65,6 +65,7 @@ Solid.createEffect = function(fn) {
 ### 4. 检查网络请求
 
 在 Network 标签中：
+
 - 查看是否有频繁的 `/vcs` 请求
 - 查看是否有频繁的 `/session` 请求
 - 查看是否有频繁的 WebSocket 消息
@@ -72,6 +73,7 @@ Solid.createEffect = function(fn) {
 ### 5. 检查文件监听器
 
 如果有多个 worktree，每个 worktree 可能都有文件监听器。检查：
+
 - 打开了多少个会话
 - 每个会话是否都有独立的 worktree
 - 文件监听器是否在频繁触发

@@ -30,7 +30,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
   name: "Server",
   init: (props: { defaultUrl: string }) => {
     const platform = usePlatform()
-    
+
     // Helper to flush storage if available (for desktop app with debounced writes)
     const flushStorage = () => {
       if (platform.platform === "desktop" && platform.storage) {
@@ -264,11 +264,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
             }
           }
           // Now call setStore after localStorage has been updated
-          setStore(
-            "projects",
-            key,
-            filtered,
-          )
+          setStore("projects", key, filtered)
           // Force flush storage if available (for desktop app with debounced writes)
           flushStorage()
         },

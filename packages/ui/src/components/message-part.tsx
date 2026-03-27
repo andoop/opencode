@@ -642,7 +642,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const isBackgroundTask = () => part.tool === "background-task"
   const taskStatus = () =>
     isBackgroundTask() && part.state && "metadata" in part.state
-      ? (part.state.metadata?.taskStatus as string | undefined) ?? part.state.status
+      ? ((part.state.metadata?.taskStatus as string | undefined) ?? part.state.status)
       : undefined
 
   return (
@@ -780,8 +780,10 @@ ToolRegistry.register({
     const i18n = useI18n()
     const taskId = () => props.metadata?.taskId as string | undefined
     const taskStatus = () => (props.metadata?.taskStatus as string | undefined) ?? props.status
-    const progress = () => props.metadata?.progress as { current?: number; total?: number; message?: string } | undefined
-    const error = () => (props.metadata?.error as string | undefined) ?? (props.status === "error" ? props.output : undefined)
+    const progress = () =>
+      props.metadata?.progress as { current?: number; total?: number; message?: string } | undefined
+    const error = () =>
+      (props.metadata?.error as string | undefined) ?? (props.status === "error" ? props.output : undefined)
     const canRetry = () => taskStatus() === "manual_retry_pending"
     const canCancel = () => taskStatus() === "running"
 
@@ -796,20 +798,12 @@ ToolRegistry.register({
             (canRetry() || canCancel()) && taskId() ? (
               <div data-slot="background-task-actions">
                 <Show when={canRetry()}>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    onClick={() => data.onTaskRetry?.(taskId()!)}
-                  >
+                  <Button variant="secondary" size="small" onClick={() => data.onTaskRetry?.(taskId()!)}>
                     Retry
                   </Button>
                 </Show>
                 <Show when={canCancel()}>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    onClick={() => data.onTaskCancel?.(taskId()!)}
-                  >
+                  <Button variant="secondary" size="small" onClick={() => data.onTaskCancel?.(taskId()!)}>
                     {i18n.t("ui.common.cancel")}
                   </Button>
                 </Show>
@@ -1115,7 +1109,7 @@ ToolRegistry.register({
               >
                 {renderChildToolPart()}
               </Show>
-                <div data-component="permission-prompt">
+              <div data-component="permission-prompt">
                 <div data-slot="permission-actions">
                   <Button variant="ghost" size="small" onClick={() => respond("reject")}>
                     {i18n.t("ui.permission.deny")}
@@ -1450,7 +1444,9 @@ ToolRegistry.register({
         <Show when={value()}>
           <div data-component="select-value">
             <div data-slot="question-answer-item">
-              <div data-slot="question-text">{typeof props.input.title === "string" ? props.input.title : "Selected value"}</div>
+              <div data-slot="question-text">
+                {typeof props.input.title === "string" ? props.input.title : "Selected value"}
+              </div>
               <div data-slot="answer-text">{value()}</div>
             </div>
           </div>

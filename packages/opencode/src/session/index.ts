@@ -64,10 +64,12 @@ export namespace Session {
         .quiet()
         .nothrow()
         .cwd(root.userWorktreeDirectory)
-      await fs.rm(root.sessionWorktreeDirectory, {
-        recursive: true,
-        force: true,
-      }).catch(() => undefined)
+      await fs
+        .rm(root.sessionWorktreeDirectory, {
+          recursive: true,
+          force: true,
+        })
+        .catch(() => undefined)
     }
     await Workspace.removeSessionState(session.workspaceID, session.id)
   }
@@ -292,14 +294,11 @@ export namespace Session {
       .map((part) => part.text.trim())
       .filter(Boolean)
       .join("\n\n")
-    const counts = msg.parts.reduce(
-      (acc, part) => {
-        if (part.type === "text" || part.type === "step-start" || part.type === "step-finish") return acc
-        acc.set(part.type, (acc.get(part.type) ?? 0) + 1)
-        return acc
-      },
-      new Map<string, number>(),
-    )
+    const counts = msg.parts.reduce((acc, part) => {
+      if (part.type === "text" || part.type === "step-start" || part.type === "step-finish") return acc
+      acc.set(part.type, (acc.get(part.type) ?? 0) + 1)
+      return acc
+    }, new Map<string, number>())
     const parts = Array.from(counts, ([type, count]) => ({ type, count }))
     if (!text && parts.length === 0) return
     return {
@@ -476,7 +475,8 @@ export namespace Session {
       .nothrow()
       .cwd(userWorktreeDirectory)
     if (created.exitCode !== 0) {
-      const message = outputText(created.stderr) || outputText(created.stdout) || "Failed to create session root worktree"
+      const message =
+        outputText(created.stderr) || outputText(created.stdout) || "Failed to create session root worktree"
       throw new Error(message)
     }
     await $`git reset --hard`.quiet().nothrow().cwd(sessionWorktreeDirectory)
@@ -785,10 +785,10 @@ export namespace Session {
         }
         await Storage.remove(msg)
       }
-      
+
       // Clean up worktree if this session has one
       await cleanupWorktree(session)
-      
+
       await Storage.remove(sessionKey(session.workspaceID, sessionID))
       Bus.publish(Event.Deleted, {
         info: session,

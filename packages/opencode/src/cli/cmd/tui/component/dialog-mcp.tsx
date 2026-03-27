@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { map, pipe, entries, sortBy } from "remeda"
@@ -6,15 +6,37 @@ import { DialogSelect, type DialogSelectRef, type DialogSelectOption } from "@tu
 import { useTheme } from "../context/theme"
 import { Keybind } from "@/util/keybind"
 import { TextAttributes } from "@opentui/core"
-import { useSDK } from "@tui/context/sdk"
+import type { McpStatus } from "@opencode-ai/sdk/v2"
 
-function Status(props: { enabled: boolean; loading: boolean }) {
+type Pending = {
+  name: string
+  action: "enable" | "disable"
+}
+
+function Status(props: { name: string; status: Accessor<McpStatus | undefined>; pending: Accessor<Pending | null> }) {
   const { theme } = useTheme()
-  if (props.loading) {
-    return <span style={{ fg: theme.textMuted }}>⋯ Loading</span>
+  const pending = () => {
+    const value = props.pending()
+    if (value?.name !== props.name) return
+    return value
   }
-  if (props.enabled) {
+  if (pending()?.action === "enable") {
+    return <span style={{ fg: theme.textMuted }}>⋯ Connecting</span>
+  }
+  if (pending()?.action === "disable") {
+    return <span style={{ fg: theme.textMuted }}>⋯ Disabling</span>
+  }
+  if (props.status()?.status === "connected") {
     return <span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>✓ Enabled</span>
+  }
+  if (props.status()?.status === "failed") {
+    return <span style={{ fg: theme.warning }}>! Failed</span>
+  }
+  if (props.status()?.status === "needs_auth") {
+    return <span style={{ fg: theme.warning }}>! Auth</span>
+  }
+  if (props.status()?.status === "needs_client_registration") {
+    return <span style={{ fg: theme.warning }}>! Setup</span>
   }
   return <span style={{ fg: theme.textMuted }}>○ Disabled</span>
 }
@@ -22,15 +44,29 @@ function Status(props: { enabled: boolean; loading: boolean }) {
 export function DialogMcp() {
   const local = useLocal()
   const sync = useSync()
-  const sdk = useSDK()
   const [, setRef] = createSignal<DialogSelectRef<unknown>>()
-  const [loading, setLoading] = createSignal<string | null>(null)
+  const [pending, setPending] = createSignal<Pending | null>(null)
+  const [visiblePending, setVisiblePending] = createSignal<Pending | null>(null)
+  let timeout: ReturnType<typeof setTimeout> | undefined
+
+  createEffect(() => {
+    const value = pending()
+    clearTimeout(timeout)
+    if (!value) {
+      setVisiblePending(null)
+      return
+    }
+    timeout = setTimeout(() => {
+      setVisiblePending(value)
+    }, 150)
+  })
+
+  onCleanup(() => {
+    clearTimeout(timeout)
+  })
 
   const options = createMemo(() => {
-    // Track sync data and loading state to trigger re-render when they change
     const mcpData = sync.data.mcp
-    const loadingMcp = loading()
-
     return pipe(
       mcpData ?? {},
       entries(),
@@ -39,7 +75,7 @@ export function DialogMcp() {
         value: name,
         title: name,
         description: status.status === "failed" ? "failed" : status.status,
-        footer: <Status enabled={local.mcp.isEnabled(name)} loading={loadingMcp === name} />,
+        footer: <Status name={name} status={() => sync.data.mcp[name]} pending={visiblePending} />,
         category: undefined,
       })),
     )
@@ -50,23 +86,18 @@ export function DialogMcp() {
       keybind: Keybind.parse("space")[0],
       title: "toggle",
       onTrigger: async (option: DialogSelectOption<string>) => {
-        // Prevent toggling while an operation is already in progress
-        if (loading() !== null) return
+        if (pending() !== null) return
+        const current = sync.data.mcp[option.value]
+        const action = current?.status === "connected" ? "disable" : "enable"
 
-        setLoading(option.value)
+        setPending({ name: option.value, action })
         try {
-          await local.mcp.toggle(option.value)
-          // Refresh MCP status from server
-          const status = await sdk.client.mcp.status()
-          if (status.data) {
-            sync.set("mcp", status.data)
-          } else {
-            console.error("Failed to refresh MCP status: no data returned")
-          }
+          const next = await local.mcp.toggle(option.value)
+          if (next) sync.set("mcp", option.value, next)
         } catch (error) {
           console.error("Failed to toggle MCP:", error)
         } finally {
-          setLoading(null)
+          setPending(null)
         }
       },
     },

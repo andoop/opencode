@@ -70,7 +70,9 @@ export function DialogSelectProject(props: { title?: string; onSelect: (value: S
   })
   const groupedProjects = createMemo(() => {
     const all = projects()
-    const known = new Map(groups().map((group) => [group.id, { id: group.id, name: group.name, description: group.description }]))
+    const known = new Map(
+      groups().map((group) => [group.id, { id: group.id, name: group.name, description: group.description }]),
+    )
     for (const project of all) {
       project.group_ids?.forEach((id, index) => {
         if (known.has(id)) return
@@ -200,7 +202,9 @@ export function DialogSelectProject(props: { title?: string; onSelect: (value: S
                               onClick={() => toggle(project.worktree)}
                             >
                               <div class="flex w-full items-center justify-between gap-3">
-                                <div class="text-14-medium text-text-strong">{project.name || getFilename(project.worktree)}</div>
+                                <div class="text-14-medium text-text-strong">
+                                  {project.name || getFilename(project.worktree)}
+                                </div>
                                 <Show when={selected().includes(project.worktree)}>
                                   <div class="text-12-regular text-text-weak">Selected</div>
                                 </Show>

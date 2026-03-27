@@ -98,9 +98,8 @@ function remoteConfig(scope: Awaited<ReturnType<typeof Config.getMcp>>) {
   return {
     path: scope.path,
     mcp: Object.fromEntries(
-      Object.entries(scope.mcp).filter(
-        (entry): entry is [string, z.infer<typeof Config.McpRemote>] => isMcpRemote(entry[1]),
-      )
+      Object.entries(scope.mcp)
+        .filter((entry): entry is [string, z.infer<typeof Config.McpRemote>] => isMcpRemote(entry[1]))
         .map(([name, entry]) => [
           name,
           {
@@ -531,7 +530,7 @@ export const McpRoutes = lazy(() =>
             description: "MCP server connected successfully",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(MCP.Status),
               },
             },
           },
@@ -540,8 +539,7 @@ export const McpRoutes = lazy(() =>
       validator("param", z.object({ name: z.string() })),
       async (c) => {
         const { name } = c.req.valid("param")
-        await MCP.connect(name)
-        return c.json(true)
+        return c.json(await MCP.connect(name))
       },
     )
     .post(
@@ -554,7 +552,7 @@ export const McpRoutes = lazy(() =>
             description: "MCP server disconnected successfully",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(MCP.Status),
               },
             },
           },
@@ -563,8 +561,7 @@ export const McpRoutes = lazy(() =>
       validator("param", z.object({ name: z.string() })),
       async (c) => {
         const { name } = c.req.valid("param")
-        await MCP.disconnect(name)
-        return c.json(true)
+        return c.json(await MCP.disconnect(name))
       },
     ),
 )

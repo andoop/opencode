@@ -10,7 +10,9 @@ export const SelectTool = Tool.define("select", {
     placeholder: z.string().optional().describe("Optional search placeholder"),
     options: z
       .array(Select.Option)
-      .describe("Options the user can choose from. Provide the full relevant list; do not truncate just because the list is long"),
+      .describe(
+        "Options the user can choose from. Provide the full relevant list; do not truncate just because the list is long",
+      ),
     custom: z.boolean().optional().describe("Allow typing a custom value"),
   }),
   async execute(params, ctx) {

@@ -526,8 +526,8 @@ function createGlobalSync() {
       return
     }
 
-    const promise = sdkFor(directory).session
-      .list({ directory, roots: true })
+    const promise = sdkFor(directory)
+      .session.list({ directory, roots: true })
       .then((x) => {
         const nonArchived = (x.data ?? [])
           .filter((s) => !!s?.id)
@@ -568,12 +568,12 @@ function createGlobalSync() {
 
     const promise = (async () => {
       const [store, setStore] = ensureChild(directory)
-      
+
       // Skip if already bootstrapped to avoid repeated git operations
       if (store.status === "complete" || store.status === "partial") {
         return
       }
-      
+
       const cache = vcsCache.get(directory)
       if (!cache) return
       const meta = metaCache.get(directory)
@@ -593,8 +593,7 @@ function createGlobalSync() {
       }
 
       const blockingRequests = {
-        project: () =>
-          sdk.project.current().then((x) => setStore("project", x.data!.id)),
+        project: () => sdk.project.current().then((x) => setStore("project", x.data!.id)),
         agent: () => sdk.app.agents().then((x) => setStore("agent", x.data ?? [])),
         config: () => sdk.config.get().then((x) => setStore("config", x.data!)),
         ...(needsModelData()
@@ -1164,24 +1163,26 @@ function createGlobalSync() {
         workspaceFetch<WorkspaceInfo[]>(globalSDK.url, "/workspace", {
           token: auth.token ?? undefined,
           fetchFn,
-        }).then(async (x) => {
-          projects = x
-            .map(workspaceAsProject)
-            .filter((p) => !!p?.id)
-            .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
-            .slice()
-            .sort((a, b) => cmp(a.id, b.id))
-          if (auth.isMultiUserEnabled && !auth.user) {
-            setGlobalStore("project", [])
-            return
-          }
-          setGlobalStore("project", projects)
-        }).catch((err) => {
-          if (auth.isMultiUserEnabled && !auth.user) {
-            setGlobalStore("project", [])
-          }
-          throw err
-        }),
+        })
+          .then(async (x) => {
+            projects = x
+              .map(workspaceAsProject)
+              .filter((p) => !!p?.id)
+              .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
+              .slice()
+              .sort((a, b) => cmp(a.id, b.id))
+            if (auth.isMultiUserEnabled && !auth.user) {
+              setGlobalStore("project", [])
+              return
+            }
+            setGlobalStore("project", projects)
+          })
+          .catch((err) => {
+            if (auth.isMultiUserEnabled && !auth.user) {
+              setGlobalStore("project", [])
+            }
+            throw err
+          }),
       ),
     ])
     const scopedDirectory = auth.isMultiUserEnabled && !auth.isAdmin ? projects[0]?.worktree : undefined
@@ -1238,15 +1239,15 @@ function createGlobalSync() {
 
   // Track if we've already bootstrapped to prevent double-bootstrap
   let bootstrapped = false
-  
+
   // Use createEffect to wait for auth to be ready before bootstrapping
   createEffect(() => {
     // Don't bootstrap more than once
     if (bootstrapped) return
-    
+
     // If multi-user mode is enabled and auth is still loading, wait
     if (auth.isMultiUserEnabled && auth.loading) return
-    
+
     // If multi-user mode is enabled and user is not authenticated, skip bootstrap
     // (AuthGuard will redirect to login page)
     if (auth.isMultiUserEnabled && !auth.isAuthenticated) {
@@ -1254,7 +1255,7 @@ function createGlobalSync() {
       setGlobalStore("ready", true)
       return
     }
-    
+
     // Auth is ready, proceed with bootstrap
     bootstrapped = true
     bootstrap()

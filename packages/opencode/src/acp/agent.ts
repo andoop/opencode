@@ -1522,10 +1522,7 @@ export namespace ACP {
     })
   }
 
-  function hasAvailableModel(
-    models: ModelOption[],
-    current: { providerID: string; modelID: string },
-  ) {
+  function hasAvailableModel(models: ModelOption[], current: { providerID: string; modelID: string }) {
     const key = `${current.providerID}/${current.modelID}`
     return models.some((model) => model.modelId === key || model.modelId.startsWith(`${key}/`))
   }

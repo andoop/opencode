@@ -76,14 +76,22 @@ export namespace GroupRegistry {
 
   export async function list() {
     const keys = await Storage.list(["group_registry"])
-    const items = await Promise.all(keys.map((x) => Storage.read<Info>(x).then(Info.parse).catch(() => undefined)))
+    const items = await Promise.all(
+      keys.map((x) =>
+        Storage.read<Info>(x)
+          .then(Info.parse)
+          .catch(() => undefined),
+      ),
+    )
     return items.filter((x): x is Info => !!x).sort((a, b) => a.name.localeCompare(b.name))
   }
 
   export async function get(id: string) {
-    return Storage.read<Info>(key(id)).then(Info.parse).catch(() => {
-      throw new NotFoundError({ id })
-    })
+    return Storage.read<Info>(key(id))
+      .then(Info.parse)
+      .catch(() => {
+        throw new NotFoundError({ id })
+      })
   }
 
   export async function findBySlug(slug: string) {

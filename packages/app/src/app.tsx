@@ -52,7 +52,7 @@ function AuthGuard(props: ParentProps) {
   createEffect(() => {
     // Don't redirect if already on login page
     if (location.pathname === "/login" || location.pathname === "/register") return
-    
+
     if (auth.isMultiUserEnabled && !auth.loading && !auth.isAuthenticated) {
       navigate("/login")
     }
@@ -173,14 +173,13 @@ export function AppInterface(props: { defaultUrl?: string }) {
               <Router
                 root={(props) => {
                   const location = useLocation()
-                  const isAuthPage = createMemo(() => location.pathname === "/login" || location.pathname === "/register")
-                  
+                  const isAuthPage = createMemo(
+                    () => location.pathname === "/login" || location.pathname === "/register",
+                  )
+
                   // Auth pages should not use Layout
                   return (
-                    <Show
-                      when={!isAuthPage()}
-                      fallback={<>{props.children}</>}
-                    >
+                    <Show when={!isAuthPage()} fallback={<>{props.children}</>}>
                       <SettingsProvider>
                         <PermissionProvider>
                           <LayoutProvider>

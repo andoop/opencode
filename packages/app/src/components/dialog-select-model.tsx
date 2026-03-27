@@ -85,19 +85,20 @@ const ModelList: Component<{
       {(i) => {
         const selected = () => current()?.provider.id === i.provider.id && current()?.id === i.id
         return (
-        <div class="w-full flex items-center gap-x-2 text-13-regular">
-          <span class="truncate">{i.name}</span>
-          <Show when={selected()}>
-            <Tag>{language.t("prompt.context.active")}</Tag>
-          </Show>
-          <Show when={i.provider.id === "opencode" && (!i.cost || i.cost?.input === 0)}>
-            <Tag>{language.t("model.tag.free")}</Tag>
-          </Show>
-          <Show when={i.latest}>
-            <Tag>{language.t("model.tag.latest")}</Tag>
-          </Show>
-        </div>
-      )}}
+          <div class="w-full flex items-center gap-x-2 text-13-regular">
+            <span class="truncate">{i.name}</span>
+            <Show when={selected()}>
+              <Tag>{language.t("prompt.context.active")}</Tag>
+            </Show>
+            <Show when={i.provider.id === "opencode" && (!i.cost || i.cost?.input === 0)}>
+              <Tag>{language.t("model.tag.free")}</Tag>
+            </Show>
+            <Show when={i.latest}>
+              <Tag>{language.t("model.tag.latest")}</Tag>
+            </Show>
+          </div>
+        )
+      }}
     </List>
   )
 }

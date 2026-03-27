@@ -6,11 +6,7 @@ import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useParams } from "@solidjs/router"
-import type {
-  McpConfigToolsListResponses,
-  McpRemoteConfig,
-  PermissionActionConfig,
-} from "@opencode-ai/sdk/v2/client"
+import type { McpConfigToolsListResponses, McpRemoteConfig, PermissionActionConfig } from "@opencode-ai/sdk/v2/client"
 
 type McpToolRule = NonNullable<McpConfigToolsListResponses[200]["tools"][string]>[number]
 import { createEffect, createMemo, For, Show, type Component } from "solid-js"
@@ -97,9 +93,7 @@ export const SettingsMcp: Component = () => {
       setStore("tools", toolsResult.data?.tools ?? {})
       setStore(
         "expanded",
-        Object.fromEntries(
-          Object.keys(data?.mcp ?? {}).map((name) => [name, store.expanded[name] ?? false]),
-        ),
+        Object.fromEntries(Object.keys(data?.mcp ?? {}).map((name) => [name, store.expanded[name] ?? false])),
       )
     } catch (err) {
       showToast({
@@ -133,7 +127,13 @@ export const SettingsMcp: Component = () => {
 
   const openEdit = (item: { name: string; config: McpRemoteConfig }) => {
     dialog.show(() => (
-      <DialogEditMcp scope={store.scope} directory={directory()} name={item.name} config={item.config} onSaved={refresh} />
+      <DialogEditMcp
+        scope={store.scope}
+        directory={directory()}
+        name={item.name}
+        config={item.config}
+        onSaved={refresh}
+      />
     ))
   }
 
@@ -262,7 +262,9 @@ export const SettingsMcp: Component = () => {
             </div>
             <div class="flex items-center gap-2">
               <Button size="large" variant="ghost" disabled={!!store.refreshing} onClick={() => void refreshAll()}>
-                {store.refreshing === "all" ? language.t("settings.mcp.action.refreshing") : language.t("settings.mcp.action.refresh")}
+                {store.refreshing === "all"
+                  ? language.t("settings.mcp.action.refreshing")
+                  : language.t("settings.mcp.action.refresh")}
               </Button>
               <Button size="large" variant="secondary" icon="plus-small" onClick={openCreate}>
                 {language.t("settings.mcp.action.add")}
@@ -290,13 +292,7 @@ export const SettingsMcp: Component = () => {
             </div>
           </div>
 
-          <TextField
-            readOnly
-            copyable
-            label={language.t("settings.mcp.path")}
-            value={store.path}
-            class="font-mono"
-          />
+          <TextField readOnly copyable label={language.t("settings.mcp.path")} value={store.path} class="font-mono" />
         </div>
 
         <div class="bg-surface-raised-base px-4 rounded-lg">
@@ -321,7 +317,9 @@ export const SettingsMcp: Component = () => {
                         <span class="text-14-medium text-text-strong truncate">{item.name}</span>
                         <span class="text-11-regular text-text-weaker">{statusLabel(item.name)}</span>
                         <Show when={item.config.enabled === false}>
-                          <span class="text-11-regular text-text-weaker">{language.t("settings.mcp.state.disabled")}</span>
+                          <span class="text-11-regular text-text-weaker">
+                            {language.t("settings.mcp.state.disabled")}
+                          </span>
                         </Show>
                       </div>
                       <span class="text-12-regular text-text-weak truncate">{item.config.url}</span>
@@ -350,7 +348,9 @@ export const SettingsMcp: Component = () => {
                           <Show
                             when={(store.tools[item.name] ?? []).length > 0}
                             fallback={
-                              <span class="mt-1 text-12-regular text-text-weaker">{language.t("settings.mcp.tools.empty")}</span>
+                              <span class="mt-1 text-12-regular text-text-weaker">
+                                {language.t("settings.mcp.tools.empty")}
+                              </span>
                             }
                           >
                             <div class="flex flex-col gap-2 mt-2">
@@ -365,7 +365,9 @@ export const SettingsMcp: Component = () => {
                                         <div class="max-w-[360px] whitespace-normal break-words">
                                           <div class="text-12-medium text-text-invert-base">{tool.name}</div>
                                           <Show when={tool.description}>
-                                            <div class="mt-1 text-12-regular text-text-invert-base">{tool.description}</div>
+                                            <div class="mt-1 text-12-regular text-text-invert-base">
+                                              {tool.description}
+                                            </div>
                                           </Show>
                                         </div>
                                       }

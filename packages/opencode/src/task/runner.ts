@@ -89,7 +89,11 @@ export namespace TaskRunner {
         draft.retry.lastError = `No handler for task kind: ${task.kind}`
         draft.updatedAt = Date.now()
       })
-      await syncPart({ ...task, status: "failed", retry: { ...task.retry, lastError: `No handler for task kind: ${task.kind}` } })
+      await syncPart({
+        ...task,
+        status: "failed",
+        retry: { ...task.retry, lastError: `No handler for task kind: ${task.kind}` },
+      })
       return
     }
 

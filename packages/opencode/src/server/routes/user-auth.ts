@@ -9,7 +9,10 @@ import { errors } from "../error"
 export function UserAuthRoutes() {
   const registerSchema = z
     .object({
-      phone: z.string().trim().regex(/^1[3-9]\d{9}$/, "Invalid phone number"),
+      phone: z
+        .string()
+        .trim()
+        .regex(/^1[3-9]\d{9}$/, "Invalid phone number"),
       password: z.string().min(6),
       confirmPassword: z.string().min(6),
     })
@@ -102,9 +105,7 @@ export function UserAuthRoutes() {
             description: "Token refreshed",
             content: {
               "application/json": {
-                schema: resolver(
-                  z.object({ token: z.string() }).meta({ ref: "RefreshResponse" }),
-                ),
+                schema: resolver(z.object({ token: z.string() }).meta({ ref: "RefreshResponse" })),
               },
             },
           },

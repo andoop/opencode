@@ -5,7 +5,9 @@ import { Storage } from "../../src/storage/storage"
 describe("ProjectRegistry helpers", () => {
   test("normalizes groups and visibility", () => {
     expect(ProjectRegistry.normalizeGroups([" Beta ", "", "Alpha", "Beta "])).toEqual(["Alpha", "Beta"])
-    expect(ProjectRegistry.normalizeVisibility({ mode: "include", user_ids: [" user_b ", "", "user_a", "user_b"] })).toEqual({
+    expect(
+      ProjectRegistry.normalizeVisibility({ mode: "include", user_ids: [" user_b ", "", "user_a", "user_b"] }),
+    ).toEqual({
       mode: "include",
       user_ids: ["user_a", "user_b"],
     })
@@ -21,11 +23,36 @@ describe("ProjectRegistry helpers", () => {
       time: { created: 1, updated: 1 },
     })
     expect(ProjectRegistry.visibleTo(base)).toBe(true)
-    expect(ProjectRegistry.visibleTo({ ...base, visibility: { mode: "include", user_ids: ["user_1"] } }, { userID: "user_1", role: "user" })).toBe(true)
-    expect(ProjectRegistry.visibleTo({ ...base, visibility: { mode: "include", user_ids: ["user_1"] } }, { userID: "user_2", role: "user" })).toBe(false)
-    expect(ProjectRegistry.visibleTo({ ...base, visibility: { mode: "exclude", user_ids: ["user_1"] } }, { userID: "user_1", role: "user" })).toBe(false)
-    expect(ProjectRegistry.visibleTo({ ...base, visibility: { mode: "exclude", user_ids: ["user_1"] } }, { userID: "user_2", role: "user" })).toBe(true)
-    expect(ProjectRegistry.visibleTo({ ...base, visibility: { mode: "include", user_ids: [] } }, { userID: "user_2", role: "admin" })).toBe(true)
+    expect(
+      ProjectRegistry.visibleTo(
+        { ...base, visibility: { mode: "include", user_ids: ["user_1"] } },
+        { userID: "user_1", role: "user" },
+      ),
+    ).toBe(true)
+    expect(
+      ProjectRegistry.visibleTo(
+        { ...base, visibility: { mode: "include", user_ids: ["user_1"] } },
+        { userID: "user_2", role: "user" },
+      ),
+    ).toBe(false)
+    expect(
+      ProjectRegistry.visibleTo(
+        { ...base, visibility: { mode: "exclude", user_ids: ["user_1"] } },
+        { userID: "user_1", role: "user" },
+      ),
+    ).toBe(false)
+    expect(
+      ProjectRegistry.visibleTo(
+        { ...base, visibility: { mode: "exclude", user_ids: ["user_1"] } },
+        { userID: "user_2", role: "user" },
+      ),
+    ).toBe(true)
+    expect(
+      ProjectRegistry.visibleTo(
+        { ...base, visibility: { mode: "include", user_ids: [] } },
+        { userID: "user_2", role: "admin" },
+      ),
+    ).toBe(true)
   })
 })
 

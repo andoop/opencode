@@ -648,8 +648,8 @@ export default function Home() {
                 <span>[*]</span>
 
                 <p>
-                  RealseeCode does not store any of your code or context data, so that it can operate in privacy sensitive
-                  environments. Learn more about <a href="/docs/enterprise/ ">privacy</a>.
+                  RealseeCode does not store any of your code or context data, so that it can operate in privacy
+                  sensitive environments. Learn more about <a href="/docs/enterprise/ ">privacy</a>.
                 </p>
               </div>
             </div>
@@ -662,8 +662,8 @@ export default function Home() {
             <ul>
               <li>
                 <Faq question="What is RealseeCode?">
-                  RealseeCode is an open source agent that helps you write and run code with any AI model. It's available
-                  as a terminal-based interface, desktop app, or IDE extension.
+                  RealseeCode is an open source agent that helps you write and run code with any AI model. It's
+                  available as a terminal-based interface, desktop app, or IDE extension.
                 </Faq>
               </li>
               <li>
@@ -685,9 +685,9 @@ export default function Home() {
               </li>
               <li>
                 <Faq question="Can I use my existing AI subscriptions with RealseeCode?">
-                  Yes, RealseeCode supports subscription plans from all major providers. You can use your Claude Pro/Max,
-                  ChatGPT Plus/Pro, or GitHub Copilot subscriptions. <a href="/docs/providers/#directory">Learn more</a>
-                  .
+                  Yes, RealseeCode supports subscription plans from all major providers. You can use your Claude
+                  Pro/Max, ChatGPT Plus/Pro, or GitHub Copilot subscriptions.{" "}
+                  <a href="/docs/providers/#directory">Learn more</a>.
                 </Faq>
               </li>
               <li>
@@ -698,8 +698,8 @@ export default function Home() {
               </li>
               <li>
                 <Faq question="How much does RealseeCode cost?">
-                  RealseeCode is 100% free to use. It also comes with a set of free models. There might be additional costs
-                  if you connect any other provider.
+                  RealseeCode is 100% free to use. It also comes with a set of free models. There might be additional
+                  costs if you connect any other provider.
                 </Faq>
               </li>
               <li>

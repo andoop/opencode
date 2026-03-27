@@ -422,7 +422,12 @@ export default function AdminUsersPage() {
             </KobalteDialog.Description>
 
             <div class="mt-4 space-y-4">
-              <TextField label="Username" value={newUsername()} onChange={setNewUsername} placeholder="Enter username" />
+              <TextField
+                label="Username"
+                value={newUsername()}
+                onChange={setNewUsername}
+                placeholder="Enter username"
+              />
               <TextField
                 label="Password"
                 type="password"
@@ -556,7 +561,9 @@ export default function AdminUsersPage() {
         <KobalteDialog.Portal>
           <KobalteDialog.Overlay class="fixed inset-0 bg-black/50" />
           <KobalteDialog.Content class="fixed left-1/2 top-1/2 max-h-[90vh] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-outline-dimmed bg-background-base p-6">
-            <KobalteDialog.Title class="text-lg font-semibold">Edit User: {editingUser()?.username}</KobalteDialog.Title>
+            <KobalteDialog.Title class="text-lg font-semibold">
+              Edit User: {editingUser()?.username}
+            </KobalteDialog.Title>
             <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">
               Update user settings
             </KobalteDialog.Description>

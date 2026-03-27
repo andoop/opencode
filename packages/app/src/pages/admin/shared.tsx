@@ -338,9 +338,7 @@ export function ModelWhitelist(props: {
       const models = Object.values(provider.models)
         .filter((model) => {
           if (!query) return true
-          return [provider.name, provider.id, model.name, model.id].some((item) =>
-            item.toLowerCase().includes(query),
-          )
+          return [provider.name, provider.id, model.name, model.id].some((item) => item.toLowerCase().includes(query))
         })
         .sort((a, b) => {
           const aSelected = value().has(`${provider.id}/${a.id}`)
@@ -364,7 +362,9 @@ export function ModelWhitelist(props: {
       <div class="flex items-start justify-between gap-3">
         <div>
           <p class="text-sm text-color-primary">可用模型</p>
-          <p class="text-xs text-color-secondary">默认不开放任何模型。只有“清空限制”才表示全开放，这里不影响供应商管理权限。</p>
+          <p class="text-xs text-color-secondary">
+            默认不开放任何模型。只有“清空限制”才表示全开放，这里不影响供应商管理权限。
+          </p>
         </div>
         <div class="flex gap-2">
           <Button size="small" variant="ghost" onClick={props.onAllowAll} disabled={props.disabled}>

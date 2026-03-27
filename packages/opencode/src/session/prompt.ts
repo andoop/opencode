@@ -624,7 +624,11 @@ export namespace SessionPrompt {
         agent,
         abort,
         sessionID,
-        system: [...(await SystemPrompt.environment(model)), ...(await SystemPrompt.projectContext()), ...(await InstructionPrompt.system())],
+        system: [
+          ...(await SystemPrompt.environment(model)),
+          ...(await SystemPrompt.projectContext()),
+          ...(await InstructionPrompt.system()),
+        ],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
           ...(isLastStep
@@ -693,7 +697,8 @@ export namespace SessionPrompt {
   async function resolveModel(
     sessionID: string,
     ...choices: Array<
-      (() => ReturnType<typeof Provider.parseModel> | undefined) | (() => Promise<ReturnType<typeof Provider.parseModel> | undefined>)
+      | (() => ReturnType<typeof Provider.parseModel> | undefined)
+      | (() => Promise<ReturnType<typeof Provider.parseModel> | undefined>)
     >
   ) {
     for (const choice of choices) {
@@ -913,7 +918,11 @@ export namespace SessionPrompt {
     })
     const model = input.model
       ? input.model
-      : await resolveModel(input.sessionID, () => agent.model, () => lastModel(input.sessionID))
+      : await resolveModel(
+          input.sessionID,
+          () => agent.model,
+          () => lastModel(input.sessionID),
+        )
     const variant =
       input.variant ??
       (agent.variant &&
@@ -1472,7 +1481,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     if (input.model) User.requireModel(input.model)
     const model = input.model
       ? input.model
-      : await resolveModel(input.sessionID, () => agent.model, () => lastModel(input.sessionID))
+      : await resolveModel(
+          input.sessionID,
+          () => agent.model,
+          () => lastModel(input.sessionID),
+        )
     const userMsg: MessageV2.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,

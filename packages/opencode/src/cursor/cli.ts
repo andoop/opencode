@@ -44,7 +44,13 @@ type StreamEvent =
   | { type: "reasoning-delta"; id: string; text: string; providerMetadata?: Record<string, unknown> }
   | { type: "reasoning-end"; id: string; providerMetadata?: Record<string, unknown> }
   | { type: "tool-input-start"; id: string; toolName: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown; providerMetadata?: Record<string, unknown> }
+  | {
+      type: "tool-call"
+      toolCallId: string
+      toolName: string
+      input: unknown
+      providerMetadata?: Record<string, unknown>
+    }
   | {
       type: "tool-result"
       toolCallId: string
@@ -295,11 +301,10 @@ class Rpc {
       if (msg.method === "session/request_permission" && msg.id !== undefined && msg.id !== null) {
         this.slog.info("acp permission requested", {
           requestID: String(msg.id),
-          options: (msg.params?.options ?? [])
-            .map((item: any) => `${item.optionId}:${item.kind ?? ""}`)
-            .join(","),
+          options: (msg.params?.options ?? []).map((item: any) => `${item.optionId}:${item.kind ?? ""}`).join(","),
         })
-        const option = msg.params?.options?.find((item: any) => item.kind?.startsWith("allow")) ?? msg.params?.options?.[0]
+        const option =
+          msg.params?.options?.find((item: any) => item.kind?.startsWith("allow")) ?? msg.params?.options?.[0]
         this.slog.info("acp permission auto-selected", {
           requestID: String(msg.id),
           optionId: option?.optionId ?? "",
@@ -315,7 +320,12 @@ class Rpc {
         })
         return
       }
-      if ((msg.result !== undefined || msg.error !== undefined) && msg.id !== undefined && msg.id !== null && this.pending.has(msg.id)) {
+      if (
+        (msg.result !== undefined || msg.error !== undefined) &&
+        msg.id !== undefined &&
+        msg.id !== null &&
+        this.pending.has(msg.id)
+      ) {
         const pending = this.pending.get(msg.id)!
         this.pending.delete(msg.id)
         if (msg.error) {
@@ -392,7 +402,6 @@ export namespace CursorCLI {
     if (!bin) {
       throw new Error("Cursor CLI not found. Install it and ensure the `agent` command is available.")
     }
-
 
     const local = await surface({
       sessionID: input.sessionID,
@@ -665,143 +674,146 @@ export namespace CursorCLI {
     })
     const textId = "cursor-text"
     const reasoningId = "cursor-reasoning"
-    const rpc = new Rpc(proc, (msg) => {
-      if (msg.method !== "session/update") return
-      const update = msg.params?.update
-      if (!update) return
-      logSessionUpdate(update)
-      switch (update.sessionUpdate) {
-        case "agent_message_chunk": {
-          const text = textFromContent(update.content)
-          if (!text) return
-          roundText += text
-          if (!textBuffered && roundText.includes(`<${CursorToolCall.TAG}`)) {
-            textBuffered = true
-            if (textOpen) {
-              queue.push({ type: "text-end", id: textId })
-              textOpen = false
+    const rpc = new Rpc(
+      proc,
+      (msg) => {
+        if (msg.method !== "session/update") return
+        const update = msg.params?.update
+        if (!update) return
+        logSessionUpdate(update)
+        switch (update.sessionUpdate) {
+          case "agent_message_chunk": {
+            const text = textFromContent(update.content)
+            if (!text) return
+            roundText += text
+            if (!textBuffered && roundText.includes(`<${CursorToolCall.TAG}`)) {
+              textBuffered = true
+              if (textOpen) {
+                queue.push({ type: "text-end", id: textId })
+                textOpen = false
+              }
+              return
+            }
+            if (textBuffered) return
+            const tagOpen = `<${CursorToolCall.TAG}`
+            let safe = roundText.length
+            for (let i = Math.max(streamedUpTo, roundText.length - tagOpen.length); i < roundText.length; i++) {
+              if (roundText[i] !== "<") continue
+              if (tagOpen.startsWith(roundText.slice(i))) {
+                safe = i
+                break
+              }
+            }
+            const delta = roundText.slice(streamedUpTo, safe)
+            if (!delta) return
+            streamedUpTo = safe
+            if (!textOpen) {
+              textOpen = true
+              queue.push({ type: "text-start", id: textId })
+            }
+            queue.push({ type: "text-delta", id: textId, text: delta })
+            textChars += delta.length
+            return
+          }
+          case "agent_thought_chunk": {
+            const text = textFromContent(update.content)
+            if (!text) return
+            roundReasoning += text
+            if (!reasoningOpen) {
+              reasoningOpen = true
+              queue.push({ type: "reasoning-start", id: reasoningId })
+            }
+            queue.push({ type: "reasoning-delta", id: reasoningId, text })
+            reasoningChars += text.length
+            return
+          }
+          case "tool_call": {
+            roundNativeToolActivity = true
+            const id = update.toolCallId as string
+            const name = toolName(update)
+            toolNames.set(id, name)
+            const item = trace(id)
+            item.startedAt = item.startedAt ?? Date.now()
+            item.updatedAt = Date.now()
+            item.title = typeof update.title === "string" && update.title ? update.title : item.title
+            item.rawInputKeys = listKeys(toolInput(update))
+            if (!seenToolInput.has(id)) {
+              seenToolInput.add(id)
+              queue.push({ type: "tool-input-start", id, toolName: name })
+            }
+            if (toolInput(update) !== undefined) {
+              toolInputs.set(id, toolInput(update))
+              item.inputPreview = previewValue(toolInput(update))
             }
             return
           }
-          if (textBuffered) return
-          const tagOpen = `<${CursorToolCall.TAG}`
-          let safe = roundText.length
-          for (let i = Math.max(streamedUpTo, roundText.length - tagOpen.length); i < roundText.length; i++) {
-            if (roundText[i] !== "<") continue
-            if (tagOpen.startsWith(roundText.slice(i))) {
-              safe = i
-              break
+          case "tool_call_update": {
+            roundNativeToolActivity = true
+            const id = update.toolCallId as string
+            const name = toolNames.get(id) ?? toolName(update)
+            toolNames.set(id, name)
+            if (!seenToolCall.has(id) && !toolInputs.has(id) && toolInput(update) === undefined) {
+              slog.warn("cursor tool update missing initial input", {
+                toolCallId: id,
+                toolName: name,
+                status: update.status ?? "",
+              })
             }
+            if (!seenToolInput.has(id)) {
+              seenToolInput.add(id)
+              queue.push({ type: "tool-input-start", id, toolName: name })
+            }
+            if (toolInput(update) !== undefined) {
+              toolInputs.set(id, toolInput(update))
+            }
+            if (!seenToolCall.has(id) && toolInputs.has(id)) {
+              seenToolCall.add(id)
+              queue.push({
+                type: "tool-call",
+                toolCallId: id,
+                toolName: name,
+                input: toolInputs.get(id),
+              })
+            }
+            if (update.status === "completed") {
+              settledToolCalls.add(id)
+              notifyToolWaiters()
+              queue.push({
+                type: "tool-result",
+                toolCallId: id,
+                input: toolInputs.get(id),
+                output: {
+                  title: update.title ?? name,
+                  output: textFromContent(update.content) || textFromContent(toolOutput(update)),
+                  metadata: {},
+                },
+              })
+            }
+            if (update.status === "failed") {
+              settledToolCalls.add(id)
+              notifyToolWaiters()
+              const toolErrMsg = textFromContent(update.content) || textFromContent(toolOutput(update)) || "Tool failed"
+              slog.warn("cursor tool_call_update failed", {
+                toolCallId: id,
+                toolName: name,
+                detail: truncate(toolErrMsg, 400),
+                failureKind: classifyCursorFailure(toolErrMsg),
+              })
+              queue.push({
+                type: "tool-error",
+                toolCallId: id,
+                input: toolInputs.get(id),
+                error: new Error(toolErrMsg),
+              })
+            }
+            return
           }
-          const delta = roundText.slice(streamedUpTo, safe)
-          if (!delta) return
-          streamedUpTo = safe
-          if (!textOpen) {
-            textOpen = true
-            queue.push({ type: "text-start", id: textId })
-          }
-          queue.push({ type: "text-delta", id: textId, text: delta })
-          textChars += delta.length
-          return
+          default:
+            return
         }
-        case "agent_thought_chunk": {
-          const text = textFromContent(update.content)
-          if (!text) return
-          roundReasoning += text
-          if (!reasoningOpen) {
-            reasoningOpen = true
-            queue.push({ type: "reasoning-start", id: reasoningId })
-          }
-          queue.push({ type: "reasoning-delta", id: reasoningId, text })
-          reasoningChars += text.length
-          return
-        }
-        case "tool_call": {
-          roundNativeToolActivity = true
-          const id = update.toolCallId as string
-          const name = toolName(update)
-          toolNames.set(id, name)
-          const item = trace(id)
-          item.startedAt = item.startedAt ?? Date.now()
-          item.updatedAt = Date.now()
-          item.title = typeof update.title === "string" && update.title ? update.title : item.title
-          item.rawInputKeys = listKeys(toolInput(update))
-          if (!seenToolInput.has(id)) {
-            seenToolInput.add(id)
-            queue.push({ type: "tool-input-start", id, toolName: name })
-          }
-          if (toolInput(update) !== undefined) {
-            toolInputs.set(id, toolInput(update))
-            item.inputPreview = previewValue(toolInput(update))
-          }
-          return
-        }
-        case "tool_call_update": {
-          roundNativeToolActivity = true
-          const id = update.toolCallId as string
-          const name = toolNames.get(id) ?? toolName(update)
-          toolNames.set(id, name)
-          if (!seenToolCall.has(id) && !toolInputs.has(id) && toolInput(update) === undefined) {
-            slog.warn("cursor tool update missing initial input", {
-              toolCallId: id,
-              toolName: name,
-              status: update.status ?? "",
-            })
-          }
-          if (!seenToolInput.has(id)) {
-            seenToolInput.add(id)
-            queue.push({ type: "tool-input-start", id, toolName: name })
-          }
-          if (toolInput(update) !== undefined) {
-            toolInputs.set(id, toolInput(update))
-          }
-          if (!seenToolCall.has(id) && toolInputs.has(id)) {
-            seenToolCall.add(id)
-            queue.push({
-              type: "tool-call",
-              toolCallId: id,
-              toolName: name,
-              input: toolInputs.get(id),
-            })
-          }
-          if (update.status === "completed") {
-            settledToolCalls.add(id)
-            notifyToolWaiters()
-            queue.push({
-              type: "tool-result",
-              toolCallId: id,
-              input: toolInputs.get(id),
-              output: {
-                title: update.title ?? name,
-                output: textFromContent(update.content) || textFromContent(toolOutput(update)),
-                metadata: {},
-              },
-            })
-          }
-          if (update.status === "failed") {
-            settledToolCalls.add(id)
-            notifyToolWaiters()
-            const toolErrMsg =
-              textFromContent(update.content) || textFromContent(toolOutput(update)) || "Tool failed"
-            slog.warn("cursor tool_call_update failed", {
-              toolCallId: id,
-              toolName: name,
-              detail: truncate(toolErrMsg, 400),
-              failureKind: classifyCursorFailure(toolErrMsg),
-            })
-            queue.push({
-              type: "tool-error",
-              toolCallId: id,
-              input: toolInputs.get(id),
-              error: new Error(toolErrMsg),
-            })
-          }
-          return
-        }
-        default:
-          return
-      }
-    }, slog)
+      },
+      slog,
+    )
 
     const text = (async () => {
       try {
@@ -906,7 +918,9 @@ export namespace CursorCLI {
             }
             await new Promise((r) => setTimeout(r, 100))
           }
-          Bun.file(bridge.readyFile).unlink().catch(() => {})
+          Bun.file(bridge.readyFile)
+            .unlink()
+            .catch(() => {})
         }
 
         let next = prompt
@@ -1115,9 +1129,7 @@ export namespace CursorCLI {
         }
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error))
-        settleOpenToolCalls(
-          truncate(`Stream ended before tool finished: ${err.message}`, 400),
-        )
+        settleOpenToolCalls(truncate(`Stream ended before tool finished: ${err.message}`, 400))
         slog.error("cursor-cli stream failed", {
           failureKind: classifyCursorFailure(err.message),
           message: truncate(err.message, 600),
@@ -1135,10 +1147,12 @@ export namespace CursorCLI {
       () => {
         slog.info("cursor-cli stream aborted by client", {
           duration: Date.now() - streamStartedAt,
-          unsettledTools: [...seenToolCall].filter((id) => !settledToolCalls.has(id)).map((id) => ({
-            toolCallId: id,
-            ...traceSummary(id),
-          })),
+          unsettledTools: [...seenToolCall]
+            .filter((id) => !settledToolCalls.has(id))
+            .map((id) => ({
+              toolCallId: id,
+              ...traceSummary(id),
+            })),
         })
         rpc.close()
       },

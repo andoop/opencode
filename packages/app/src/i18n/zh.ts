@@ -142,7 +142,8 @@ export const dict = {
   "provider.connect.oauth.code.invalid": "授权码无效",
   "provider.connect.oauth.auto.visit.prefix": "访问 ",
   "provider.connect.oauth.auto.visit.link": "此链接",
-  "provider.connect.oauth.auto.visit.suffix": " 并输入以下代码，以连接你的帐户并在 RealseeCode 中使用 {{provider}} 模型。",
+  "provider.connect.oauth.auto.visit.suffix":
+    " 并输入以下代码，以连接你的帐户并在 RealseeCode 中使用 {{provider}} 模型。",
   "provider.connect.oauth.auto.confirmationCode": "确认码",
   "provider.connect.toast.connected.title": "{{provider}} 已连接",
   "provider.connect.toast.connected.description": "现在可以使用 {{provider}} 模型了。",
@@ -736,10 +737,11 @@ export const dict = {
   "settings.commands.toast.created": "命令已创建",
   "settings.commands.toast.updated": "命令已更新",
   "settings.commands.toast.deleted": "命令已删除",
-  "settings.commands.delete.confirm": "删除命令 \"{name}\"？",
+  "settings.commands.delete.confirm": '删除命令 "{name}"？',
   "settings.commands.import": "从 Markdown 导入",
   "settings.commands.import.placeholder": "粘贴完整的 .md 文件内容（含 frontmatter）...",
-  "settings.commands.import.description": "粘贴命令 .md 文件内容，自动提取 frontmatter 字段（description、model、agent、subtask）填入表单。",
+  "settings.commands.import.description":
+    "粘贴命令 .md 文件内容，自动提取 frontmatter 字段（description、model、agent、subtask）填入表单。",
   "settings.commands.import.apply": "应用",
   "settings.commands.import.error": "解析 Markdown 失败，请检查格式后重试。",
   "settings.commands.validation.nameRequired": "名称为必填项",

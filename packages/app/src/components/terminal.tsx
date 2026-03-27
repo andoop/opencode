@@ -258,7 +258,15 @@ export const Terminal = (props: TerminalProps) => {
         startRenderLoop?: () => void
         isDisposed?: boolean
         isOpen?: boolean
-        renderer?: { render: (wasmTerm: unknown, force: boolean, viewportY: number, term: unknown, scrollbarOpacity: number) => void }
+        renderer?: {
+          render: (
+            wasmTerm: unknown,
+            force: boolean,
+            viewportY: number,
+            term: unknown,
+            scrollbarOpacity: number,
+          ) => void
+        }
         wasmTerm?: { getCursor: () => { x: number; y: number } }
         lastCursorY?: number
         cursorMoveEmitter?: { fire: () => void }
@@ -337,8 +345,8 @@ export const Terminal = (props: TerminalProps) => {
       cleanups.push(() => window.removeEventListener("resize", handleResize))
       const onResize = t.onResize(async (size) => {
         if (socket.readyState === WebSocket.OPEN) {
-          await client().pty
-            .update({
+          await client()
+            .pty.update({
               ptyID: local.pty.id,
               size: {
                 cols: size.cols,
@@ -368,8 +376,7 @@ export const Terminal = (props: TerminalProps) => {
       const handleOpen = () => {
         local.onConnect?.()
         client()
-          .pty
-          .update({
+          .pty.update({
             ptyID: local.pty.id,
             size: {
               cols: t.cols,

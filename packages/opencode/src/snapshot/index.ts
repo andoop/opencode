@@ -221,9 +221,7 @@ export namespace Snapshot {
       log.info("tracking", { hash, cwd: Instance.directory, git: gitdir() })
       return hash.trim()
     }
-    const entries = await Promise.all(
-      roots.map(async (root) => [root.projectID, await trackRoot(root)] as const),
-    )
+    const entries = await Promise.all(roots.map(async (root) => [root.projectID, await trackRoot(root)] as const))
     return encodeMulti(Object.fromEntries(entries))
   }
 
@@ -280,10 +278,11 @@ export namespace Snapshot {
           if (!hash) continue
           const git = gitdir(root.projectID)
           const relative = path.relative(root.sessionWorktreeDirectory, file)
-          const result = await $`git --git-dir ${git} --work-tree ${root.sessionWorktreeDirectory} checkout ${hash} -- ${relative}`
-            .quiet()
-            .cwd(root.sessionWorktreeDirectory)
-            .nothrow()
+          const result =
+            await $`git --git-dir ${git} --work-tree ${root.sessionWorktreeDirectory} checkout ${hash} -- ${relative}`
+              .quiet()
+              .cwd(root.sessionWorktreeDirectory)
+              .nothrow()
           if (result.exitCode !== 0) {
             await fs.unlink(file).catch(() => {})
           }

@@ -65,7 +65,10 @@ export type ParsedToolCalls = {
 function stripFence(text: string) {
   const trimmed = text.trim()
   if (!trimmed.startsWith("```")) return trimmed
-  return trimmed.replace(/^```[a-zA-Z0-9_-]*\s*/, "").replace(/\s*```$/, "").trim()
+  return trimmed
+    .replace(/^```[a-zA-Z0-9_-]*\s*/, "")
+    .replace(/\s*```$/, "")
+    .trim()
 }
 
 function stringifySchema(input: Record<string, unknown>) {
@@ -76,13 +79,7 @@ function stringifyResult(tag: string, name: string, body: string) {
   return `<${tag} name="${name}">\n${body}\n</${tag}>`
 }
 
-async function ask(input: {
-  sessionID: string
-  agent: string
-  permission: string
-  callID: string
-  messageID: string
-}) {
+async function ask(input: { sessionID: string; agent: string; permission: string; callID: string; messageID: string }) {
   const agent = await Agent.get(input.agent)
   const session = await Session.get(input.sessionID).catch(() => undefined)
   await PermissionNext.ask({
@@ -135,11 +132,7 @@ export async function surface(input: { sessionID: string; agent: string; allowed
       async execute(args, abort, refs) {
         const callID = refs?.callID ?? Identifier.ascending("tool")
         const messageID = refs?.messageID ?? Identifier.ascending("message")
-        await Plugin.trigger(
-          "tool.execute.before",
-          { tool: item.id, sessionID: input.sessionID, callID },
-          { args },
-        )
+        await Plugin.trigger("tool.execute.before", { tool: item.id, sessionID: input.sessionID, callID }, { args })
         const result = await item.execute(args, {
           sessionID: input.sessionID,
           messageID,
@@ -158,11 +151,7 @@ export async function surface(input: { sessionID: string; agent: string; allowed
             })
           },
         })
-        await Plugin.trigger(
-          "tool.execute.after",
-          { tool: item.id, sessionID: input.sessionID, callID },
-          result,
-        )
+        await Plugin.trigger("tool.execute.after", { tool: item.id, sessionID: input.sessionID, callID }, result)
         return result
       },
     }
@@ -208,11 +197,7 @@ export async function surface(input: { sessionID: string; agent: string; allowed
       async execute(args, abort, refs) {
         const callID = refs?.callID ?? Identifier.ascending("tool")
         const messageID = refs?.messageID ?? Identifier.ascending("message")
-        await Plugin.trigger(
-          "tool.execute.before",
-          { tool: key, sessionID: input.sessionID, callID },
-          { args },
-        )
+        await Plugin.trigger("tool.execute.before", { tool: key, sessionID: input.sessionID, callID }, { args })
         await ask({
           sessionID: input.sessionID,
           agent: input.agent,
@@ -225,12 +210,12 @@ export async function surface(input: { sessionID: string; agent: string; allowed
           abortSignal: abort,
           messages: [],
         })
-        await Plugin.trigger(
-          "tool.execute.after",
-          { tool: key, sessionID: input.sessionID, callID },
-          result,
+        await Plugin.trigger("tool.execute.after", { tool: key, sessionID: input.sessionID, callID }, result)
+        const truncated = await Truncate.output(
+          renderMcpContent(result.content as Array<Record<string, unknown>>),
+          {},
+          agent,
         )
-        const truncated = await Truncate.output(renderMcpContent(result.content as Array<Record<string, unknown>>), {}, agent)
         return {
           title: "",
           output: truncated.content,
@@ -325,7 +310,11 @@ export function parse(text: string): ParsedToolCalls {
 export function toolPrompt(results: Array<{ name: string; output: string; error?: boolean }>) {
   return [
     ...results.map((item) =>
-      stringifyResult(item.error ? ERROR : RESULT, item.name, item.output || (item.error ? "Tool failed." : "Tool completed.")),
+      stringifyResult(
+        item.error ? ERROR : RESULT,
+        item.name,
+        item.output || (item.error ? "Tool failed." : "Tool completed."),
+      ),
     ),
     `Continue from the latest user request. If you need another tool, emit <${TAG}> blocks only.`,
   ].join("\n\n")

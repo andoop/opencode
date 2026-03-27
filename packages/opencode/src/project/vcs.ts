@@ -19,17 +19,19 @@ export namespace Vcs {
     ),
   }
 
-  const SubmoduleInfoSchema: z.ZodType<any> = z.object({
-    path: z.string(),
-    commit: z.string().optional(),
-    branch: z.string().optional(),
-    submodules: z.array(z.lazy(() => SubmoduleInfoSchema)).optional(),
-    recentBranches: z.array(z.string()).optional(),
-    localBranches: z.array(z.string()).optional(),
-    remoteBranches: z.array(z.string()).optional(),
-  }).meta({
-    ref: "VcsSubmoduleInfo",
-  })
+  const SubmoduleInfoSchema: z.ZodType<any> = z
+    .object({
+      path: z.string(),
+      commit: z.string().optional(),
+      branch: z.string().optional(),
+      submodules: z.array(z.lazy(() => SubmoduleInfoSchema)).optional(),
+      recentBranches: z.array(z.string()).optional(),
+      localBranches: z.array(z.string()).optional(),
+      remoteBranches: z.array(z.string()).optional(),
+    })
+    .meta({
+      ref: "VcsSubmoduleInfo",
+    })
   export const SubmoduleInfo = SubmoduleInfoSchema
   export type SubmoduleInfo = z.infer<typeof SubmoduleInfoSchema>
 
@@ -195,13 +197,9 @@ export namespace Vcs {
     if (!result.trim()) return []
 
     const lines = result.trim().split("\n")
-    const paths = lines
-      .map((line) => line.trim().split(/\s+/)[1])
-      .filter((p): p is string => !!p)
+    const paths = lines.map((line) => line.trim().split(/\s+/)[1]).filter((p): p is string => !!p)
 
-    const infos = await Promise.all(
-      paths.map((p) => withGitTimeout(getSubmoduleInfo(p, Instance.worktree), null)),
-    )
+    const infos = await Promise.all(paths.map((p) => withGitTimeout(getSubmoduleInfo(p, Instance.worktree), null)))
     return infos.filter((x): x is SubmoduleInfo => x !== null)
   }
 

@@ -530,12 +530,12 @@ export namespace MCP {
     const mcp = config[name]
     if (!mcp) {
       log.error("MCP config not found", { name })
-      return
+      return { status: "failed", error: "MCP config not found" } satisfies Status
     }
 
     if (!isMcpConfigured(mcp)) {
       log.error("Ignoring MCP connect request for config without type", { name })
-      return
+      return { status: "failed", error: "MCP config is invalid" } satisfies Status
     }
 
     const result = await create(name, { ...mcp, enabled: true })
@@ -546,7 +546,7 @@ export namespace MCP {
         status: "failed",
         error: "Unknown error during connection",
       }
-      return
+      return s.status[name]
     }
 
     const s = await state()
@@ -561,6 +561,7 @@ export namespace MCP {
       }
       s.clients[name] = result.mcpClient
     }
+    return s.status[name]
   }
 
   export async function disconnect(name: string) {
@@ -573,6 +574,7 @@ export namespace MCP {
       delete s.clients[name]
     }
     s.status[name] = { status: "disabled" }
+    return s.status[name]
   }
 
   export async function tools() {

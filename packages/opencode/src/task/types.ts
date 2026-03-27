@@ -1,14 +1,7 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 
-export const TaskStatus = z.enum([
-  "pending",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-  "manual_retry_pending",
-])
+export const TaskStatus = z.enum(["pending", "running", "completed", "failed", "cancelled", "manual_retry_pending"])
 export type TaskStatus = z.infer<typeof TaskStatus>
 
 export const TaskProgress = z.object({
@@ -49,9 +42,6 @@ export namespace Task {
     Updated: BusEvent.define("task.updated", z.object({ task: TaskSchema })),
     Completed: BusEvent.define("task.completed", z.object({ task: TaskSchema })),
     Failed: BusEvent.define("task.failed", z.object({ task: TaskSchema })),
-    RecoveryPending: BusEvent.define(
-      "task.recovery_pending",
-      z.object({ taskIds: z.array(z.string()) }),
-    ),
+    RecoveryPending: BusEvent.define("task.recovery_pending", z.object({ taskIds: z.array(z.string()) })),
   }
 }

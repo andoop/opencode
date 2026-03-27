@@ -8406,7 +8406,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "$ref": "#/components/schemas/MCPStatus"
                 }
               }
             }
@@ -8447,7 +8447,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "$ref": "#/components/schemas/MCPStatus"
                 }
               }
             }

@@ -193,7 +193,12 @@ function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
             <For each={branches()}>
               {(branch) => (
                 <div class="flex items-center gap-1.5 h-5">
-                  <Icon name="branch" size="small" class="text-icon-weak shrink-0" style={{ width: "12px", height: "12px" }} />
+                  <Icon
+                    name="branch"
+                    size="small"
+                    class="text-icon-weak shrink-0"
+                    style={{ width: "12px", height: "12px" }}
+                  />
                   <span class="text-12-regular text-text-weak truncate">{branch.name}</span>
                   <Show when={branch.type === "remote"}>
                     <span class="text-12-regular text-text-weakest shrink-0">remote</span>
@@ -205,9 +210,7 @@ function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
         </Show>
 
         <Show when={props.submodule.submodules && props.submodule.submodules.length > 0}>
-          <For each={props.submodule.submodules}>
-            {(sub) => <SubmoduleItem submodule={sub} depth={depth() + 1} />}
-          </For>
+          <For each={props.submodule.submodules}>{(sub) => <SubmoduleItem submodule={sub} depth={depth() + 1} />}</For>
         </Show>
       </Show>
     </div>
@@ -1756,7 +1759,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     const waitForWorktree = async () => {
       const worktree = WorktreeState.get(sessionDirectory)
-      
+
       if (!worktree || worktree.status !== "pending") {
         return true
       }
@@ -1814,7 +1817,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         if (timer.id === undefined) return
         clearTimeout(timer.id)
       })
-      
+
       pending.delete(session.id)
       if (controller.signal.aborted) {
         return false
@@ -1827,11 +1830,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     const send = async () => {
       const ok = await waitForWorktree()
-      
+
       if (!ok) {
         return
       }
-      
+
       await client.session.prompt({
         sessionID: session.id,
         agent,
@@ -2359,9 +2362,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         <div class="flex flex-col gap-0.5">
                           <span class="text-12-medium text-text-weak">Submodules</span>
                           <div class="flex flex-col">
-                            <For each={submodules()}>
-                              {(submodule) => <SubmoduleItem submodule={submodule} />}
-                            </For>
+                            <For each={submodules()}>{(submodule) => <SubmoduleItem submodule={submodule} />}</For>
                           </div>
                         </div>
                       </Show>

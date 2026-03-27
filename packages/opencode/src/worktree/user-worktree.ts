@@ -13,15 +13,9 @@ import { Log } from "../util/log"
 export namespace UserWorktree {
   const log = Log.create({ service: "user-worktree" })
 
-  export const NotGitError = NamedError.create(
-    "UserWorktreeNotGitError",
-    z.object({ message: z.string() }),
-  )
+  export const NotGitError = NamedError.create("UserWorktreeNotGitError", z.object({ message: z.string() }))
 
-  export const CreateFailedError = NamedError.create(
-    "UserWorktreeCreateFailedError",
-    z.object({ message: z.string() }),
-  )
+  export const CreateFailedError = NamedError.create("UserWorktreeCreateFailedError", z.object({ message: z.string() }))
 
   function isMultiUserMode(): boolean {
     return Flag.OPENCODE_MULTI_USER === "true" || Flag.OPENCODE_MULTI_USER === "1"
@@ -45,7 +39,10 @@ export namespace UserWorktree {
   }
 
   async function exists(target: string): Promise<boolean> {
-    return fs.stat(target).then(() => true).catch(() => false)
+    return fs
+      .stat(target)
+      .then(() => true)
+      .catch(() => false)
   }
 
   async function prune(mainDirectory: string) {
@@ -68,7 +65,10 @@ export namespace UserWorktree {
     if (directory.startsWith(worktreeBase)) return directory
 
     // Check if the project uses git
-    const isGit = await fs.stat(path.join(directory, ".git")).then(() => true).catch(() => false)
+    const isGit = await fs
+      .stat(path.join(directory, ".git"))
+      .then(() => true)
+      .catch(() => false)
     if (!isGit) return directory
 
     const userWorktreeDir = getUserWorktreePath(projectID, user.id)
@@ -115,10 +115,7 @@ export namespace UserWorktree {
     await prune(mainDirectory)
 
     // Check if branch exists
-    const branchCheck = await $`git show-ref --verify --quiet refs/heads/${branch}`
-      .quiet()
-      .nothrow()
-      .cwd(mainDirectory)
+    const branchCheck = await $`git show-ref --verify --quiet refs/heads/${branch}`.quiet().nothrow().cwd(mainDirectory)
 
     const create = () =>
       branchCheck.exitCode === 0
@@ -135,7 +132,11 @@ export namespace UserWorktree {
 
     if (created.exitCode !== 0) {
       throw new CreateFailedError({
-        message: message || (branchCheck.exitCode === 0 ? "Failed to create user worktree" : "Failed to create user worktree with new branch"),
+        message:
+          message ||
+          (branchCheck.exitCode === 0
+            ? "Failed to create user worktree"
+            : "Failed to create user worktree with new branch"),
       })
     }
 
@@ -168,10 +169,7 @@ export namespace UserWorktree {
 
     if (!(await exists(worktreeDir))) return
 
-    const removed = await $`git worktree remove --force ${worktreeDir}`
-      .quiet()
-      .nothrow()
-      .cwd(mainDirectory)
+    const removed = await $`git worktree remove --force ${worktreeDir}`.quiet().nothrow().cwd(mainDirectory)
     if (removed.exitCode !== 0) {
       log.warn("worktree_remove_failed", {
         userID,

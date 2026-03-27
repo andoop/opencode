@@ -122,7 +122,13 @@ export namespace Project {
   async function loadUserProjects(userID: string) {
     const prefix = projectListPrefix(userID)
     const keys = await Storage.list(prefix)
-    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).then(Info.parse).catch(() => undefined)))
+    const projects = await Promise.all(
+      keys.map((x) =>
+        Storage.read<Info>(x)
+          .then(Info.parse)
+          .catch(() => undefined),
+      ),
+    )
     return projects
       .filter((p): p is Info => !!p)
       .map((project) => ({
@@ -160,7 +166,10 @@ export namespace Project {
     if (currentUserRole() === "admin") return
 
     const resolved = await resolveDirectory(directory)
-    const match = resolved.vcs === "git" && resolved.worktree !== "/" ? await ProjectRegistry.findByDirectory(resolved.worktree) : undefined
+    const match =
+      resolved.vcs === "git" && resolved.worktree !== "/"
+        ? await ProjectRegistry.findByDirectory(resolved.worktree)
+        : undefined
     if (resolved.vcs !== "git" || resolved.worktree === "/") {
       throw new DirectoryAccessError({ directory })
     }
@@ -181,7 +190,9 @@ export namespace Project {
     const { id, sandbox, worktree, vcs } = await resolveDirectory(directory)
     const registry = vcs === "git" ? await ProjectRegistry.findByDirectory(worktree) : undefined
     const registryByProject =
-      vcs === "git" && !registry && isManagedWorktree(directory, id) ? await ProjectRegistry.findByProjectID(id) : undefined
+      vcs === "git" && !registry && isManagedWorktree(directory, id)
+        ? await ProjectRegistry.findByProjectID(id)
+        : undefined
     const canonicalWorktree = registry?.directory ?? registryByProject?.directory ?? worktree
     const canonicalName = registry?.name ?? registryByProject?.name
     const canonicalDescription = registry?.description ?? registryByProject?.description
@@ -191,7 +202,9 @@ export namespace Project {
 
     const userID = currentUserID()
     const key = projectKey(id, userID)
-    let existing = await Storage.read<Info>(key).then(Info.parse).catch(() => undefined)
+    let existing = await Storage.read<Info>(key)
+      .then(Info.parse)
+      .catch(() => undefined)
     if (!existing) {
       existing = {
         id,
@@ -320,7 +333,9 @@ export namespace Project {
       const role = currentUserRole()
 
       const userProjects = await loadUserProjects(userID)
-      const registry = (await ProjectRegistry.list()).filter((entry) => ProjectRegistry.visibleTo(entry, { userID, role }))
+      const registry = (await ProjectRegistry.list()).filter((entry) =>
+        ProjectRegistry.visibleTo(entry, { userID, role }),
+      )
       if (role === "admin") {
         const merged = new Map(userProjects.map((project) => [project.worktree, project]))
         for (const entry of registry) {
@@ -328,12 +343,23 @@ export namespace Project {
         }
         return [...merged.values()]
       }
-      return registry.map((entry) => mergeRegistryProject(entry, userProjects.find((x) => x.worktree === entry.directory)))
+      return registry.map((entry) =>
+        mergeRegistryProject(
+          entry,
+          userProjects.find((x) => x.worktree === entry.directory),
+        ),
+      )
     }
 
     const prefix = projectListPrefix()
     const keys = await Storage.list(prefix)
-    const projects = await Promise.all(keys.map((x) => Storage.read<Info>(x).then(Info.parse).catch(() => undefined)))
+    const projects = await Promise.all(
+      keys.map((x) =>
+        Storage.read<Info>(x)
+          .then(Info.parse)
+          .catch(() => undefined),
+      ),
+    )
     return projects
       .filter((p): p is Info => !!p)
       .map((project) => ({

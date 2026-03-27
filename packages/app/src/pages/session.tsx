@@ -165,12 +165,14 @@ function SessionReviewTab(props: SessionReviewTabProps) {
 
   const sdk = useSDK()
 
-  const readFile = props.readFile ?? (async (path: string) => {
-    return sdk.client.file
-      .read({ path })
-      .then((x) => x.data)
-      .catch(() => undefined)
-  })
+  const readFile =
+    props.readFile ??
+    (async (path: string) => {
+      return sdk.client.file
+        .read({ path })
+        .then((x) => x.data)
+        .catch(() => undefined)
+    })
 
   const restoreScroll = () => {
     const el = scroll
@@ -320,7 +322,7 @@ export default function Page() {
 
     let data = globalSync.child(dir)[0]
     let actualDir = dir
-    
+
     // Try to find session in this store
     if (sessionID) {
       const match = Binary.search(data.session, sessionID, (s) => s.id)
@@ -394,7 +396,8 @@ export default function Page() {
     all: () => terminalContext.directory(terminalDir(), params.id).all(),
     active: () => terminalContext.directory(terminalDir(), params.id).active(),
     new: () => terminalContext.directory(terminalDir(), params.id).new(),
-    update: (pty: Partial<LocalPTY> & { id: string }) => terminalContext.directory(terminalDir(), params.id).update(pty),
+    update: (pty: Partial<LocalPTY> & { id: string }) =>
+      terminalContext.directory(terminalDir(), params.id).update(pty),
     clone: (id: string) => terminalContext.directory(terminalDir(), params.id).clone(id),
     open: (id: string) => terminalContext.directory(terminalDir(), params.id).open(id),
     close: (id: string) => terminalContext.directory(terminalDir(), params.id).close(id),
@@ -473,8 +476,8 @@ export default function Page() {
     if (ui.responding) return
 
     setUi("responding", true)
-    permissionClient().permission
-      .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
+    permissionClient()
+      .permission.respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
         showToast({ title: language.t("common.requestFailed"), description: message })
@@ -510,7 +513,8 @@ export default function Page() {
         }
       : {
           title: "Creating new session",
-          description: "Preparing an isolated workspace. Interaction is temporarily blocked until the session is ready.",
+          description:
+            "Preparing an isolated workspace. Interaction is temporarily blocked until the session is ready.",
           project: "Project",
           session: "Session directory",
           loading: "Working",
@@ -732,7 +736,9 @@ export default function Page() {
     tabs().setActive(normalized)
   })
 
-  const [gitStatus, setGitStatus] = createSignal<Array<{ path: string; added: number; removed: number; status: string }>>([])
+  const [gitStatus, setGitStatus] = createSignal<
+    Array<{ path: string; added: number; removed: number; status: string }>
+  >([])
   const [gitDiffs, setGitDiffs] = createSignal<FileDiff[]>([])
   const [gitDiffsReady, setGitDiffsReady] = createSignal(false)
   const [gitRefresh, setGitRefresh] = createSignal(0)
@@ -817,7 +823,7 @@ export default function Page() {
     () => {
       const msgs = visibleUserMessages()
       const start = store.turnStart
-      const result = start <= 0 ? msgs : (start >= msgs.length ? emptyUserMessages : msgs.slice(start))
+      const result = start <= 0 ? msgs : start >= msgs.length ? emptyUserMessages : msgs.slice(start)
       return result
     },
     emptyUserMessages,
@@ -1081,13 +1087,15 @@ export default function Page() {
       description: language.t("command.context.addSelection.description"),
       category: language.t("command.category.context"),
       keybind: "mod+shift+l",
-      disabled: !auth.canFeature("files") || (() => {
-        const active = tabs().active()
-        if (!active) return true
-        const path = file.pathFromTab(active)
-        if (!path) return true
-        return file.selectedLines(path) == null
-      })(),
+      disabled:
+        !auth.canFeature("files") ||
+        (() => {
+          const active = tabs().active()
+          if (!active) return true
+          const path = file.pathFromTab(active)
+          if (!path) return true
+          return file.selectedLines(path) == null
+        })(),
       onSelect: () => {
         const active = tabs().active()
         if (!active) return
@@ -1709,7 +1717,15 @@ export default function Page() {
 
   createEffect(
     on(
-      () => [layout.fileTree.opened(), fileTreeTab(), actualSessionDir(), sdk.directory, sdk.url, auth.token, gitRefresh()],
+      () => [
+        layout.fileTree.opened(),
+        fileTreeTab(),
+        actualSessionDir(),
+        sdk.directory,
+        sdk.url,
+        auth.token,
+        gitRefresh(),
+      ],
       ([opened, tab, actualDir, sdkDir, url, token, refresh]) => {
         if (!opened) return
         if (tab !== "git") return
@@ -1722,10 +1738,12 @@ export default function Page() {
         setGitDiffsReady(false)
         Promise.all([
           sdk.client.file.status({ directory: dir }),
-          (platform.fetch ?? fetch)(`${String(url)}/file/diff?directory=${encodeURIComponent(dir)}`, { headers }).then((res) => {
-            if (!res.ok) throw new Error(res.statusText)
-            return res.json() as Promise<FileDiff[]>
-          }),
+          (platform.fetch ?? fetch)(`${String(url)}/file/diff?directory=${encodeURIComponent(dir)}`, { headers }).then(
+            (res) => {
+              if (!res.ok) throw new Error(res.statusText)
+              return res.json() as Promise<FileDiff[]>
+            },
+          ),
         ])
           .then(([status, diffs]) => {
             if (request !== gitStatusRequest) return
@@ -2288,7 +2306,9 @@ export default function Page() {
                           <Match when={true}>
                             <div class="h-full px-4 pb-30 flex flex-col items-center justify-center text-center gap-6">
                               <Mark class="w-14 opacity-10" />
-                              <div class="text-14-regular text-text-weak max-w-56">{language.t("session.git.noChanges")}</div>
+                              <div class="text-14-regular text-text-weak max-w-56">
+                                {language.t("session.git.noChanges")}
+                              </div>
                             </div>
                           </Match>
                         </Switch>
@@ -2463,7 +2483,11 @@ export default function Page() {
                             sessionClient().question.reply(input)
                           const rejectQuestion = (input: { requestID: string }) =>
                             sessionClient().question.reject(input)
-                          const replyToSelect = (input: { requestID: string; value: string; source?: "option" | "custom" }) =>
+                          const replyToSelect = (input: {
+                            requestID: string
+                            value: string
+                            source?: "option" | "custom"
+                          }) =>
                             sessionClient().select.reply({
                               requestID: input.requestID,
                               selectReply: {
@@ -2471,8 +2495,7 @@ export default function Page() {
                                 source: input.source,
                               },
                             })
-                          const rejectSelect = (input: { requestID: string }) =>
-                            sessionClient().select.reject(input)
+                          const rejectSelect = (input: { requestID: string }) => sessionClient().select.reject(input)
                           const navigateToSession = (sessionID: string) => {
                             navigate(`/${params.dir}/session/${sessionID}`)
                           }
@@ -2584,7 +2607,8 @@ export default function Page() {
                                         data-message-id={message.id}
                                         classList={{
                                           "min-w-0 w-full max-w-full": true,
-                                          "md:max-w-200 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]": centered(),
+                                          "md:max-w-200 3xl:max-w-[1200px] 4xl:max-w-[1600px] 5xl:max-w-[1900px]":
+                                            centered(),
                                         }}
                                       >
                                         <SessionTurn
@@ -2615,7 +2639,10 @@ export default function Page() {
                 </Show>
               </Match>
               <Match when={true}>
-                <NewSessionView onCreate={() => void createSessionFromCurrentProject()} creating={ui.creating.status === "running"} />
+                <NewSessionView
+                  onCreate={() => void createSessionFromCurrentProject()}
+                  creating={ui.creating.status === "running"}
+                />
               </Match>
             </Switch>
           </div>
@@ -2662,7 +2689,12 @@ export default function Page() {
                       </BasicTool>
                       <div data-component="permission-prompt">
                         <div data-slot="permission-actions">
-                          <Button variant="ghost" size="small" onClick={() => decide("reject")} disabled={ui.responding}>
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            onClick={() => decide("reject")}
+                            disabled={ui.responding}
+                          >
                             {language.t("ui.permission.deny")}
                           </Button>
                           <Button
@@ -2673,7 +2705,12 @@ export default function Page() {
                           >
                             {language.t("ui.permission.allowAlways")}
                           </Button>
-                          <Button variant="primary" size="small" onClick={() => decide("once")} disabled={ui.responding}>
+                          <Button
+                            variant="primary"
+                            size="small"
+                            onClick={() => decide("once")}
+                            disabled={ui.responding}
+                          >
                             {language.t("ui.permission.allowOnce")}
                           </Button>
                         </div>
@@ -2830,7 +2867,9 @@ export default function Page() {
                                   variant="ghost"
                                   iconSize="large"
                                   onClick={() =>
-                                    dialog.show(() => <DialogSelectFile mode="files" onOpenFile={() => showAllFiles()} />)
+                                    dialog.show(() => (
+                                      <DialogSelectFile mode="files" onOpenFile={() => showAllFiles()} />
+                                    ))
                                   }
                                   aria-label={language.t("command.file.open")}
                                 />
@@ -3653,7 +3692,9 @@ export default function Page() {
               <div class="mt-4 grid gap-2 rounded-lg bg-background-stronger p-3">
                 <div class="flex items-start justify-between gap-3">
                   <div class="text-12-medium text-text-weak">{creatingCopy().project}</div>
-                  <div class="min-w-0 text-right text-12-regular text-text-strong break-all">{ui.creating.projectRoot}</div>
+                  <div class="min-w-0 text-right text-12-regular text-text-strong break-all">
+                    {ui.creating.projectRoot}
+                  </div>
                 </div>
                 <Show when={ui.creating.sessionDirectory}>
                   <div class="flex items-start justify-between gap-3">
@@ -3677,7 +3718,9 @@ export default function Page() {
                   {
                     key: "worktree" as SessionCreateStep,
                     title: creatingCopy().worktreeTitle,
-                    description: ui.creating.needsWorktree ? creatingCopy().worktreeDescription : creatingCopy().worktreeSkipped,
+                    description: ui.creating.needsWorktree
+                      ? creatingCopy().worktreeDescription
+                      : creatingCopy().worktreeSkipped,
                   },
                   {
                     key: "open" as SessionCreateStep,

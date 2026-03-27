@@ -244,7 +244,13 @@ export function DialogConnectProvider(props: { provider: string }) {
                         Run `agent login` in your terminal if you have not already signed in.
                       </div>
                       <div class="flex items-center gap-3">
-                        <Button class="w-auto" type="button" size="large" variant="primary" onClick={() => void complete()}>
+                        <Button
+                          class="w-auto"
+                          type="button"
+                          size="large"
+                          variant="primary"
+                          onClick={() => void complete()}
+                        >
                           Continue
                         </Button>
                       </div>

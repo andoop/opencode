@@ -610,8 +610,7 @@ export const dict = {
   "settings.general.row.font.title": "Font",
   "settings.general.row.font.description": "Customise the mono font used in code blocks",
   "settings.general.row.terminalFps.title": "Terminal FPS",
-  "settings.general.row.terminalFps.description":
-    "The maximum terminal framerate. 0 = unlimited (uses more CPU).",
+  "settings.general.row.terminalFps.description": "The maximum terminal framerate. 0 = unlimited (uses more CPU).",
 
   "settings.general.row.releaseNotes.title": "Release notes",
   "settings.general.row.releaseNotes.description": "Show What's New popups after updates",
@@ -755,10 +754,11 @@ export const dict = {
   "settings.commands.toast.created": "Command created",
   "settings.commands.toast.updated": "Command updated",
   "settings.commands.toast.deleted": "Command deleted",
-  "settings.commands.delete.confirm": "Delete command \"{name}\"?",
+  "settings.commands.delete.confirm": 'Delete command "{name}"?',
   "settings.commands.import": "Import from Markdown",
   "settings.commands.import.placeholder": "Paste the full .md file content here (with frontmatter)...",
-  "settings.commands.import.description": "Paste a command .md file to auto-fill the form. Frontmatter fields (description, model, agent, subtask) will be extracted.",
+  "settings.commands.import.description":
+    "Paste a command .md file to auto-fill the form. Frontmatter fields (description, model, agent, subtask) will be extracted.",
   "settings.commands.import.apply": "Apply",
   "settings.commands.import.error": "Failed to parse markdown. Check the format and try again.",
   "settings.commands.validation.nameRequired": "Name is required",

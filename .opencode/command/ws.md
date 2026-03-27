@@ -21,6 +21,7 @@ description: "切换工作空间中所有项目到指定 feature 分支"
 ```
 
 参数说明：
+
 - `title`：项目名称
 - `options`：完整分支列表（不要截断），每项 `label` 为远程分支全名，`description` 为提交时间
 
@@ -29,6 +30,7 @@ description: "切换工作空间中所有项目到指定 feature 分支"
 ## 切换规则
 
 全部选完后批量切换：
+
 - 本地分支名：去掉 `origin/` 前缀，`feature` 替换为 `rc`，重名则加 `-2`、`-3` 后缀
 - 工作区不干净先 stash
 - `git checkout -b <本地分支> <远程分支>`

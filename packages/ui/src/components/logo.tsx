@@ -8,14 +8,7 @@ export const Mark = (props: { class?: string }) => {
       xmlns="http://www.w3.org/2000/svg"
     >
       <circle data-slot="logo-mark-shadow" cx="10" cy="12" r="4" fill="var(--icon-weak-base)" />
-      <circle
-        data-slot="logo-mark-ring"
-        cx="10"
-        cy="10"
-        r="7"
-        stroke="var(--icon-strong-base)"
-        stroke-width="4"
-      />
+      <circle data-slot="logo-mark-ring" cx="10" cy="10" r="7" stroke="var(--icon-strong-base)" stroke-width="4" />
     </svg>
   )
 }

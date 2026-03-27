@@ -382,13 +382,23 @@ export default function AdminProjectsPage() {
             <table class="min-w-[980px] w-full table-fixed">
               <thead class="border-b border-outline-dimmed bg-background-frame">
                 <tr>
-                  <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.name")}</th>
+                  <th class="px-4 py-3 text-left text-sm font-medium">
+                    {language.t("admin.projectRegistry.column.name")}
+                  </th>
                   <th class="px-4 py-3 text-left text-sm font-medium">分组</th>
                   <th class="px-4 py-3 text-left text-sm font-medium">可见范围</th>
-                  <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.description")}</th>
-                  <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.directory")}</th>
-                  <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.added")}</th>
-                  <th class="px-4 py-3 text-left text-sm font-medium">{language.t("admin.projectRegistry.column.actions")}</th>
+                  <th class="px-4 py-3 text-left text-sm font-medium">
+                    {language.t("admin.projectRegistry.column.description")}
+                  </th>
+                  <th class="px-4 py-3 text-left text-sm font-medium">
+                    {language.t("admin.projectRegistry.column.directory")}
+                  </th>
+                  <th class="px-4 py-3 text-left text-sm font-medium">
+                    {language.t("admin.projectRegistry.column.added")}
+                  </th>
+                  <th class="px-4 py-3 text-left text-sm font-medium">
+                    {language.t("admin.projectRegistry.column.actions")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -397,7 +407,9 @@ export default function AdminProjectsPage() {
                     <tr class="border-b border-outline-dimmed last:border-0">
                       <td class="px-4 py-3">{project.name || "-"}</td>
                       <td class="px-4 py-3 text-sm text-color-secondary">
-                        <div class="line-clamp-3 whitespace-pre-wrap break-words">{project.groups.join(", ") || "未分组"}</div>
+                        <div class="line-clamp-3 whitespace-pre-wrap break-words">
+                          {project.groups.join(", ") || "未分组"}
+                        </div>
                       </td>
                       <td class="px-4 py-3 text-sm text-color-secondary">{projectVisibilityLabel(project)}</td>
                       <td class="max-w-md px-4 py-3 text-sm text-color-secondary">
@@ -430,7 +442,9 @@ export default function AdminProjectsPage() {
           <KobalteDialog.Content class="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-outline-dimmed bg-background-base p-6">
             <KobalteDialog.Title class="text-lg font-semibold">
               {editingProject()
-                ? language.t("admin.projectDialog.editTitle", { project: editingProject()?.name || editingProject()?.directory || "" })
+                ? language.t("admin.projectDialog.editTitle", {
+                    project: editingProject()?.name || editingProject()?.directory || "",
+                  })
                 : language.t("admin.projectDialog.addTitle")}
             </KobalteDialog.Title>
             <KobalteDialog.Description class="mt-1 text-sm text-color-secondary">

@@ -101,7 +101,13 @@ export namespace ProjectProfile {
       lines.push("Workspace: Single project workspace")
     }
 
-    lines.push(`Workspace projects: ${list(projects)}`, "", "## Project Profiles", ...projects.flatMap(section), "</project-context>")
+    lines.push(
+      `Workspace projects: ${list(projects)}`,
+      "",
+      "## Project Profiles",
+      ...projects.flatMap(section),
+      "</project-context>",
+    )
     return lines.join("\n")
   }
 
@@ -124,7 +130,11 @@ export namespace ProjectProfile {
       const selectedGroups = await names(workspace.selected_group_ids, workspace.selected_groups)
       const projects = await workspaceProjects()
       lines.push(`Workspace: ${workspace.name}`)
-      if (selectedGroups[0] !== "未分组" || workspace.selected_group_ids.length > 0 || workspace.selected_groups.length > 0) {
+      if (
+        selectedGroups[0] !== "未分组" ||
+        workspace.selected_group_ids.length > 0 ||
+        workspace.selected_groups.length > 0
+      ) {
         lines.push(`Selected groups: ${selectedGroups.join(", ")}`)
       }
       lines.push(
@@ -132,7 +142,9 @@ export namespace ProjectProfile {
       )
     }
 
-    lines.push("Use the profile tool whenever you need the detailed markdown background for a project, group, or workspace.")
+    lines.push(
+      "Use the profile tool whenever you need the detailed markdown background for a project, group, or workspace.",
+    )
     lines.push("</project-context>")
     return lines.join("\n")
   }

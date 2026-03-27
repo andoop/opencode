@@ -163,7 +163,7 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
-      if (!await Filesystem.isDir(cwd)) {
+      if (!(await Filesystem.isDir(cwd))) {
         throw new Error(
           `Working directory does not exist: ${cwd}\nEnsure the path is absolute and the directory exists before running commands.`,
         )

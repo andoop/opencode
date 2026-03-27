@@ -44,7 +44,10 @@ describe("workspace session flow", () => {
 
     for (const root of session.roots) {
       expect(root.sessionWorktreeDirectory.startsWith(path.join(session.directory, "roots"))).toBe(true)
-      const exists = await fs.stat(root.sessionWorktreeDirectory).then(() => true).catch(() => false)
+      const exists = await fs
+        .stat(root.sessionWorktreeDirectory)
+        .then(() => true)
+        .catch(() => false)
       expect(exists).toBe(true)
     }
 

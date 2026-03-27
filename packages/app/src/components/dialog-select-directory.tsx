@@ -119,14 +119,13 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           limit: 200,
         })
         .then((x) => x.data ?? [])
-      const dirs = nodes
-        .map((n) => ({
-          path: trimTrailing(normalize(n.absolute)),
-          name: n.name,
-          expanded: false,
-          loading: false,
-          children: [],
-        }))
+      const dirs = nodes.map((n) => ({
+        path: trimTrailing(normalize(n.absolute)),
+        name: n.name,
+        expanded: false,
+        loading: false,
+        children: [],
+      }))
 
       setDirectoryCache((prev) => {
         const next = new Map(prev)
@@ -200,7 +199,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     }
 
     const selected = Array.from(selectedPaths())
-    props.onSelect(props.multiple ? (selected.length > 0 ? selected : null) : selected[0] ?? null)
+    props.onSelect(props.multiple ? (selected.length > 0 ? selected : null) : (selected[0] ?? null))
     dialog.close()
   }
 
@@ -236,7 +235,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     const children = createMemo(() => directoryCache().get(path()) ?? [])
     const canExpand = () => isLoading() || isExpanded() || !directoryCache().has(path()) || children().length > 0
 
-  return (
+    return (
       <div>
         <div
           classList={{
@@ -249,7 +248,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
             toggleSelect(path())
           }}
           onDblClick={(e) => {
-          e.stopPropagation()
+            e.stopPropagation()
             toggleExpand(path())
           }}
         >
@@ -272,19 +271,17 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           <Show when={multiple() && isSelected()}>
             <Icon name="check" class="size-4 text-icon-success-base" />
           </Show>
-                  </div>
+        </div>
         <Show when={isExpanded()}>
           <Collapsible open={isExpanded()}>
             <Collapsible.Content>
-              <For each={children()}>
-                {(child) => <DirectoryItem path={child.path} level={props.level + 1} />}
-              </For>
+              <For each={children()}>{(child) => <DirectoryItem path={child.path} level={props.level + 1} />}</For>
             </Collapsible.Content>
           </Collapsible>
         </Show>
-              </div>
-            )
-          }
+      </div>
+    )
+  }
 
   const multiple = () => props.multiple ?? false
 
@@ -307,7 +304,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     },
   )
 
-          return (
+  return (
     <Dialog title={props.title ?? language.t("workspace.new")} class="!max-w-2xl">
       <div class="flex flex-col gap-3 h-[500px]">
         {/* 搜索框 */}
@@ -362,14 +359,12 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
         {/* 目录树或搜索结果 */}
         <div class="flex-1 overflow-y-auto border border-border-base rounded-md bg-background-frame">
-            <Show
+          <Show
             when={searchQuery().trim()}
             fallback={
               <Show when={rootDirectories()}>
                 <div class="p-2">
-                  <For each={rootDirectories()}>
-                    {(dir) => <DirectoryItem path={dir.path} level={0} />}
-                  </For>
+                  <For each={rootDirectories()}>{(dir) => <DirectoryItem path={dir.path} level={0} />}</For>
                 </div>
               </Show>
             }
@@ -378,27 +373,27 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
               <div class="p-2">
                 <For each={searchResults()}>
                   {(path) => (
-                  <div
-                    classList={{
-                      "flex items-center gap-x-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-surface-raised-base-hover transition-colors": true,
-                      "bg-surface-base-active": selectedPaths().has(path),
-                    }}
-                    onClick={() => toggleSelect(path)}
-                    onDblClick={() => submit(path)}
-                  >
-                    <FileIcon node={{ path, type: "directory" }} class="shrink-0 size-4" />
-                    <span class="flex-1 text-14-regular text-text-strong">{displayPath(path)}</span>
-                    <Show when={selectedPaths().has(path)}>
-                      <Icon name="check" class="size-4 text-icon-success-base" />
-                    </Show>
-                  </div>
-                )}
-              </For>
+                    <div
+                      classList={{
+                        "flex items-center gap-x-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-surface-raised-base-hover transition-colors": true,
+                        "bg-surface-base-active": selectedPaths().has(path),
+                      }}
+                      onClick={() => toggleSelect(path)}
+                      onDblClick={() => submit(path)}
+                    >
+                      <FileIcon node={{ path, type: "directory" }} class="shrink-0 size-4" />
+                      <span class="flex-1 text-14-regular text-text-strong">{displayPath(path)}</span>
+                      <Show when={selectedPaths().has(path)}>
+                        <Icon name="check" class="size-4 text-icon-success-base" />
+                      </Show>
+                    </div>
+                  )}
+                </For>
               </div>
             </Show>
           </Show>
-              </div>
-            </div>
+        </div>
+      </div>
     </Dialog>
   )
 }

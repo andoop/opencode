@@ -47,9 +47,9 @@ export default function Home() {
               <img data-slot="zen logo dark" src={zenLogoDark} alt="zen logo dark" />
               <h1>Reliable optimized models for coding agents</h1>
               <p>
-                Zen gives you access to a curated set of AI models that RealseeCode has tested and benchmarked specifically
-                for coding agents. No need to worry about inconsistent performance and quality, use validated models
-                that work.
+                Zen gives you access to a curated set of AI models that RealseeCode has tested and benchmarked
+                specifically for coding agents. No need to worry about inconsistent performance and quality, use
+                validated models that work.
               </p>
               <div data-slot="model-logos">
                 <div>
@@ -307,8 +307,8 @@ export default function Home() {
                 <Faq question="How much does Zen cost?">
                   Zen <a href="/docs/zen/#pricing">charges per request</a> with zero markups, so you pay exactly what
                   the model provider charges. Your total cost depends on usage, and you can set monthly spend limits in
-                  your <a href="/auth">account</a>. To cover costs, RealseeCode adds only a small payment processing fee of
-                  $1.23 per $20 balance top-up.
+                  your <a href="/auth">account</a>. To cover costs, RealseeCode adds only a small payment processing fee
+                  of $1.23 per $20 balance top-up.
                 </Faq>
               </li>
               <li>
@@ -327,8 +327,8 @@ export default function Home() {
               </li>
               <li>
                 <Faq question="Can I use Zen with other coding agents?">
-                  While Zen works great with RealseeCode, you can use Zen with any agent. Follow the setup instructions in
-                  your preferred coding agent.
+                  While Zen works great with RealseeCode, you can use Zen with any agent. Follow the setup instructions
+                  in your preferred coding agent.
                 </Faq>
               </li>
             </ul>

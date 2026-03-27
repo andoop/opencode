@@ -187,8 +187,7 @@ export const SettingsCommands: Component = () => {
     globalSync.set("config", "commands", next)
 
     try {
-      await globalSync.updateConfig({ commands: { [name]: value } })
-      await load()
+      await sdk.client.global.config.update({ config: { commands: { [name]: value } } })
     } catch (err) {
       globalSync.set("config", "commands", before)
       showToast({
@@ -240,7 +239,9 @@ export const SettingsCommands: Component = () => {
             <div class="bg-surface-raised-base px-4 rounded-lg">
               <Show
                 when={store.globalItems.length > 0}
-                fallback={<div class="py-4 text-14-regular text-text-weak">{language.t("settings.commands.empty")}</div>}
+                fallback={
+                  <div class="py-4 text-14-regular text-text-weak">{language.t("settings.commands.empty")}</div>
+                }
               >
                 <For each={store.globalItems}>
                   {(item) => (
@@ -249,7 +250,10 @@ export const SettingsCommands: Component = () => {
                         <div class="flex items-center gap-2">
                           <span class="text-14-medium text-text-strong truncate">/{item.name}</span>
                           <span class="text-11-regular text-text-weaker px-1.5 py-0.5 rounded bg-surface-base">
-                            {sourceLabel({ name: item.name, source: BUILTIN_COMMANDS.has(item.name) ? "builtin" : "command" })}
+                            {sourceLabel({
+                              name: item.name,
+                              source: BUILTIN_COMMANDS.has(item.name) ? "builtin" : "command",
+                            })}
                           </span>
                         </div>
                         <Show when={item.config.description}>
@@ -273,7 +277,12 @@ export const SettingsCommands: Component = () => {
                         <Button size="large" variant="ghost" disabled={!!store.busy} onClick={() => openEdit(item)}>
                           {language.t("common.edit")}
                         </Button>
-                        <Button size="large" variant="ghost" disabled={!!store.busy} onClick={() => void remove(item.name)}>
+                        <Button
+                          size="large"
+                          variant="ghost"
+                          disabled={!!store.busy}
+                          onClick={() => void remove(item.name)}
+                        >
                           {language.t("common.delete")}
                         </Button>
                       </div>
@@ -303,7 +312,12 @@ export const SettingsCommands: Component = () => {
                           <span class="text-12-regular text-text-weak truncate">{cmd.description}</span>
                         </Show>
                       </div>
-                      <Switch checked={enabled(cmd.name)} disabled={!!store.busy} onChange={(value) => void toggle(cmd.name, value)} hideLabel>
+                      <Switch
+                        checked={enabled(cmd.name)}
+                        disabled={!!store.busy}
+                        onChange={(value) => void toggle(cmd.name, value)}
+                        hideLabel
+                      >
                         /{cmd.name}
                       </Switch>
                     </div>

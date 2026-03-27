@@ -739,9 +739,7 @@ export function SessionTurn(
                                 <span data-slot="session-turn-retry-attempt">(#{retry()?.attempt})</span>
                               </Match>
                               <Match when={working()}>
-                                <span data-slot="session-turn-status-text">
-                                  {store.status ?? fallbackStatus()}
-                                </span>
+                                <span data-slot="session-turn-status-text">{store.status ?? fallbackStatus()}</span>
                               </Match>
                               <Match when={props.stepsExpanded}>
                                 <span data-slot="session-turn-status-text">{i18n.t("ui.sessionTurn.steps.hide")}</span>
@@ -785,9 +783,7 @@ export function SessionTurn(
                     </Show>
                     <Show when={!props.stepsExpanded && selectParts().length > 0}>
                       <div data-slot="session-turn-select-parts">
-                        <For each={selectParts()}>
-                          {({ part, message }) => <Part part={part} message={message} />}
-                        </For>
+                        <For each={selectParts()}>{({ part, message }) => <Part part={part} message={message} />}</For>
                       </div>
                     </Show>
                     <Show when={!props.stepsExpanded && questionParts().length > 0}>
@@ -814,9 +810,7 @@ export function SessionTurn(
                     <Show when={!props.stepsExpanded && backgroundTaskParts().length > 0}>
                       <div data-slot="session-turn-background-task-parts">
                         <For each={backgroundTaskParts()}>
-                          {({ part, message }) => (
-                            <Part part={part} message={message} defaultOpen />
-                          )}
+                          {({ part, message }) => <Part part={part} message={message} defaultOpen />}
                         </For>
                       </div>
                     </Show>

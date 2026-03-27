@@ -39,13 +39,13 @@ interface Task {
   id: string
   sessionID: string
   messageID: string
-  partID: string           // 关联的 ToolPart ID（任务卡片）
+  partID: string // 关联的 ToolPart ID（任务卡片）
   kind: string
   title: string
   status: TaskStatus
   progress?: { current: number; total?: number; message?: string }
   retry: { attempt: number; maxAttempts: number; lastError?: string }
-  externalRef?: string    // 外部服务任务 ID，用于 api_poll 类型
+  externalRef?: string // 外部服务任务 ID，用于 api_poll 类型
   createdAt: number
   updatedAt: number
   completedAt?: number
@@ -67,11 +67,9 @@ interface Task {
 
 ```typescript
 import z from "zod"
-import { BusEvent } from "@/bus/bus-event"  // 或项目内 Bus 事件定义方式
+import { BusEvent } from "@/bus/bus-event" // 或项目内 Bus 事件定义方式
 
-export const TaskStatus = z.enum([
-  "pending", "running", "completed", "failed", "cancelled", "manual_retry_pending",
-])
+export const TaskStatus = z.enum(["pending", "running", "completed", "failed", "cancelled", "manual_retry_pending"])
 export type TaskStatus = z.infer<typeof TaskStatus>
 
 export const TaskProgress = z.object({
@@ -112,10 +110,7 @@ export namespace Task {
     Updated: BusEvent.define("task.updated", z.object({ task: TaskSchema })),
     Completed: BusEvent.define("task.completed", z.object({ task: TaskSchema })),
     Failed: BusEvent.define("task.failed", z.object({ task: TaskSchema })),
-    RecoveryPending: BusEvent.define(
-      "task.recovery_pending",
-      z.object({ taskIds: z.array(z.string()) }),
-    ),
+    RecoveryPending: BusEvent.define("task.recovery_pending", z.object({ taskIds: z.array(z.string()) })),
   }
 }
 ```

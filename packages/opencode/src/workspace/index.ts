@@ -19,10 +19,7 @@ export namespace Workspace {
     z.object({ workspaceID: z.string() }),
   )
 
-  export const NotFoundError = NamedError.create(
-    "WorkspaceNotFoundError",
-    z.object({ workspaceID: z.string() }),
-  )
+  export const NotFoundError = NamedError.create("WorkspaceNotFoundError", z.object({ workspaceID: z.string() }))
 
   export const CreateInput = z.object({
     name: z.string().optional(),
@@ -151,7 +148,9 @@ export namespace Workspace {
 
   export async function read(workspaceID: string) {
     const target = file(workspaceID)
-    const info = await Bun.file(target).json().catch(() => undefined)
+    const info = await Bun.file(target)
+      .json()
+      .catch(() => undefined)
     if (!info) throw new NotFoundError({ workspaceID })
     return Info.parse(info)
   }
@@ -172,9 +171,7 @@ export namespace Workspace {
           .catch(() => undefined),
       ),
     )
-    return workspaces
-      .filter((item): item is Info => !!item)
-      .toSorted((a, b) => b.time.updated - a.time.updated)
+    return workspaces.filter((item): item is Info => !!item).toSorted((a, b) => b.time.updated - a.time.updated)
   }
 
   async function projectsFromDirectories(input: z.input<typeof CreateInput>) {
@@ -200,9 +197,7 @@ export namespace Workspace {
       }),
     )
     const roots = projects.filter((item): item is ProjectInfo => !!item)
-    const primary =
-      roots.find((item) => item.projectID === parsed.primaryProjectID) ??
-      roots[0]
+    const primary = roots.find((item) => item.projectID === parsed.primaryProjectID) ?? roots[0]
     if (!primary) {
       throw new MissingPrimaryProjectError({ workspaceID: "pending" })
     }
@@ -277,7 +272,9 @@ export namespace Workspace {
   }
 
   async function readSessionState(filepath: string) {
-    const data = await Bun.file(filepath).json().catch(() => undefined)
+    const data = await Bun.file(filepath)
+      .json()
+      .catch(() => undefined)
     if (!data) return
     return SessionState.parse(data)
   }
@@ -330,7 +327,9 @@ export namespace Workspace {
     while (true) {
       const workspaceJson = path.join(current, "workspace.json")
       if (await Filesystem.exists(workspaceJson)) {
-        const workspace = await Bun.file(workspaceJson).json().then((x) => Info.parse(x))
+        const workspace = await Bun.file(workspaceJson)
+          .json()
+          .then((x) => Info.parse(x))
         const states = await listSessionStates(workspace.id)
         const session = states.find((item) => Filesystem.contains(item.directory, absolute))
         const root = session?.roots.find((item) => Filesystem.contains(item.sessionWorktreeDirectory, absolute))
@@ -372,9 +371,7 @@ export namespace Workspace {
       id: input.id,
       worktree: input.directory,
       name: input.name,
-      description: input.projects
-        .map((item) => item.name ?? path.basename(item.sourceDirectory))
-        .join(", "),
+      description: input.projects.map((item) => item.name ?? path.basename(item.sourceDirectory)).join(", "),
       vcs: "git" as const,
       group_ids: input.selected_group_ids,
       groups: input.selected_groups,
