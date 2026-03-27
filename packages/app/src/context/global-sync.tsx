@@ -595,7 +595,10 @@ function createGlobalSync() {
       const blockingRequests = {
         project: () => sdk.project.current().then((x) => setStore("project", x.data!.id)),
         agent: () => sdk.app.agents().then((x) => setStore("agent", x.data ?? [])),
-        config: () => sdk.config.get().then((x) => setStore("config", x.data!)),
+        config: () =>
+          sdk.config.get().then((x) => {
+            setStore("config", x.data!)
+          }),
         ...(needsModelData()
           ? {
               provider: () =>
@@ -623,7 +626,9 @@ function createGlobalSync() {
 
       Promise.all([
         sdk.path.get().then((x) => setStore("path", x.data!)),
-        sdk.command.list().then((x) => setStore("command", x.data ?? [])),
+        sdk.command.list().then((x) => {
+          setStore("command", x.data ?? [])
+        }),
         sdk.session.status().then((x) => setStore("session_status", x.data!)),
         loadSessions(directory),
         ...(auth.canFeature("mcp") ? [sdk.mcp.status().then((x) => setStore("mcp", x.data!))] : []),
@@ -1200,6 +1205,17 @@ function createGlobalSync() {
               setGlobalStore("path", x.data!)
             }),
           ),
+          ...(!auth.isAdmin
+            ? [
+                task("command.config.list.inspect", () =>
+                  sdk.command.config.list().then((x) => {
+                    setGlobalStore("config", "commands", x.data?.commands ?? {})
+                  }).catch((err) => {
+                    throw err
+                  }),
+                ),
+              ]
+            : []),
           ...(needsModelData()
             ? [
                 task("provider.list", () =>

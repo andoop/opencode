@@ -20,6 +20,7 @@ test("legacy permissions default to all features enabled", () => {
     providers: true,
     servers: true,
     mcp: true,
+    commands: false,
   })
 })
 

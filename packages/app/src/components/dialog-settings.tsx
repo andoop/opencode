@@ -59,10 +59,12 @@ export const DialogSettings: Component = () => {
                         {language.t("settings.mcp.title")}
                       </Tabs.Trigger>
                     </Show>
-                    <Tabs.Trigger value="commands">
-                      <Icon name="console" />
-                      {language.t("settings.commands.title")}
-                    </Tabs.Trigger>
+                    <Show when={auth.canFeature("commands")}>
+                      <Tabs.Trigger value="commands">
+                        <Icon name="console" />
+                        {language.t("settings.commands.title")}
+                      </Tabs.Trigger>
+                    </Show>
                   </div>
                 </div>
               </div>
@@ -94,9 +96,11 @@ export const DialogSettings: Component = () => {
             <SettingsMcp />
           </Tabs.Content>
         </Show>
-        <Tabs.Content value="commands" class="no-scrollbar">
-          <SettingsCommands />
-        </Tabs.Content>
+        <Show when={auth.canFeature("commands")}>
+          <Tabs.Content value="commands" class="no-scrollbar">
+            <SettingsCommands />
+          </Tabs.Content>
+        </Show>
         {/* <Tabs.Content value="agents" class="no-scrollbar"> */}
         {/*   <SettingsAgents /> */}
         {/* </Tabs.Content> */}

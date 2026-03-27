@@ -6983,6 +6983,9 @@ export type CommandConfigListResponses = {
         subtask?: boolean
       }
     }
+    commands: {
+      [key: string]: boolean
+    }
   }
 }
 

@@ -18,6 +18,7 @@ export const FEATURE_DEFAULTS = {
   providers: true,
   servers: true,
   mcp: true,
+  commands: false,
 } as const
 
 export type AuthFeatures = {
@@ -31,6 +32,7 @@ export type AuthFeatures = {
   providers?: boolean
   servers?: boolean
   mcp?: boolean
+  commands?: boolean
 }
 
 export type ResolvedAuthFeatures = {
@@ -44,6 +46,7 @@ export type ResolvedAuthFeatures = {
   providers: boolean
   servers: boolean
   mcp: boolean
+  commands: boolean
 }
 
 export type AuthFeatureKey = Exclude<keyof ResolvedAuthFeatures, "modes">
@@ -57,6 +60,7 @@ export function resolveAuthFeatures(user?: Pick<AuthUser, "role" | "permission">
       providers: true,
       servers: true,
       mcp: true,
+      commands: true,
     }
   }
 
@@ -72,6 +76,7 @@ export function resolveAuthFeatures(user?: Pick<AuthUser, "role" | "permission">
     providers: feature?.providers ?? FEATURE_DEFAULTS.providers,
     servers: feature?.servers ?? FEATURE_DEFAULTS.servers,
     mcp: feature?.mcp ?? FEATURE_DEFAULTS.mcp,
+    commands: feature?.commands ?? FEATURE_DEFAULTS.commands,
   }
 }
 

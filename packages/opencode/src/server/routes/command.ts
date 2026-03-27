@@ -17,6 +17,7 @@ const CommandConfigInput = z.object({
 const CommandConfigList = z.object({
   path: z.string(),
   command: z.record(z.string(), CommandConfigInput),
+  commands: Config.Commands.default({}),
 })
 
 export const CommandRoutes = lazy(() =>
@@ -61,7 +62,12 @@ export const CommandRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await Config.getCommand())
+        const commandConfig = await Config.getCommand()
+        const globalConfig = await Config.getGlobal()
+        return c.json({
+          ...commandConfig,
+          commands: globalConfig.commands ?? {},
+        })
       },
     )
     .post(

@@ -29,6 +29,7 @@ export namespace User {
     providers: true,
     servers: true,
     mcp: true,
+    commands: false,
   } as const
 
   // Permission schemas
@@ -60,6 +61,7 @@ export namespace User {
     providers: z.boolean().optional(),
     servers: z.boolean().optional(),
     mcp: z.boolean().optional(),
+    commands: z.boolean().optional(),
   })
   export type Features = z.infer<typeof Features>
 
@@ -74,6 +76,7 @@ export namespace User {
     providers: boolean
     servers: boolean
     mcp: boolean
+    commands: boolean
   }
 
   export type FeatureKey = Exclude<keyof ResolvedFeatures, "modes">
@@ -172,6 +175,7 @@ export namespace User {
         providers: true,
         servers: true,
         mcp: true,
+        commands: true,
       }
     }
 
@@ -187,6 +191,7 @@ export namespace User {
       providers: feature?.providers ?? FEATURE_DEFAULTS.providers,
       servers: feature?.servers ?? FEATURE_DEFAULTS.servers,
       mcp: feature?.mcp ?? FEATURE_DEFAULTS.mcp,
+      commands: feature?.commands ?? FEATURE_DEFAULTS.commands,
     }
   }
 
