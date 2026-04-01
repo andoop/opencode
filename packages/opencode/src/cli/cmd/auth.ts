@@ -12,6 +12,7 @@ import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import type { Hooks } from "@opencode-ai/plugin"
 import { CursorCLI } from "../../cursor/cli"
+import { KiroCLI } from "../../kiro/cli"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -276,6 +277,16 @@ export const AuthLoginCommand = cmd({
               models: {},
             }
           }
+          if (KiroCLI.available() && (enabled ? enabled.has("kiro-cli") : true) && !disabled.has("kiro-cli")) {
+            filtered["kiro-cli"] = {
+              id: "kiro-cli",
+              name: "Kiro CLI",
+              env: [],
+              api: "local://kiro-cli",
+              npm: "opencode-kiro-cli",
+              models: {},
+            }
+          }
           return filtered
         })
 
@@ -288,6 +299,7 @@ export const AuthLoginCommand = cmd({
           openrouter: 5,
           vercel: 6,
           "cursor-cli": 7,
+          "kiro-cli": 8,
         }
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -308,6 +320,7 @@ export const AuthLoginCommand = cmd({
                   anthropic: "Claude Max or API key",
                   openai: "ChatGPT Plus/Pro or API key",
                   "cursor-cli": "uses local Cursor CLI login",
+                  "kiro-cli": "uses local Kiro CLI login",
                 }[x.id],
               })),
             ),
@@ -368,6 +381,13 @@ export const AuthLoginCommand = cmd({
         if (provider === "cursor-cli") {
           prompts.log.info("Cursor CLI uses your local `agent` installation and existing Cursor login.")
           prompts.log.info("Run `agent login` if you have not signed in yet.")
+          prompts.outro("Done")
+          return
+        }
+
+        if (provider === "kiro-cli") {
+          prompts.log.info("Kiro CLI uses your local `kiro-cli` installation and existing Kiro login.")
+          prompts.log.info("Run `kiro-cli login` if you have not signed in yet.")
           prompts.outro("Done")
           return
         }

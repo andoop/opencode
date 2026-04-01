@@ -8,6 +8,7 @@ export const popularProviders = [
   "anthropic",
   "github-copilot",
   "cursor-cli",
+  "kiro-cli",
   "openai",
   "google",
   "openrouter",

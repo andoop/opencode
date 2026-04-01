@@ -41,6 +41,7 @@ import { createGitLab, VERSION as GITLAB_PROVIDER_VERSION } from "@gitlab/gitlab
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { CursorCLI } from "@/cursor/cli"
+import { KiroCLI } from "@/kiro/cli"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -513,6 +514,12 @@ export namespace Provider {
         options: {},
       }
     },
+    "kiro-cli": async () => {
+      return {
+        autoload: KiroCLI.available(),
+        options: {},
+      }
+    },
   }
 
   export const Model = z
@@ -769,6 +776,55 @@ export namespace Provider {
     }
   }
 
+  function kiroModel(id: string, name: string, context = 200_000, reasoning = false): Model {
+    return {
+      id,
+      providerID: "kiro-cli",
+      api: { id, url: "local://kiro-cli", npm: "opencode-kiro-cli" },
+      name,
+      family: "kiro",
+      capabilities: {
+        temperature: false,
+        reasoning,
+        attachment: true,
+        toolcall: true,
+        input: { text: true, audio: false, image: true, video: false, pdf: true },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      limit: { context, output: 32_000 },
+      status: "active",
+      options: {},
+      headers: {},
+      release_date: "",
+      variants: {},
+    }
+  }
+
+  function kiroProvider(): Info {
+    const defs: Array<[id: string, name: string, context?: number, reasoning?: boolean]> = [
+      ["auto", "Auto", 1_000_000],
+      ["claude-opus-4.6", "Claude Opus 4.6", 1_000_000],
+      ["claude-sonnet-4.6", "Claude Sonnet 4.6", 1_000_000],
+      ["deepseek-3.2", "DeepSeek 3.2", 164_000],
+      ["minimax-m2.5", "MiniMax M2.5", 196_000],
+      ["qwen3-coder-next", "Qwen3 Coder Next", 256_000],
+    ]
+    const models: Record<string, Model> = {}
+    for (const [id, name, context, reasoning] of defs) {
+      models[id] = kiroModel(id, name, context, reasoning)
+    }
+    return {
+      id: "kiro-cli",
+      source: "custom",
+      name: "Kiro CLI",
+      env: [],
+      options: {},
+      models,
+    }
+  }
+
   const state = Instance.state(async () => {
     using _ = log.time("state")
     const config = await Config.get()
@@ -776,6 +832,9 @@ export namespace Provider {
     const database = mapValues(modelsDev, fromModelsDevProvider)
     if (CursorCLI.available()) {
       database["cursor-cli"] = cursorProvider()
+    }
+    if (KiroCLI.available()) {
+      database["kiro-cli"] = kiroProvider()
     }
 
     const disabled = new Set(config.disabled_providers ?? [])

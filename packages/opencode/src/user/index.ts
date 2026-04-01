@@ -17,6 +17,7 @@ export namespace User {
     "cursor-cli/composer-1.5",
     "cursor-cli/composer-2",
     "cursor-cli/composer-2-fast",
+    "kiro-cli/auto",
   ] as const
   const FEATURE_DEFAULTS = {
     modes: {

@@ -10,6 +10,7 @@ const SUPPORTED_IDES = [
   { name: "Visual Studio Code - Insiders" as const, cmd: "code-insiders" },
   { name: "Visual Studio Code" as const, cmd: "code" },
   { name: "Cursor" as const, cmd: "cursor" },
+  { name: "Kiro" as const, cmd: "kiro-cli" },
   { name: "VSCodium" as const, cmd: "codium" },
 ]
 
@@ -45,7 +46,7 @@ export namespace Ide {
   }
 
   export function alreadyInstalled() {
-    return ["vscode", "vscode-insiders", "cursor"].includes(process.env["OPENCODE_CALLER"] ?? "")
+    return ["vscode", "vscode-insiders", "cursor", "kiro"].includes(process.env["OPENCODE_CALLER"] ?? "")
   }
 
   export async function install(ide: (typeof SUPPORTED_IDES)[number]["name"]) {

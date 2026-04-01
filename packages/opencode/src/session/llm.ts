@@ -23,6 +23,7 @@ import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
 import { CursorCLI } from "@/cursor/cli"
+import { KiroCLI } from "@/kiro/cli"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -156,6 +157,20 @@ export namespace LLM {
 
     if (provider.id === "cursor-cli") {
       return CursorCLI.stream({
+        sessionID: input.sessionID,
+        assistantMessageID: input.assistantMessageID,
+        modelID: input.model.id,
+        agent: input.agent.name,
+        cwd: Instance.directory,
+        system,
+        messages: input.messages,
+        abort: input.abort,
+        allowedTools: Object.keys(tools),
+      })
+    }
+
+    if (provider.id === "kiro-cli") {
+      return KiroCLI.stream({
         sessionID: input.sessionID,
         assistantMessageID: input.assistantMessageID,
         modelID: input.model.id,

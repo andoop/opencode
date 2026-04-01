@@ -27,6 +27,7 @@ import { WebCommand } from "./cli/cmd/web"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
 import { CursorBridgeCommand } from "./cli/cmd/cursor-bridge"
+import { KiroBridgeCommand } from "./cli/cmd/kiro-bridge"
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -99,6 +100,7 @@ const cli = yargs(hideBin(process.argv))
   .command(PrCommand)
   .command(SessionCommand)
   .command(CursorBridgeCommand)
+  .command(KiroBridgeCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
