@@ -446,6 +446,7 @@ export namespace Session {
     workspaceProject: Workspace.ProjectInfo
     sessionID: string
     sessionDirectory: string
+    baseBranch?: string
   }) {
     const sessionWorktreeDirectory = path.join(input.sessionDirectory, "roots", input.workspaceProject.slug)
     const userWorktreeDirectory = await UserWorktree.getOrCreate(
@@ -467,10 +468,10 @@ export namespace Session {
       })
     }
     const branch = `session/${input.sessionID}`
-    const baseBranch = await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
-    const baseCommit = await gitText(userWorktreeDirectory, ["rev-parse", "HEAD"])
+    const baseBranch = input.baseBranch ?? await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
+    const baseCommit = await gitText(userWorktreeDirectory, ["rev-parse", baseBranch!])
     await fs.mkdir(path.dirname(sessionWorktreeDirectory), { recursive: true })
-    const created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory}`
+    const created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit!}`
       .quiet()
       .nothrow()
       .cwd(userWorktreeDirectory)
@@ -518,6 +519,7 @@ export namespace Session {
         title: z.string().optional(),
         permission: Info.shape.permission,
         workspaceID: z.string().optional(),
+        branches: z.record(z.string(), z.string()).optional(),
       })
       .optional(),
     async (input) => {
@@ -526,6 +528,7 @@ export namespace Session {
         directory: Instance.directory,
         title: input?.title,
         permission: input?.permission,
+        branches: input?.branches,
       })
     },
   )
@@ -585,6 +588,7 @@ export namespace Session {
     directory: string
     permission?: PermissionNext.Ruleset
     userID?: string
+    branches?: Record<string, string>
   }) {
     const userID = input.userID ?? currentUserID()
     const sessionID = Identifier.descending("session", input.id)
@@ -597,6 +601,7 @@ export namespace Session {
           workspaceProject: project,
           sessionID,
           sessionDirectory,
+          baseBranch: input.branches?.[project.projectID],
         }),
       ),
     )

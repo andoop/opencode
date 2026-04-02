@@ -46,6 +46,7 @@ import { User } from "../user"
 import { UserAuth } from "../user/auth"
 import { UserAuthRoutes } from "./routes/user-auth"
 import { UserRoutes } from "./routes/user"
+import { BranchRoutes } from "./routes/branch"
 import { BrowseRoutes } from "./routes/browse"
 import { CommandRoutes } from "./routes/command"
 import { WorkspaceRoutes } from "./routes/workspace"
@@ -383,6 +384,7 @@ export namespace Server {
         .route("/provider", ProviderRoutes())
         .route("/", FileRoutes())
         .route("/mcp", McpRoutes())
+        .route("/branch", BranchRoutes())
         .route("/tui", TuiRoutes())
         .post(
           "/instance/dispose",
