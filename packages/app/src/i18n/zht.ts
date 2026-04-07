@@ -250,6 +250,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "搜尋資料夾",
   "dialog.directory.empty": "找不到資料夾",
+  "dialog.directory.path.invalid": "路徑無效或無法存取",
+  "dialog.directory.path.placeholder": "/Volumes/... 或任意絕對路徑",
+  "dialog.directory.path.go": "前往",
+  "dialog.directory.path.reset": "重設",
+  "dialog.directory.path.current": "目前根目錄",
 
   "dialog.server.title": "伺服器",
   "dialog.server.description": "切換此應用程式連線的 OpenCode 伺服器。",

@@ -248,6 +248,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "フォルダを検索",
   "dialog.directory.empty": "フォルダが見つかりません",
+  "dialog.directory.path.invalid": "パスが無効かアクセスできません",
+  "dialog.directory.path.placeholder": "/Volumes/... または絶対パス",
+  "dialog.directory.path.go": "移動",
+  "dialog.directory.path.reset": "リセット",
+  "dialog.directory.path.current": "現在のルート",
 
   "dialog.server.title": "サーバー",
   "dialog.server.description": "このアプリが接続するOpenCodeサーバーを切り替えます。",

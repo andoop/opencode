@@ -249,6 +249,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Buscar carpetas",
   "dialog.directory.empty": "No se encontraron carpetas",
+  "dialog.directory.path.invalid": "Ruta no válida o sin acceso",
+  "dialog.directory.path.placeholder": "/Volumes/... o ruta absoluta",
+  "dialog.directory.path.go": "Ir",
+  "dialog.directory.path.reset": "Restablecer",
+  "dialog.directory.path.current": "Raíz actual",
 
   "dialog.server.title": "Servidores",
   "dialog.server.description": "Cambiar a qué servidor de OpenCode se conecta esta app.",

@@ -249,6 +249,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Rechercher des dossiers",
   "dialog.directory.empty": "Aucun dossier trouvé",
+  "dialog.directory.path.invalid": "Chemin invalide ou inaccessible",
+  "dialog.directory.path.placeholder": "/Volumes/... ou chemin absolu",
+  "dialog.directory.path.go": "Aller",
+  "dialog.directory.path.reset": "Réinitialiser",
+  "dialog.directory.path.current": "Racine actuelle",
 
   "dialog.server.title": "Serveurs",
   "dialog.server.description": "Changez le serveur OpenCode auquel cette application se connecte.",

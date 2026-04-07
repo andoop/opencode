@@ -249,6 +249,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Поиск папок",
   "dialog.directory.empty": "Папки не найдены",
+  "dialog.directory.path.invalid": "Неверный путь или нет доступа",
+  "dialog.directory.path.placeholder": "/Volumes/... или абсолютный путь",
+  "dialog.directory.path.go": "Перейти",
+  "dialog.directory.path.reset": "Сбросить",
+  "dialog.directory.path.current": "Текущий корень",
 
   "dialog.server.title": "Серверы",
   "dialog.server.description": "Переключите сервер OpenCode к которому подключается приложение.",

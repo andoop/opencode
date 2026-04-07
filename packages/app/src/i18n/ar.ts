@@ -249,6 +249,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "البحث في المجلدات",
   "dialog.directory.empty": "لم يتم العثور على مجلدات",
+  "dialog.directory.path.invalid": "مسار غير صالح أو لا يمكن الوصول",
+  "dialog.directory.path.placeholder": "/Volumes/... أو مسار مطلق",
+  "dialog.directory.path.go": "انتقال",
+  "dialog.directory.path.reset": "إعادة تعيين",
+  "dialog.directory.path.current": "المجلد الجذر الحالي",
 
   "dialog.server.title": "الخوادم",
   "dialog.server.description": "تبديل خادم OpenCode الذي يتصل به هذا التطبيق.",

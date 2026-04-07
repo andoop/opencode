@@ -36,6 +36,9 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   const [loadingPaths, setLoadingPaths] = createSignal<Set<string>>(new Set())
   const [directoryCache, setDirectoryCache] = createSignal<Map<string, DirectoryNode[]>>(new Map())
   const [currentPath, setCurrentPath] = createSignal<string>("")
+  const [manualPath, setManualPath] = createSignal("")
+  const [manualRoot, setManualRoot] = createSignal<string | null>(null)
+  const [manualError, setManualError] = createSignal("")
 
   const missingBase = createMemo(() => !(sync.data.path.home || sync.data.path.directory))
 
@@ -52,9 +55,11 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
   const home = createMemo(() => sync.data.path.home || fallbackPath()?.home || "")
 
-  const rootPath = createMemo(
+  const defaultRoot = createMemo(
     () => sync.data.path.home || sync.data.path.directory || fallbackPath()?.home || fallbackPath()?.directory || "/",
   )
+
+  const rootPath = createMemo(() => manualRoot() ?? defaultRoot())
 
   function normalize(input: string) {
     const v = input.replaceAll("\\", "/")
@@ -151,6 +156,28 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
       return await loadDirectory(path)
     },
   )
+
+  async function navigateTo(input: string) {
+    const target = trimTrailing(input.trim())
+    if (!target) return
+    setManualError("")
+    try {
+      const nodes = await sdk.client.browse
+        .list({ directory: target, path: "", type: "directory", limit: 1 })
+        .then((x) => x.data)
+      if (!nodes) {
+        setManualError(language.t("dialog.directory.path.invalid") || "路径无效或无法访问")
+        return
+      }
+      setDirectoryCache(new Map())
+      setExpandedPaths(new Set([""]))
+      setCurrentPath("")
+      setManualRoot(target)
+      setManualPath("")
+    } catch {
+      setManualError(language.t("dialog.directory.path.invalid") || "路径无效或无法访问")
+    }
+  }
 
   async function toggleExpand(path: string) {
     const key = trimTrailing(path)
@@ -324,6 +351,50 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           <Button variant="ghost" onClick={cancel}>
             {language.t("common.cancel")}
           </Button>
+        </div>
+
+        {/* 路径输入 */}
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder={language.t("dialog.directory.path.placeholder") || "/Volumes/... 或任意绝对路径"}
+              value={manualPath()}
+              onInput={(e) => {
+                setManualPath(e.currentTarget.value)
+                setManualError("")
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") navigateTo(manualPath())
+              }}
+              class="flex-1 px-3 py-2 rounded-md border border-border-base bg-background-base text-14-regular text-text-strong focus:outline-none focus:ring-2 focus:ring-border-strong-base font-mono"
+            />
+            <Button variant="ghost" onClick={() => navigateTo(manualPath())}>
+              {language.t("dialog.directory.path.go") || "前往"}
+            </Button>
+            <Show when={manualRoot()}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setManualRoot(null)
+                  setDirectoryCache(new Map())
+                  setExpandedPaths(new Set([""]))
+                  setManualPath("")
+                  setManualError("")
+                }}
+              >
+                {language.t("dialog.directory.path.reset") || "重置"}
+              </Button>
+            </Show>
+          </div>
+          <Show when={manualError()}>
+            <span class="text-12-regular text-text-danger">{manualError()}</span>
+          </Show>
+          <Show when={manualRoot()}>
+            <span class="text-12-regular text-text-weak">
+              {language.t("dialog.directory.path.current") || "当前根目录"}: {manualRoot()}
+            </span>
+          </Show>
         </div>
 
         {/* 面包屑导航 */}

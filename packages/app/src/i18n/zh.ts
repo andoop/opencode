@@ -255,6 +255,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "搜索文件夹",
   "dialog.directory.empty": "未找到文件夹",
+  "dialog.directory.path.invalid": "路径无效或无法访问",
+  "dialog.directory.path.placeholder": "/Volumes/... 或任意绝对路径",
+  "dialog.directory.path.go": "前往",
+  "dialog.directory.path.reset": "重置",
+  "dialog.directory.path.current": "当前根目录",
 
   "dialog.server.title": "服务器",
   "dialog.server.description": "切换此应用连接的 RealseeCode 服务器。",

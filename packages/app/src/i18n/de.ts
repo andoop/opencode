@@ -254,6 +254,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Ordner durchsuchen",
   "dialog.directory.empty": "Keine Ordner gefunden",
+  "dialog.directory.path.invalid": "Ungültiger Pfad oder kein Zugriff",
+  "dialog.directory.path.placeholder": "/Volumes/... oder absoluter Pfad",
+  "dialog.directory.path.go": "Los",
+  "dialog.directory.path.reset": "Zurücksetzen",
+  "dialog.directory.path.current": "Aktuelles Stammverzeichnis",
 
   "dialog.server.title": "Server",
   "dialog.server.description": "Wechseln Sie den OpenCode-Server, mit dem sich diese App verbindet.",

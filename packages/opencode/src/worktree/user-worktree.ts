@@ -73,14 +73,24 @@ export namespace UserWorktree {
 
     const userWorktreeDir = getUserWorktreePath(projectID, user.id)
 
-    // If user worktree already exists, return it
+    // If user worktree already exists, verify it's a valid git worktree
     if (await exists(userWorktreeDir)) {
-      log.info("using_existing_worktree", {
+      const check = await $`git rev-parse --git-dir`.quiet().nothrow().cwd(userWorktreeDir)
+      if (check.exitCode === 0) {
+        log.info("using_existing_worktree", {
+          userID: user.id,
+          projectID,
+          directory: userWorktreeDir,
+        })
+        return userWorktreeDir
+      }
+      // worktree directory exists but git ref is broken, remove and recreate
+      log.warn("stale_worktree_detected", {
         userID: user.id,
         projectID,
         directory: userWorktreeDir,
       })
-      return userWorktreeDir
+      await fs.rm(userWorktreeDir, { recursive: true, force: true }).catch(() => {})
     }
 
     // Create new user worktree

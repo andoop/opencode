@@ -258,6 +258,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Search folders",
   "dialog.directory.empty": "No folders found",
+  "dialog.directory.path.invalid": "Invalid path or cannot access",
+  "dialog.directory.path.placeholder": "/Volumes/... or any absolute path",
+  "dialog.directory.path.go": "Go",
+  "dialog.directory.path.reset": "Reset",
+  "dialog.directory.path.current": "Current root",
 
   "dialog.server.title": "Servers",
   "dialog.server.description": "Switch which RealseeCode server this app connects to.",

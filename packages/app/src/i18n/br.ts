@@ -248,6 +248,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Buscar pastas",
   "dialog.directory.empty": "Nenhuma pasta encontrada",
+  "dialog.directory.path.invalid": "Caminho inválido ou sem acesso",
+  "dialog.directory.path.placeholder": "/Volumes/... ou caminho absoluto",
+  "dialog.directory.path.go": "Ir",
+  "dialog.directory.path.reset": "Redefinir",
+  "dialog.directory.path.current": "Raiz atual",
 
   "dialog.server.title": "Servidores",
   "dialog.server.description": "Trocar para qual servidor OpenCode este aplicativo se conecta.",

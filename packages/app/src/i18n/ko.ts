@@ -252,6 +252,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "폴더 검색",
   "dialog.directory.empty": "폴더 없음",
+  "dialog.directory.path.invalid": "경로가 잘못되었거나 액세스할 수 없습니다",
+  "dialog.directory.path.placeholder": "/Volumes/... 또는 절대 경로",
+  "dialog.directory.path.go": "이동",
+  "dialog.directory.path.reset": "초기화",
+  "dialog.directory.path.current": "현재 루트",
 
   "dialog.server.title": "서버",
   "dialog.server.description": "이 앱이 연결할 OpenCode 서버를 전환합니다.",

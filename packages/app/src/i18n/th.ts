@@ -254,6 +254,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "ค้นหาโฟลเดอร์",
   "dialog.directory.empty": "ไม่พบโฟลเดอร์",
+  "dialog.directory.path.invalid": "เส้นทางไม่ถูกต้องหรือเข้าไม่ได้",
+  "dialog.directory.path.placeholder": "/Volumes/... หรือเส้นทางแบบสัมบูรณ์",
+  "dialog.directory.path.go": "ไป",
+  "dialog.directory.path.reset": "รีเซ็ต",
+  "dialog.directory.path.current": "รูทปัจจุบัน",
 
   "dialog.server.title": "เซิร์ฟเวอร์",
   "dialog.server.description": "สลับเซิร์ฟเวอร์ OpenCode ที่แอปนี้เชื่อมต่อด้วย",

@@ -249,6 +249,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Szukaj folderów",
   "dialog.directory.empty": "Nie znaleziono folderów",
+  "dialog.directory.path.invalid": "Nieprawidłowa ścieżka lub brak dostępu",
+  "dialog.directory.path.placeholder": "/Volumes/... lub ścieżka bezwzględna",
+  "dialog.directory.path.go": "Idź",
+  "dialog.directory.path.reset": "Resetuj",
+  "dialog.directory.path.current": "Bieżący katalog główny",
 
   "dialog.server.title": "Serwery",
   "dialog.server.description": "Przełącz serwer OpenCode, z którym łączy się ta aplikacja.",

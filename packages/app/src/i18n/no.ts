@@ -252,6 +252,11 @@ export const dict = {
 
   "dialog.directory.search.placeholder": "Søk etter mapper",
   "dialog.directory.empty": "Ingen mapper funnet",
+  "dialog.directory.path.invalid": "Ugyldig sti eller ingen tilgang",
+  "dialog.directory.path.placeholder": "/Volumes/... eller absolutt sti",
+  "dialog.directory.path.go": "Gå",
+  "dialog.directory.path.reset": "Tilbakestill",
+  "dialog.directory.path.current": "Gjeldende rot",
 
   "dialog.server.title": "Servere",
   "dialog.server.description": "Bytt hvilken OpenCode-server denne appen kobler til.",

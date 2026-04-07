@@ -471,10 +471,19 @@ export namespace Session {
     const baseBranch = input.baseBranch ?? await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
     const baseCommit = await gitText(userWorktreeDirectory, ["rev-parse", baseBranch!])
     await fs.mkdir(path.dirname(sessionWorktreeDirectory), { recursive: true })
-    const created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit!}`
+    await $`git worktree prune`.quiet().nothrow().cwd(userWorktreeDirectory)
+    let created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit!}`
       .quiet()
       .nothrow()
       .cwd(userWorktreeDirectory)
+    if (created.exitCode !== 0) {
+      // delete stale branch and retry
+      await $`git branch -D ${branch}`.quiet().nothrow().cwd(userWorktreeDirectory)
+      created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit!}`
+        .quiet()
+        .nothrow()
+        .cwd(userWorktreeDirectory)
+    }
     if (created.exitCode !== 0) {
       const message =
         outputText(created.stderr) || outputText(created.stdout) || "Failed to create session root worktree"
