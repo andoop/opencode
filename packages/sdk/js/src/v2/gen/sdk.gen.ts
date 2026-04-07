@@ -13,6 +13,8 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  BranchListResponses,
+  BranchRefreshResponses,
   BrowseListResponses,
   CommandConfigCreateErrors,
   CommandConfigCreateResponses,
@@ -797,6 +799,7 @@ export class User extends HeyApiClient {
           providers?: boolean
           servers?: boolean
           mcp?: boolean
+          commands?: boolean
         }
         models?: Array<string> | null
       }
@@ -899,6 +902,7 @@ export class User extends HeyApiClient {
           providers?: boolean
           servers?: boolean
           mcp?: boolean
+          commands?: boolean
         }
         models?: Array<string> | null
       }
@@ -2005,6 +2009,9 @@ export class Session extends HeyApiClient {
       title?: string
       permission?: PermissionRuleset
       workspaceID?: string
+      branches?: {
+        [key: string]: string
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2018,6 +2025,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "title" },
             { in: "body", key: "permission" },
             { in: "body", key: "workspaceID" },
+            { in: "body", key: "branches" },
           ],
         },
       ],
@@ -4048,6 +4056,70 @@ export class Mcp extends HeyApiClient {
   }
 }
 
+export class Branch extends HeyApiClient {
+  /**
+   * List branches
+   *
+   * Get local and remote branches for a git directory.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<BranchListResponses, unknown, ThrowOnError>({
+      url: "/branch/list",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Refresh branches
+   *
+   * Run git fetch and return updated branch list.
+   */
+  public refresh<ThrowOnError extends boolean = false>(
+    parameters?: {
+      query_directory?: string
+      body_directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<BranchRefreshResponses, unknown, ThrowOnError>({
+      url: "/branch/refresh",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Control extends HeyApiClient {
   /**
    * Get next TUI request
@@ -4909,6 +4981,11 @@ export class OpencodeClient extends HeyApiClient {
   private _mcp?: Mcp
   get mcp(): Mcp {
     return (this._mcp ??= new Mcp({ client: this.client }))
+  }
+
+  private _branch?: Branch
+  get branch(): Branch {
+    return (this._branch ??= new Branch({ client: this.client }))
   }
 
   private _tui?: Tui

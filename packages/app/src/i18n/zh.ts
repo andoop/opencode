@@ -856,4 +856,14 @@ export const dict = {
   "workspace.reset.archived.one": "将归档 1 个会话。",
   "workspace.reset.archived.many": "将归档 {{count}} 个会话。",
   "workspace.reset.note": "这将把工作区重置为与默认分支一致。",
+
+  "dialog.branch.title": "选择分支",
+  "dialog.branch.search.placeholder": "搜索分支",
+  "dialog.branch.local": "本地",
+  "dialog.branch.remote": "远程",
+  "dialog.branch.empty": "未找到分支",
+  "dialog.branch.current": "当前",
+  "dialog.branch.refresh": "刷新",
+  "dialog.branch.refreshing": "刷新中...",
+  "dialog.branch.skip": "跳过",
 } satisfies Partial<Record<Keys, string>>

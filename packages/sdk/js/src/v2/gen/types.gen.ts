@@ -101,6 +101,7 @@ export type EventUserCreated = {
           providers?: boolean
           servers?: boolean
           mcp?: boolean
+          commands?: boolean
         }
         models?: Array<string> | null
       }
@@ -142,6 +143,7 @@ export type EventUserUpdated = {
           providers?: boolean
           servers?: boolean
           mcp?: boolean
+          commands?: boolean
         }
         models?: Array<string> | null
       }
@@ -183,6 +185,7 @@ export type EventUserDeleted = {
           providers?: boolean
           servers?: boolean
           mcp?: boolean
+          commands?: boolean
         }
         models?: Array<string> | null
       }
@@ -633,35 +636,6 @@ export type EventMessagePartRemoved = {
   }
 }
 
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "busy"
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
 export type QuestionOption = {
   /**
    * Display text (1-5 words, concise)
@@ -730,13 +704,6 @@ export type EventQuestionRejected = {
   properties: {
     sessionID: string
     requestID: string
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
   }
 }
 
@@ -1049,6 +1016,42 @@ export type EventMcpBrowserOpenFailed = {
   }
 }
 
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "busy"
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -1226,12 +1229,9 @@ export type Event =
   | EventMessageRemoved
   | EventMessagePartUpdated
   | EventMessagePartRemoved
-  | EventSessionStatus
-  | EventSessionIdle
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
-  | EventSessionCompacted
   | EventSelectAsked
   | EventSelectReplied
   | EventSelectRejected
@@ -1249,6 +1249,9 @@ export type Event =
   | EventTuiSessionSelect
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventSessionCompacted
   | EventCommandExecuted
   | EventWorktreeReady
   | EventWorktreeFailed
@@ -2231,6 +2234,7 @@ export type UserAuthLoginResponse = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3154,6 +3158,7 @@ export type UserAuthMeResponses = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3247,6 +3252,7 @@ export type UserListResponses = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3286,6 +3292,7 @@ export type UserCreateData = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3338,6 +3345,7 @@ export type UserCreateResponses = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3436,6 +3444,7 @@ export type UserGetResponses = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3475,6 +3484,7 @@ export type UserUpdateData = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -3533,6 +3543,7 @@ export type UserUpdateResponses = {
         providers?: boolean
         servers?: boolean
         mcp?: boolean
+        commands?: boolean
       }
       models?: Array<string> | null
     }
@@ -4437,6 +4448,9 @@ export type SessionCreateData = {
     title?: string
     permission?: PermissionRuleset
     workspaceID?: string
+    branches?: {
+      [key: string]: string
+    }
   }
   path?: never
   query?: {
@@ -6593,6 +6607,58 @@ export type McpDisconnectResponses = {
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
 
+export type BranchListData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Git directory path
+     */
+    directory: string
+  }
+  url: "/branch/list"
+}
+
+export type BranchListResponses = {
+  /**
+   * Branch list
+   */
+  200: {
+    local: Array<string>
+    remote: Array<string>
+    current?: string
+  }
+}
+
+export type BranchListResponse = BranchListResponses[keyof BranchListResponses]
+
+export type BranchRefreshData = {
+  body?: {
+    /**
+     * Git directory path
+     */
+    directory: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/branch/refresh"
+}
+
+export type BranchRefreshResponses = {
+  /**
+   * Updated branch list
+   */
+  200: {
+    local: Array<string>
+    remote: Array<string>
+    current?: string
+  }
+}
+
+export type BranchRefreshResponse = BranchRefreshResponses[keyof BranchRefreshResponses]
+
 export type TuiAppendPromptData = {
   body?: {
     text: string
@@ -6983,7 +7049,10 @@ export type CommandConfigListResponses = {
         subtask?: boolean
       }
     }
-    commands: {
+    /**
+     * Enable or disable commands by name. Use slash names for system commands and command names for custom commands.
+     */
+    commands?: {
       [key: string]: boolean
     }
   }
@@ -7033,6 +7102,12 @@ export type CommandConfigCreateResponses = {
         subtask?: boolean
       }
     }
+    /**
+     * Enable or disable commands by name. Use slash names for system commands and command names for custom commands.
+     */
+    commands?: {
+      [key: string]: boolean
+    }
   }
 }
 
@@ -7072,6 +7147,12 @@ export type CommandConfigDeleteResponses = {
         model?: string
         subtask?: boolean
       }
+    }
+    /**
+     * Enable or disable commands by name. Use slash names for system commands and command names for custom commands.
+     */
+    commands?: {
+      [key: string]: boolean
     }
   }
 }
@@ -7120,6 +7201,12 @@ export type CommandConfigUpdateResponses = {
         model?: string
         subtask?: boolean
       }
+    }
+    /**
+     * Enable or disable commands by name. Use slash names for system commands and command names for custom commands.
+     */
+    commands?: {
+      [key: string]: boolean
     }
   }
 }

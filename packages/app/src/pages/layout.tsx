@@ -70,6 +70,7 @@ import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { navStart } from "@/utils/perf"
 import { DialogSelectProject } from "@/components/dialog-select-project"
+import { DialogSelectBranch } from "@/components/dialog-select-branch"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
@@ -2987,11 +2988,31 @@ export default function Layout(props: ParentProps) {
     layout.mobileSidebar.hide()
   }
 
+  const selectBranch = (directory: string, projectName: string) =>
+    new Promise<string | null>((resolve) => {
+      let resolved = false
+      const done = (v: string | null) => {
+        if (resolved) return
+        resolved = true
+        resolve(v)
+      }
+      dialog.show(
+        () => <DialogSelectBranch directory={directory} projectName={projectName} onSelect={done} />,
+        () => done(null),
+      )
+    })
+
   const createSession = async (project: LocalProject) => {
     if (state.creatingSession.open && state.creatingSession.status === "running") return
     if (!layout.sidebar.opened()) {
       setState("hoverSession", undefined)
       setState("hoverProject", undefined)
+    }
+
+    let branches: Record<string, string> | undefined
+    if (project.vcs === "git" && project.id) {
+      const branch = await selectBranch(project.worktree, project.name || getFilename(project.worktree))
+      if (branch) branches = { [project.id]: branch }
     }
 
     setState("creatingSession", {
@@ -3008,7 +3029,7 @@ export default function Layout(props: ParentProps) {
     }
 
     const created = await clientForDirectory(project.worktree)
-      .session.create({})
+      .session.create({ branches })
       .then((x) => x.data)
       .catch((err) => {
         fail(errorMessage(err), "create")

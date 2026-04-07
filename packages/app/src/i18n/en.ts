@@ -873,4 +873,14 @@ export const dict = {
   "workspace.reset.archived.one": "1 session will be archived.",
   "workspace.reset.archived.many": "{{count}} sessions will be archived.",
   "workspace.reset.note": "This will reset the workspace to match the default branch.",
+
+  "dialog.branch.title": "Select branch",
+  "dialog.branch.search.placeholder": "Search branches",
+  "dialog.branch.local": "Local",
+  "dialog.branch.remote": "Remote",
+  "dialog.branch.empty": "No branches found",
+  "dialog.branch.current": "current",
+  "dialog.branch.refresh": "Refresh",
+  "dialog.branch.refreshing": "Refreshing...",
+  "dialog.branch.skip": "Skip",
 }

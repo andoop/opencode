@@ -764,4 +764,14 @@ export const dict = {
   "workspace.reset.archived.one": "將封存 1 個工作階段。",
   "workspace.reset.archived.many": "將封存 {{count}} 個工作階段。",
   "workspace.reset.note": "這將把工作區重設為與預設分支一致。",
+
+  "dialog.branch.title": "選擇分支",
+  "dialog.branch.search.placeholder": "搜尋分支",
+  "dialog.branch.local": "本機",
+  "dialog.branch.remote": "遠端",
+  "dialog.branch.empty": "找不到分支",
+  "dialog.branch.current": "目前",
+  "dialog.branch.refresh": "重新整理",
+  "dialog.branch.refreshing": "重新整理中...",
+  "dialog.branch.skip": "略過",
 } satisfies Partial<Record<Keys, string>>
