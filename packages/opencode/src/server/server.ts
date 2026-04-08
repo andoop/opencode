@@ -49,6 +49,7 @@ import { UserRoutes } from "./routes/user"
 import { BranchRoutes } from "./routes/branch"
 import { BrowseRoutes } from "./routes/browse"
 import { CommandRoutes } from "./routes/command"
+import { GitRoutes } from "./routes/git"
 import { WorkspaceRoutes } from "./routes/workspace"
 import { Workspace } from "@/workspace"
 
@@ -338,6 +339,7 @@ export namespace Server {
           if (c.req.path === "/log") return next()
           if (c.req.path === "/session" && c.req.method === "GET" && c.req.query("directory")) return next()
           if (c.req.method === "GET" && c.req.path.startsWith("/branch/") && c.req.query("directory")) return next()
+          if (c.req.method === "GET" && c.req.path.startsWith("/git/") && c.req.query("directory")) return next()
           if (isReadonlyDirectoryRequest(c.req.method, c.req.path)) return next()
           const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
           const directory = (() => {
@@ -386,6 +388,7 @@ export namespace Server {
         .route("/", FileRoutes())
         .route("/mcp", McpRoutes())
         .route("/branch", BranchRoutes())
+        .route("/git", GitRoutes())
         .route("/tui", TuiRoutes())
         .post(
           "/instance/dispose",

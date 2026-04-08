@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs"
 import { $ } from "bun"
 import { Log } from "@/util/log"
+import { Filesystem } from "@/util/filesystem"
 import { Project } from "@/project/project"
 import { UserWorktree } from "@/worktree/user-worktree"
 import { Workspace } from "@/workspace"
@@ -16,6 +17,15 @@ async function resolveGitWorktree(requested: string) {
   const scoped = await Workspace.fromDirectory(absolute)
   if (scoped) {
     try {
+      const root = scoped.session?.roots.find(
+        (item) =>
+          Filesystem.contains(item.sessionWorktreeDirectory, absolute) || Filesystem.contains(item.sourceDirectory, absolute),
+      )
+      if (root?.vcs === "git") return root.sessionWorktreeDirectory
+
+      const projectRoot = scoped.workspace.projects.find((item) => Filesystem.contains(item.sourceDirectory, absolute))
+      if (projectRoot?.vcs === "git") return projectRoot.sourceDirectory
+
       const project = await Workspace.primaryProject(scoped)
       if (project.vcs !== "git") return absolute
       return (

@@ -45,6 +45,8 @@ import type {
   FindSymbolsResponses,
   FindTextResponses,
   FormatterStatusResponses,
+  GitCommitResponses,
+  GitHistoryResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
@@ -4120,6 +4122,70 @@ export class Branch extends HeyApiClient {
   }
 }
 
+export class Git extends HeyApiClient {
+  /**
+   * Get git history
+   *
+   * Get a paginated git history view for all visible refs in a directory.
+   */
+  public history<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory: string
+      limit?: number
+      cursor?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GitHistoryResponses, unknown, ThrowOnError>({
+      url: "/git/history",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get git commit detail
+   *
+   * Get commit metadata and full file diffs for a commit in a directory.
+   */
+  public commit<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory: string
+      oid: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "oid" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GitCommitResponses, unknown, ThrowOnError>({
+      url: "/git/commit",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Control extends HeyApiClient {
   /**
    * Get next TUI request
@@ -4986,6 +5052,11 @@ export class OpencodeClient extends HeyApiClient {
   private _branch?: Branch
   get branch(): Branch {
     return (this._branch ??= new Branch({ client: this.client }))
+  }
+
+  private _git?: Git
+  get git(): Git {
+    return (this._git ??= new Git({ client: this.client }))
   }
 
   private _tui?: Tui

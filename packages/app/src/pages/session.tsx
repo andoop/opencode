@@ -68,6 +68,7 @@ import { decode64 } from "@/utils/base64"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
+import { getFilename } from "@opencode-ai/util/path"
 import {
   SessionHeader,
   SessionContextTab,
@@ -75,14 +76,35 @@ import {
   FileVisual,
   SortableTerminalTab,
   NewSessionView,
+  SessionGitHistoryTab,
+  SessionGitCommitDetail,
 } from "@/components/session"
+import type { SessionGitHistoryEntry } from "@/components/session/session-git-history-tab"
+import type { SessionGitCommitDetailValue } from "@/components/session/session-git-commit-detail"
 import { navMark, navParams } from "@/utils/perf"
 import { same } from "@/utils/same"
 import { DataProvider } from "@opencode-ai/ui/context"
 import { iife } from "@opencode-ai/util/iife"
+import { workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
 
 type DiffStyle = "unified" | "split"
 type SessionCreateStep = "create" | "worktree" | "open"
+type GitHistoryPage = {
+  items: SessionGitHistoryEntry[]
+  next?: string
+}
+type GitHistoryProject = {
+  id: string
+  directory: string
+  label: string
+  prefix: string
+}
+type GitHistoryVcs = {
+  loading: boolean
+  branch?: string
+  tracking?: string
+  worktree?: string
+}
 
 const createSessionState = () => ({
   open: false,
@@ -742,7 +764,19 @@ export default function Page() {
   const [gitDiffs, setGitDiffs] = createSignal<FileDiff[]>([])
   const [gitDiffsReady, setGitDiffsReady] = createSignal(false)
   const [gitRefresh, setGitRefresh] = createSignal(0)
+  const [gitHistory, setGitHistory] = createSignal<GitHistoryPage>({ items: [] })
+  const [gitHistoryLoading, setGitHistoryLoading] = createSignal(false)
+  const [gitHistoryLoadingMore, setGitHistoryLoadingMore] = createSignal(false)
+  const [gitHistoryCommit, setGitHistoryCommit] = createSignal<SessionGitCommitDetailValue>()
+  const [gitHistoryCommitLoading, setGitHistoryCommitLoading] = createSignal(false)
+  const [gitHistoryProjects, setGitHistoryProjects] = createSignal<GitHistoryProject[]>([])
+  const [gitHistoryVcs, setGitHistoryVcs] = createSignal<GitHistoryVcs>({ loading: false })
+  const [selectedHistoryProject, setSelectedHistoryProject] = createSignal<string>()
+  const [selectedHistoryCommit, setSelectedHistoryCommit] = createSignal<string>()
   let gitStatusRequest = 0
+  let gitHistoryRequest = 0
+  let gitCommitRequest = 0
+  let gitHistoryProjectsRequest = 0
   const reviewCount = createMemo(() => gitDiffs().length)
   const hasReview = createMemo(() => reviewCount() > 0)
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
@@ -1506,7 +1540,7 @@ export default function Page() {
   const mobileReview = createMemo(() => !isDesktop() && store.mobileTab === "git")
 
   const fileTreeTab = () => layout.fileTree.tab()
-  const setFileTreeTab = (value: "all" | "git") => layout.fileTree.setTab(value)
+  const setFileTreeTab = (value: "all" | "git" | "history") => layout.fileTree.setTab(value)
 
   const [tree, setTree] = createStore({
     reviewScroll: undefined as HTMLDivElement | undefined,
@@ -1520,6 +1554,242 @@ export default function Page() {
   const setPendingDiff = (value: string | undefined) => setTree("pendingDiff", value)
   const activeDiff = () => tree.activeDiff
   const setActiveDiff = (value: string | undefined) => setTree("activeDiff", value)
+
+  const gitHeaders = () => {
+    const headers: Record<string, string> = {}
+    if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`
+    return headers
+  }
+
+  const sessionDirectoryRoot = () => {
+    const actualDir = actualSessionDir()
+    if (typeof actualDir === "string" && actualDir) return actualDir
+    if (typeof sdk.directory === "string" && sdk.directory) return sdk.directory
+    return ""
+  }
+
+  const historyProject = createMemo(() => {
+    const id = selectedHistoryProject()
+    if (!id) return gitHistoryProjects()[0]
+    return gitHistoryProjects().find((item) => item.id === id) ?? gitHistoryProjects()[0]
+  })
+
+  const historyDirectory = () => historyProject()?.directory || sessionDirectoryRoot()
+  const historyVcsDirectory = () => {
+    const project = historyProject()
+    if (!project) return sessionDirectoryRoot()
+    if (project.id === currentProject()?.id) return sessionDirectoryRoot()
+    if (project.directory === currentProject()?.worktree) return sessionDirectoryRoot()
+    return project.directory
+  }
+  const historyWorkspaceID = () => info()?.workspaceID || currentProject()?.id
+  const historyCurrentCommit = createMemo(() =>
+    gitHistory().items.find((item) => item.refs.some((ref) => ref.kind === "head")),
+  )
+  const historyCurrentBranch = createMemo(() => {
+    const head = historyCurrentCommit()
+    const ref =
+      head?.refs.find((item) => item.kind === "local") ??
+      head?.refs.find((item) => item.kind === "remote")
+    if (ref?.name) return ref.name
+
+    const project = historyProject()
+    if (!project) return sessionSyncData().vcs?.branch || gitHistoryVcs().branch
+    if (project.id === currentProject()?.id) return sessionSyncData().vcs?.branch || gitHistoryVcs().branch
+    if (project.directory === currentProject()?.worktree) return sessionSyncData().vcs?.branch || gitHistoryVcs().branch
+    return gitHistoryVcs().branch
+  })
+
+  const withHistoryPath = (detail: SessionGitCommitDetailValue) => {
+    const prefix = historyProject()?.prefix
+    if (!prefix) return detail
+    return {
+      ...detail,
+      files: detail.files.map((file) => ({
+        ...file,
+        path: `${prefix}/${file.path}`,
+      })),
+      diffs: detail.diffs.map((diff) => ({
+        ...diff,
+        file: `${prefix}/${diff.file}`,
+      })),
+    }
+  }
+
+  createEffect(
+    on(
+      () =>
+        [historyWorkspaceID(), currentProject()?.id, currentProject()?.worktree, sessionDirectoryRoot(), sdk.url, auth.token] as const,
+      async ([workspaceID, projectID, projectDir, sessionDir]) => {
+        const request = ++gitHistoryProjectsRequest
+        const prefix = (directory: string) => {
+          if (!sessionDir || directory === sessionDir) return ""
+          return directory.startsWith(`${sessionDir}/`) ? directory.slice(sessionDir.length + 1) : ""
+        }
+
+        const fallback = [
+          {
+            id: projectID || projectDir || sessionDir || "default",
+            directory: projectDir || sessionDir,
+            label: currentProject()?.name || getFilename(projectDir || sessionDir),
+            prefix: prefix(projectDir || sessionDir),
+          },
+        ].filter((item): item is GitHistoryProject => !!item.directory)
+
+        const workspaceKey = workspaceID || projectID
+        if (!workspaceKey) {
+          if (request !== gitHistoryProjectsRequest) return
+          setGitHistoryProjects(fallback)
+          setSelectedHistoryProject(fallback[0]?.id)
+          return
+        }
+
+        const workspace = await workspaceFetch<WorkspaceInfo>(
+          sdk.url,
+          `/workspace/${encodeURIComponent(workspaceKey)}`,
+          { token: auth.token ?? undefined, fetchFn: platform.fetch ?? fetch },
+        ).catch(() => undefined)
+
+        if (request !== gitHistoryProjectsRequest) return
+        if (!workspace?.projects?.length) {
+          setGitHistoryProjects(fallback)
+          setSelectedHistoryProject(fallback[0]?.id)
+          return
+        }
+
+        const projects = workspace.projects
+          .filter((item) => item.vcs === "git")
+          .map((item) => ({
+            id: item.projectID,
+            directory: item.sourceDirectory,
+            label: item.name?.trim() || item.slug || getFilename(item.sourceDirectory),
+            prefix: prefix(item.sourceDirectory),
+          }))
+
+        const next = projects.length > 0 ? projects : fallback
+        setGitHistoryProjects(next)
+        setSelectedHistoryProject((prev) => {
+          if (prev && next.some((item) => item.id === prev)) return prev
+          const current = next.find((item) => item.directory === sessionDir)
+          if (current) return current.id
+          return next[0]?.id
+        })
+      },
+      { defer: true },
+    ),
+  )
+
+  const fetchGitHistory = async (cursor?: string) => {
+    const dir = historyDirectory()
+    if (!dir) return
+
+    const request = ++gitHistoryRequest
+    if (cursor) setGitHistoryLoadingMore(true)
+    else setGitHistoryLoading(true)
+
+    try {
+      const search = new URLSearchParams({
+        directory: dir,
+        limit: "80",
+      })
+      if (cursor) search.set("cursor", cursor)
+
+      const res = await (platform.fetch ?? fetch)(`${String(sdk.url)}/git/history?${search.toString()}`, {
+        headers: gitHeaders(),
+      })
+      if (!res.ok) throw new Error(res.statusText)
+
+      const data = (await res.json()) as GitHistoryPage
+      if (request !== gitHistoryRequest) return
+
+      setGitHistory((prev) => ({
+        items: cursor ? [...prev.items, ...data.items] : data.items,
+        next: data.next,
+      }))
+
+      const current = selectedHistoryCommit()
+      if (cursor) return
+      if (!current && data.items[0]) {
+        setSelectedHistoryCommit(data.items[0].oid)
+        return
+      }
+      if (current && data.items.some((item) => item.oid === current)) return
+      setSelectedHistoryCommit(data.items[0]?.oid)
+    } catch {
+      if (request !== gitHistoryRequest) return
+      if (!cursor) {
+        setGitHistory({ items: [], next: undefined })
+        setSelectedHistoryCommit(undefined)
+        setGitHistoryCommit(undefined)
+      }
+    } finally {
+      if (request !== gitHistoryRequest) return
+      if (cursor) setGitHistoryLoadingMore(false)
+      else setGitHistoryLoading(false)
+    }
+  }
+
+  const fetchHistoryVcs = async () => {
+    const dir = historyVcsDirectory()
+    if (!dir) return
+
+    setGitHistoryVcs({ loading: true })
+    try {
+      const url = new URL("/vcs", sdk.url)
+      url.searchParams.set("directory", dir)
+      url.searchParams.set("detail", "true")
+      const res = await (platform.fetch ?? fetch)(url.toString(), {
+        headers: gitHeaders(),
+      })
+      if (!res.ok) throw new Error(res.statusText)
+      const data = await res.json()
+      setGitHistoryVcs({
+        loading: false,
+        branch: data.branch,
+        tracking: data.tracking,
+        worktree: data.worktree,
+      })
+    } catch {
+      setGitHistoryVcs({ loading: false })
+    }
+  }
+
+  const fetchSelectedCommit = async (oid: string) => {
+    const dir = historyDirectory()
+    if (!dir) return
+
+    const request = ++gitCommitRequest
+    setGitHistoryCommitLoading(true)
+
+    try {
+      const search = new URLSearchParams({
+        directory: dir,
+        oid,
+      })
+      const res = await (platform.fetch ?? fetch)(`${String(sdk.url)}/git/commit?${search.toString()}`, {
+        headers: gitHeaders(),
+      })
+      if (!res.ok) throw new Error(res.statusText)
+
+      const data = withHistoryPath((await res.json()) as SessionGitCommitDetailValue)
+      if (request !== gitCommitRequest) return
+      setGitHistoryCommit(data)
+    } catch {
+      if (request !== gitCommitRequest) return
+      setGitHistoryCommit(undefined)
+    } finally {
+      if (request !== gitCommitRequest) return
+      setGitHistoryCommitLoading(false)
+    }
+  }
+
+  const refreshGitHistory = async () => {
+    await fetchGitHistory()
+    await fetchHistoryVcs()
+    const oid = selectedHistoryCommit()
+    if (!oid) return
+    await fetchSelectedCommit(oid)
+  }
 
   const showAllFiles = () => {
     if (!auth.canFeature("files")) return
@@ -1577,7 +1847,7 @@ export default function Page() {
   )
 
   const setFileTreeTabValue = (value: string) => {
-    if (value !== "all" && value !== "git") return
+    if (value !== "all" && value !== "git" && value !== "history") return
     setFileTreeTab(value)
   }
 
@@ -1796,6 +2066,48 @@ export default function Page() {
   const reviewHasChanges = createMemo(() => gitDiffs().length > 0)
   const viewReviewFile = (path: string) => {
     if (fileTreeTab() === "git") setFileTreeTab("all")
+    const value = file.tab(path)
+    tabs().open(value)
+    file.load(path)
+  }
+
+  createEffect(
+    on(
+      () => [layout.fileTree.opened(), fileTreeTab(), historyDirectory(), selectedHistoryProject(), sdk.url, auth.token] as const,
+      ([opened, tab, dir]) => {
+        if (!opened) return
+        if (tab !== "history") return
+        if (!dir) return
+        void fetchGitHistory()
+        void fetchHistoryVcs()
+      },
+      { defer: true },
+    ),
+  )
+
+  createEffect(
+    on(
+      () => [fileTreeTab(), selectedHistoryCommit(), historyDirectory(), selectedHistoryProject()] as const,
+      ([tab, oid, dir]) => {
+        if (tab !== "history") return
+        if (!oid || !dir) {
+          setGitHistoryCommit(undefined)
+          return
+        }
+        void fetchSelectedCommit(oid)
+      },
+      { defer: true },
+    ),
+  )
+
+  const loadMoreGitHistory = () => {
+    const next = gitHistory().next
+    if (!next) return
+    void fetchGitHistory(next)
+  }
+
+  const openHistoryFile = (path: string) => {
+    setFileTreeTab("all")
     const value = file.tab(path)
     tabs().open(value)
     file.load(path)
@@ -2761,6 +3073,9 @@ export default function Page() {
               <Show
                 when={fileTreeTab() === "git"}
                 fallback={
+                  <Show
+                    when={fileTreeTab() === "history"}
+                    fallback={
                   <DragDropProvider
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
@@ -3426,6 +3741,24 @@ export default function Page() {
                       </Show>
                     </DragOverlay>
                   </DragDropProvider>
+                    }
+                  >
+                    <SessionGitCommitDetail
+                      commit={gitHistoryCommit()}
+                      loading={gitHistoryCommitLoading()}
+                      loadingLabel={language.t("session.history.loadingCommit")}
+                      emptyLabel={language.t("session.history.selectCommit")}
+                      authorLabel={language.t("session.history.author")}
+                      dateLabel={language.t("session.history.date")}
+                      parentsLabel={language.t("session.history.parents")}
+                      filesLabel={language.t("session.history.changedFiles")}
+                      noDiffLabel={language.t("session.history.noDiff")}
+                      openFileLabel={language.t("session.history.openFile")}
+                      diffStyle={layout.review.diffStyle()}
+                      onDiffStyleChange={layout.review.setDiffStyle}
+                      onViewFile={openHistoryFile}
+                    />
+                  </Show>
                 }
               >
                 {reviewPanel()}
@@ -3450,6 +3783,9 @@ export default function Page() {
                       <Tabs.Trigger value="git" class="flex-1" classes={{ button: "w-full" }}>
                         {gitStatus().length ? `${gitStatus().length} ` : ""}
                         {language.t("session.files.git")}
+                      </Tabs.Trigger>
+                      <Tabs.Trigger value="history" class="flex-1" classes={{ button: "w-full" }}>
+                        {language.t("session.files.history")}
                       </Tabs.Trigger>
                       <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
                         {language.t("session.files.all")}
@@ -3480,6 +3816,39 @@ export default function Page() {
                         modified={diffFiles()}
                         kinds={kinds()}
                         onFileClick={(node) => openTab(file.tab(node.path))}
+                      />
+                    </Tabs.Content>
+                    <Tabs.Content value="history" class="bg-background-base px-0 py-0">
+                      <SessionGitHistoryTab
+                        title={language.t("session.files.history")}
+                        projects={gitHistoryProjects().map((item) => ({ id: item.id, label: item.label }))}
+                        currentProject={selectedHistoryProject()}
+                        currentProjectLabel={historyProject()?.label}
+                        currentBranch={historyCurrentBranch()}
+                        trackingBranch={gitHistoryVcs().tracking}
+                        currentCommit={historyCurrentCommit()}
+                        commits={gitHistory().items}
+                        selected={selectedHistoryCommit()}
+                        loading={gitHistoryLoading()}
+                        loadingMore={gitHistoryLoadingMore()}
+                        hasMore={!!gitHistory().next}
+                        empty={language.t("session.history.empty")}
+                        loadingLabel={language.t("session.history.loading")}
+                        loadMoreLabel={language.t("common.loadMore")}
+                        projectLabel={language.t("session.history.project")}
+                        refreshLabel={language.t("dialog.branch.refresh")}
+                        currentBranchLabel={language.t("prompt.git.currentBranch")}
+                        trackingBranchLabel={language.t("prompt.git.trackingRemote")}
+                        currentCommitLabel={language.t("session.history.currentCommit")}
+                        onRefresh={refreshGitHistory}
+                        onSelect={setSelectedHistoryCommit}
+                        onSelectProject={(id) => {
+                          setSelectedHistoryProject(id)
+                          setSelectedHistoryCommit(undefined)
+                          setGitHistory({ items: [], next: undefined })
+                          setGitHistoryCommit(undefined)
+                        }}
+                        onLoadMore={loadMoreGitHistory}
                       />
                     </Tabs.Content>
                   </Tabs>

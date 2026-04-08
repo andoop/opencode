@@ -2634,6 +2634,48 @@ export type McpStatus =
 
 export type McpScope = "project" | "global"
 
+export type GitRef = {
+  name: string
+  kind: "head" | "local" | "remote" | "tag"
+}
+
+export type GitHistoryEntry = {
+  oid: string
+  short: string
+  parents: Array<string>
+  author_name: string
+  author_email: string
+  authored_at: number
+  refs: Array<GitRef>
+  subject: string
+}
+
+export type GitHistoryPage = {
+  items: Array<GitHistoryEntry>
+  next?: string
+}
+
+export type GitCommitFile = {
+  path: string
+  additions: number
+  deletions: number
+  status: "added" | "deleted" | "modified"
+}
+
+export type GitCommitDetail = {
+  oid: string
+  short: string
+  parents: Array<string>
+  author_name: string
+  author_email: string
+  authored_at: number
+  refs: Array<GitRef>
+  subject: string
+  body?: string
+  files: Array<GitCommitFile>
+  diffs: Array<FileDiff>
+}
+
 export type Path = {
   home: string
   state: string
@@ -2654,6 +2696,7 @@ export type VcsSubmoduleInfo = {
 
 export type VcsInfo = {
   branch: string
+  tracking?: string
   worktree?: string
   submodules?: Array<VcsSubmoduleInfo>
   branches?: Array<string>
@@ -6658,6 +6701,54 @@ export type BranchRefreshResponses = {
 }
 
 export type BranchRefreshResponse = BranchRefreshResponses[keyof BranchRefreshResponses]
+
+export type GitHistoryData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Git directory path
+     */
+    directory: string
+    limit?: number
+    cursor?: string
+  }
+  url: "/git/history"
+}
+
+export type GitHistoryResponses = {
+  /**
+   * Git history page
+   */
+  200: GitHistoryPage
+}
+
+export type GitHistoryResponse = GitHistoryResponses[keyof GitHistoryResponses]
+
+export type GitCommitData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Git directory path
+     */
+    directory: string
+    /**
+     * Commit object id
+     */
+    oid: string
+  }
+  url: "/git/commit"
+}
+
+export type GitCommitResponses = {
+  /**
+   * Git commit detail
+   */
+  200: GitCommitDetail
+}
+
+export type GitCommitResponse = GitCommitResponses[keyof GitCommitResponses]
 
 export type TuiAppendPromptData = {
   body?: {
