@@ -1679,12 +1679,33 @@ export default function Page() {
   createEffect(
     on(
       () =>
-        [historyWorkspaceID(), currentProject()?.id, currentProject()?.worktree, sessionDirectoryRoot(), sdk.url, auth.token] as const,
+        [
+          historyWorkspaceID(),
+          currentProject()?.id,
+          currentProject()?.worktree,
+          sessionDirectoryRoot(),
+          sdk.url,
+          auth.token,
+          layout
+            .projects
+            .list()
+            .map((item) => [item.id, item.worktree, item.name, item.vcs].filter(Boolean).join(":"))
+            .join("|"),
+        ] as const,
       async ([workspaceID, projectID, projectDir, sessionDir]) => {
         const request = ++gitHistoryProjectsRequest
         const prefix = (directory: string) => {
           if (!sessionDir || directory === sessionDir) return ""
           return directory.startsWith(`${sessionDir}/`) ? directory.slice(sessionDir.length + 1) : ""
+        }
+        const mergeProjects = (items: GitHistoryProject[]) => {
+          const seen = new Set<string>()
+          return items.filter((item) => {
+            if (!item.directory) return false
+            if (seen.has(item.directory)) return false
+            seen.add(item.directory)
+            return true
+          })
         }
 
         const fallback = [
@@ -1695,12 +1716,22 @@ export default function Page() {
             prefix: prefix(projectDir || sessionDir),
           },
         ].filter((item): item is GitHistoryProject => !!item.directory)
+        const local = layout.projects
+          .list()
+          .filter((item) => !!item.worktree && item.vcs === "git")
+          .map((item) => ({
+            id: item.id || item.worktree,
+            directory: item.worktree,
+            label: item.name?.trim() || getFilename(item.worktree),
+            prefix: prefix(item.worktree),
+          }))
 
         const workspaceKey = workspaceID || projectID
         if (!workspaceKey) {
           if (request !== gitHistoryProjectsRequest) return
-          setGitHistoryProjects(fallback)
-          setSelectedHistoryProject(fallback[0]?.id)
+          const next = mergeProjects([...local, ...fallback])
+          setGitHistoryProjects(next)
+          setSelectedHistoryProject(next[0]?.id)
           return
         }
 
@@ -1712,8 +1743,9 @@ export default function Page() {
 
         if (request !== gitHistoryProjectsRequest) return
         if (!workspace?.projects?.length) {
-          setGitHistoryProjects(fallback)
-          setSelectedHistoryProject(fallback[0]?.id)
+          const next = mergeProjects([...local, ...fallback])
+          setGitHistoryProjects(next)
+          setSelectedHistoryProject(next[0]?.id)
           return
         }
 
@@ -1726,7 +1758,7 @@ export default function Page() {
             prefix: prefix(item.sourceDirectory),
           }))
 
-        const next = projects.length > 0 ? projects : fallback
+        const next = mergeProjects([...projects, ...local, ...fallback])
         setGitHistoryProjects(next)
         setSelectedHistoryProject((prev) => {
           if (prev && next.some((item) => item.id === prev)) return prev
@@ -1748,41 +1780,33 @@ export default function Page() {
     else setGitHistoryLoading(true)
 
     try {
-      const items: SessionGitHistoryEntry[] = cursor ? [...gitHistory().items] : []
-      let next = cursor
-
-      while (true) {
-        const search = new URLSearchParams({
-          directory: dir,
-          limit: "200",
-        })
-        if (next) search.set("cursor", next)
-
-        const res = await (platform.fetch ?? fetch)(`${String(sdk.url)}/git/history?${search.toString()}`, {
-          headers: gitHeaders(),
-        })
-        if (!res.ok) throw new Error(res.statusText)
-
-        const data = (await res.json()) as GitHistoryPage
-        if (request !== gitHistoryRequest) return
-        items.push(...data.items)
-        next = data.next
-        if (!next) break
-      }
-
-      setGitHistory({
-        items,
-        next: undefined,
+      const search = new URLSearchParams({
+        directory: dir,
+        limit: cursor ? "300" : "500",
       })
+      if (cursor) search.set("cursor", cursor)
+
+      const res = await (platform.fetch ?? fetch)(`${String(sdk.url)}/git/history?${search.toString()}`, {
+        headers: gitHeaders(),
+      })
+      if (!res.ok) throw new Error(res.statusText)
+
+      const data = (await res.json()) as GitHistoryPage
+      if (request !== gitHistoryRequest) return
+
+      setGitHistory((prev) => ({
+        items: cursor ? [...prev.items, ...data.items] : data.items,
+        next: data.next,
+      }))
 
       const current = selectedHistoryCommit()
       if (cursor) return
-      if (!current && items[0]) {
-        setSelectedHistoryCommit(items[0].oid)
+      if (!current && data.items[0]) {
+        setSelectedHistoryCommit(data.items[0].oid)
         return
       }
-      if (current && items.some((item) => item.oid === current)) return
-      setSelectedHistoryCommit(items[0]?.oid)
+      if (current && data.items.some((item) => item.oid === current)) return
+      setSelectedHistoryCommit(data.items[0]?.oid)
     } catch {
       if (request !== gitHistoryRequest) return
       if (!cursor) {

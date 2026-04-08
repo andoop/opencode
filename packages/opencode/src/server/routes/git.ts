@@ -35,7 +35,7 @@ export const GitRoutes = lazy(() =>
         "query",
         z.object({
           directory: z.string().meta({ description: "Git directory path" }),
-          limit: z.coerce.number().int().min(1).max(200).optional(),
+          limit: z.coerce.number().int().min(1).max(500).optional(),
           cursor: z.string().optional(),
         }),
       ),

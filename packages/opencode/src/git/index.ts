@@ -201,7 +201,7 @@ export namespace Git {
     const root = await gitRoot(input.directory)
     if (!root) return { items: [], next: undefined }
 
-    const limit = Math.min(200, Math.max(1, input.limit ?? 60))
+    const limit = Math.min(500, Math.max(1, input.limit ?? 60))
     const skip = Math.max(0, Number(input.cursor ?? "0") || 0)
     const remotes = await remoteNames(root)
     const format = ["%H", "%h", "%P", "%an", "%ae", "%at", "%D", "%s"].join(unit) + record
