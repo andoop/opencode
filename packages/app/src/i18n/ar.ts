@@ -255,6 +255,16 @@ export const dict = {
   "dialog.directory.path.reset": "إعادة تعيين",
   "dialog.directory.path.current": "المجلد الجذر الحالي",
 
+  "dialog.branch.title": "اختر الفرع",
+  "dialog.branch.search.placeholder": "البحث في الفروع",
+  "dialog.branch.local": "محلي",
+  "dialog.branch.remote": "بعيد",
+  "dialog.branch.empty": "لم يتم العثور على فروع",
+  "dialog.branch.current": "الحالي",
+  "dialog.branch.refresh": "تحديث",
+  "dialog.branch.refreshing": "جارٍ التحديث...",
+  "dialog.branch.skip": "تخطي",
+
   "dialog.server.title": "الخوادم",
   "dialog.server.description": "تبديل خادم OpenCode الذي يتصل به هذا التطبيق.",
   "dialog.server.search.placeholder": "البحث في الخوادم",

@@ -255,6 +255,16 @@ export const dict = {
   "dialog.directory.path.reset": "Сбросить",
   "dialog.directory.path.current": "Текущий корень",
 
+  "dialog.branch.title": "Выберите ветку",
+  "dialog.branch.search.placeholder": "Поиск веток",
+  "dialog.branch.local": "Локальная",
+  "dialog.branch.remote": "Удалённая",
+  "dialog.branch.empty": "Ветки не найдены",
+  "dialog.branch.current": "текущая",
+  "dialog.branch.refresh": "Обновить",
+  "dialog.branch.refreshing": "Обновление...",
+  "dialog.branch.skip": "Пропустить",
+
   "dialog.server.title": "Серверы",
   "dialog.server.description": "Переключите сервер OpenCode к которому подключается приложение.",
   "dialog.server.search.placeholder": "Поиск серверов",

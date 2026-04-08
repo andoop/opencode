@@ -255,6 +255,16 @@ export const dict = {
   "dialog.directory.path.reset": "Restablecer",
   "dialog.directory.path.current": "Raíz actual",
 
+  "dialog.branch.title": "Seleccionar rama",
+  "dialog.branch.search.placeholder": "Buscar ramas",
+  "dialog.branch.local": "Local",
+  "dialog.branch.remote": "Remoto",
+  "dialog.branch.empty": "No se encontraron ramas",
+  "dialog.branch.current": "actual",
+  "dialog.branch.refresh": "Actualizar",
+  "dialog.branch.refreshing": "Actualizando...",
+  "dialog.branch.skip": "Omitir",
+
   "dialog.server.title": "Servidores",
   "dialog.server.description": "Cambiar a qué servidor de OpenCode se conecta esta app.",
   "dialog.server.search.placeholder": "Buscar servidores",

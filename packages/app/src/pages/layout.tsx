@@ -70,7 +70,7 @@ import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { navStart } from "@/utils/perf"
 import { DialogSelectProject } from "@/components/dialog-select-project"
-import { DialogSelectBranch } from "@/components/dialog-select-branch"
+import { DialogSelectBranch, type BranchDialogConfirm } from "@/components/dialog-select-branch"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
@@ -80,6 +80,8 @@ import { Popover } from "@opencode-ai/ui/popover"
 import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
 
 type SessionCreateStep = "create" | "worktree" | "open"
+
+type BranchDialogOutcome = BranchDialogConfirm | { kind: "cancel" }
 
 const createSessionOverlayState = () => ({
   open: false,
@@ -2988,19 +2990,76 @@ export default function Layout(props: ParentProps) {
     layout.mobileSidebar.hide()
   }
 
-  const selectBranch = (directory: string, projectName: string) =>
-    new Promise<string | null>((resolve) => {
+  const selectBranch = (directory: string, projectName: string, titleSuffix?: string) =>
+    new Promise<BranchDialogOutcome>((resolve) => {
       let resolved = false
-      const done = (v: string | null) => {
+      const finish = (v: BranchDialogOutcome) => {
         if (resolved) return
         resolved = true
         resolve(v)
       }
       dialog.show(
-        () => <DialogSelectBranch directory={directory} projectName={projectName} onSelect={done} />,
-        () => done(null),
+        () => (
+          <DialogSelectBranch
+            directory={directory}
+            projectName={projectName}
+            titleSuffix={titleSuffix}
+            onConfirm={(c) => finish(c)}
+          />
+        ),
+        () => finish({ kind: "cancel" }),
       )
     })
+
+  const collectSessionBranches = async (project: LocalProject) => {
+    const workspace = project.id
+      ? await workspaceFetch<WorkspaceInfo>(
+          globalSDK.url,
+          `/workspace/${encodeURIComponent(project.id)}`,
+          { token: auth.token ?? undefined, fetchFn: platform.fetch ?? fetch },
+        ).catch(() => undefined)
+      : undefined
+
+    const gitProjects: { projectID: string; directory: string; label: string }[] = []
+
+    if (workspace?.projects?.length) {
+      for (const wp of workspace.projects) {
+        if (wp.vcs !== "git") continue
+        gitProjects.push({
+          projectID: wp.projectID,
+          directory: wp.sourceDirectory,
+          label: wp.name?.trim() || wp.slug || getFilename(wp.sourceDirectory),
+        })
+      }
+    } else if (project.vcs === "git" && project.id) {
+      gitProjects.push({
+        projectID: project.id,
+        directory: project.worktree,
+        label: project.name || getFilename(project.worktree),
+      })
+    }
+
+    if (gitProjects.length === 0) {
+      return { cancelled: false, branches: undefined, workspaceID: workspace?.id }
+    }
+
+    const branches: Record<string, string> = {}
+    const total = gitProjects.length
+    let i = 0
+    for (const p of gitProjects) {
+      i += 1
+      const suffix = total > 1 ? ` (${i}/${total})` : ""
+      const outcome = await selectBranch(p.directory, p.label, suffix)
+      if (outcome.kind === "cancel") return { cancelled: true }
+      if (outcome.kind === "pick") branches[p.projectID] = outcome.branch
+    }
+
+    return {
+      cancelled: false,
+      branches: Object.keys(branches).length ? branches : undefined,
+      workspaceID: workspace?.id,
+    }
+  }
 
   const createSession = async (project: LocalProject) => {
     if (state.creatingSession.open && state.creatingSession.status === "running") return
@@ -3009,11 +3068,10 @@ export default function Layout(props: ParentProps) {
       setState("hoverProject", undefined)
     }
 
-    let branches: Record<string, string> | undefined
-    if (project.vcs === "git" && project.id) {
-      const branch = await selectBranch(project.worktree, project.name || getFilename(project.worktree))
-      if (branch) branches = { [project.id]: branch }
-    }
+    const branchPick = await collectSessionBranches(project)
+    if (branchPick.cancelled) return
+
+    const { branches, workspaceID } = branchPick
 
     setState("creatingSession", {
       ...createSessionOverlayState(),
@@ -3029,7 +3087,7 @@ export default function Layout(props: ParentProps) {
     }
 
     const created = await clientForDirectory(project.worktree)
-      .session.create({ branches })
+      .session.create({ branches, workspaceID })
       .then((x) => x.data)
       .catch((err) => {
         fail(errorMessage(err), "create")

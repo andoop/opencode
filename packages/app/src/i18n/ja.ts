@@ -254,6 +254,16 @@ export const dict = {
   "dialog.directory.path.reset": "リセット",
   "dialog.directory.path.current": "現在のルート",
 
+  "dialog.branch.title": "ブランチを選択",
+  "dialog.branch.search.placeholder": "ブランチを検索",
+  "dialog.branch.local": "ローカル",
+  "dialog.branch.remote": "リモート",
+  "dialog.branch.empty": "ブランチが見つかりません",
+  "dialog.branch.current": "現在",
+  "dialog.branch.refresh": "更新",
+  "dialog.branch.refreshing": "更新中...",
+  "dialog.branch.skip": "スキップ",
+
   "dialog.server.title": "サーバー",
   "dialog.server.description": "このアプリが接続するOpenCodeサーバーを切り替えます。",
   "dialog.server.search.placeholder": "サーバーを検索",

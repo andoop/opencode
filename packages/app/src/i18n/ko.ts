@@ -258,6 +258,16 @@ export const dict = {
   "dialog.directory.path.reset": "초기화",
   "dialog.directory.path.current": "현재 루트",
 
+  "dialog.branch.title": "브랜치 선택",
+  "dialog.branch.search.placeholder": "브랜치 검색",
+  "dialog.branch.local": "로컬",
+  "dialog.branch.remote": "원격",
+  "dialog.branch.empty": "브랜치를 찾을 수 없습니다",
+  "dialog.branch.current": "현재",
+  "dialog.branch.refresh": "새로고침",
+  "dialog.branch.refreshing": "새로고침 중...",
+  "dialog.branch.skip": "건너뛰기",
+
   "dialog.server.title": "서버",
   "dialog.server.description": "이 앱이 연결할 OpenCode 서버를 전환합니다.",
   "dialog.server.search.placeholder": "서버 검색",

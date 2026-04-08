@@ -255,6 +255,16 @@ export const dict = {
   "dialog.directory.path.reset": "Nulstil",
   "dialog.directory.path.current": "Aktuel rod",
 
+  "dialog.branch.title": "Vælg gren",
+  "dialog.branch.search.placeholder": "Søg grene",
+  "dialog.branch.local": "Lokal",
+  "dialog.branch.remote": "Fjern",
+  "dialog.branch.empty": "Ingen grene fundet",
+  "dialog.branch.current": "aktuel",
+  "dialog.branch.refresh": "Opdater",
+  "dialog.branch.refreshing": "Opdaterer...",
+  "dialog.branch.skip": "Spring over",
+
   "dialog.server.title": "Servere",
   "dialog.server.description": "Skift hvilken OpenCode-server denne app forbinder til.",
   "dialog.server.search.placeholder": "Søg servere",

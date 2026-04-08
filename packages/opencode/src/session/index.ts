@@ -48,6 +48,46 @@ export namespace Session {
     return User.current()?.id
   }
 
+  function pad(input: number) {
+    return input.toString().padStart(2, "0")
+  }
+
+  function branchTime(time: number) {
+    const date = new Date(time)
+    return [
+      pad(date.getFullYear() % 100),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+    ].join("")
+  }
+
+  function branchPart(input: string | undefined, fallback: string) {
+    const cleaned = (input ?? "")
+      .trim()
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[./-]+/, "")
+      .replace(/[./-]+$/, "")
+    return cleaned || fallback
+  }
+
+  function branchUser() {
+    const user = User.current()
+    if (user?.username) return branchPart(user.username, "user")
+    if (user?.id) return `u${branchPart(user.id.slice(-4), "user")}`
+    return "user"
+  }
+
+  function branchTail(input: string | undefined) {
+    return branchPart(input?.split("/").at(-1), "head")
+  }
+
+  function branchName(input: { baseBranch: string; created: number }) {
+    return `rc/${branchUser()}/${branchTime(input.created)}/${branchTail(input.baseBranch)}`
+  }
+
   function sessionKey(workspaceID: string, sessionID: string): string[] {
     return ["session", workspaceID, sessionID]
   }
@@ -408,7 +448,11 @@ export namespace Session {
     await Bun.write(target, JSON.stringify(session, null, 2))
   }
 
-  async function workspaceFor(directory: string, title?: string) {
+  async function workspaceFor(directory: string, title?: string, workspaceID?: string) {
+    if (workspaceID) {
+      const fromStore = await Workspace.read(workspaceID).catch(() => undefined)
+      if (fromStore) return fromStore
+    }
     const workspace = currentWorkspace()
     if (workspace) return workspace
     const source = await Project.fromDirectory(directory)
@@ -419,10 +463,11 @@ export namespace Session {
         item.projects[0]?.sourceDirectory === source.project.worktree,
     )
     if (existing) return existing
-    return Workspace.create({
+    const created = await Workspace.create({
       name: title,
       directories: [directory],
     })
+    return created
   }
 
   function outputText(input: Uint8Array | undefined) {
@@ -442,11 +487,22 @@ export namespace Session {
     return text.trim() || undefined
   }
 
+  async function resolvePickedBranch(directory: string, branch: string) {
+    const local = await gitText(directory, ["rev-parse", branch])
+    if (local) return { ref: branch, commit: local }
+    const remote = await gitText(directory, ["rev-parse", `origin/${branch}`])
+    if (remote) return { ref: `origin/${branch}`, commit: remote }
+    const fullRemote = await gitText(directory, ["rev-parse", `refs/remotes/origin/${branch}`])
+    if (fullRemote) return { ref: `refs/remotes/origin/${branch}`, commit: fullRemote }
+    return
+  }
+
   async function createSessionRoot(input: {
     workspaceProject: Workspace.ProjectInfo
     sessionID: string
     sessionDirectory: string
     baseBranch?: string
+    created: number
   }) {
     const sessionWorktreeDirectory = path.join(input.sessionDirectory, "roots", input.workspaceProject.slug)
     const userWorktreeDirectory = await UserWorktree.getOrCreate(
@@ -467,19 +523,37 @@ export namespace Session {
         vcs: input.workspaceProject.vcs,
       })
     }
-    const branch = `session/${input.sessionID}`
-    const baseBranch = input.baseBranch ?? await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
-    const baseCommit = await gitText(userWorktreeDirectory, ["rev-parse", baseBranch!])
+    const picked = input.baseBranch?.trim()
+    let baseBranch: string
+    let baseCommit: string | undefined
+    if (picked) {
+      baseBranch = picked
+      const resolved = await resolvePickedBranch(userWorktreeDirectory, picked)
+      baseCommit = resolved?.commit
+    } else {
+      const abbrev = await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
+      baseBranch = abbrev && abbrev !== "HEAD" ? abbrev : "HEAD"
+      baseCommit = await gitText(userWorktreeDirectory, ["rev-parse", "HEAD"])
+    }
+    if (!baseCommit) {
+      throw new Error(
+        `Could not resolve base commit for ${input.workspaceProject.slug} (${input.workspaceProject.projectID}); branch=${picked ?? baseBranch}`,
+      )
+    }
+    const branch = branchName({
+      baseBranch,
+      created: input.created,
+    })
     await fs.mkdir(path.dirname(sessionWorktreeDirectory), { recursive: true })
     await $`git worktree prune`.quiet().nothrow().cwd(userWorktreeDirectory)
-    let created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit!}`
+    let created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit}`
       .quiet()
       .nothrow()
       .cwd(userWorktreeDirectory)
     if (created.exitCode !== 0) {
       // delete stale branch and retry
       await $`git branch -D ${branch}`.quiet().nothrow().cwd(userWorktreeDirectory)
-      created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit!}`
+      created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit}`
         .quiet()
         .nothrow()
         .cwd(userWorktreeDirectory)
@@ -537,6 +611,7 @@ export namespace Session {
         directory: Instance.directory,
         title: input?.title,
         permission: input?.permission,
+        workspaceID: input?.workspaceID,
         branches: input?.branches,
       })
     },
@@ -597,12 +672,14 @@ export namespace Session {
     directory: string
     permission?: PermissionNext.Ruleset
     userID?: string
+    workspaceID?: string
     branches?: Record<string, string>
   }) {
     const userID = input.userID ?? currentUserID()
     const sessionID = Identifier.descending("session", input.id)
-    const workspace = await workspaceFor(input.directory, input.title)
+    const workspace = await workspaceFor(input.directory, input.title, input.workspaceID)
     const sessionDirectory = Workspace.sessionDirectory(workspace.id, sessionID)
+    const created = Date.now()
     await fs.mkdir(path.join(sessionDirectory, "roots"), { recursive: true })
     const roots = await Promise.all(
       workspace.projects.map((project) =>
@@ -611,6 +688,7 @@ export namespace Session {
           sessionID,
           sessionDirectory,
           baseBranch: input.branches?.[project.projectID],
+          created,
         }),
       ),
     )
@@ -629,8 +707,8 @@ export namespace Session {
       title: input.title ?? createDefaultTitle(!!input.parentID),
       permission: input.permission,
       time: {
-        created: Date.now(),
-        updated: Date.now(),
+        created,
+        updated: created,
       },
     }
     log.info("created", result)

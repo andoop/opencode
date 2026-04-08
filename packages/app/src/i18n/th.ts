@@ -260,6 +260,16 @@ export const dict = {
   "dialog.directory.path.reset": "รีเซ็ต",
   "dialog.directory.path.current": "รูทปัจจุบัน",
 
+  "dialog.branch.title": "เลือกสาขา",
+  "dialog.branch.search.placeholder": "ค้นหาสาขา",
+  "dialog.branch.local": "ในเครื่อง",
+  "dialog.branch.remote": "ระยะไกล",
+  "dialog.branch.empty": "ไม่พบสาขา",
+  "dialog.branch.current": "ปัจจุบัน",
+  "dialog.branch.refresh": "รีเฟรช",
+  "dialog.branch.refreshing": "กำลังรีเฟรช...",
+  "dialog.branch.skip": "ข้าม",
+
   "dialog.server.title": "เซิร์ฟเวอร์",
   "dialog.server.description": "สลับเซิร์ฟเวอร์ OpenCode ที่แอปนี้เชื่อมต่อด้วย",
   "dialog.server.search.placeholder": "ค้นหาเซิร์ฟเวอร์",
