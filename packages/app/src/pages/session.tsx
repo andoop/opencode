@@ -98,6 +98,7 @@ type GitHistoryProject = {
   directory: string
   label: string
   prefix: string
+  branch?: string
 }
 type GitHistoryVcs = {
   loading: boolean
@@ -1580,29 +1581,34 @@ export default function Page() {
   })
 
   const historyDirectory = () => historyProject()?.directory || sessionDirectoryRoot()
-  const historyVcsDirectory = () => {
-    const project = historyProject()
-    if (!project) return sessionDirectoryRoot()
-    if (project.id === currentProject()?.id) return sessionDirectoryRoot()
-    if (project.directory === currentProject()?.worktree) return sessionDirectoryRoot()
-    return project.directory
-  }
-  const historyWorkspaceID = () => info()?.workspaceID || currentProject()?.id
+  const historyVcsDirectory = () => historyProject()?.directory || sessionDirectoryRoot()
+  const historyWorkspaceID = () => info()?.workspaceID
+  const historyRoot = createMemo(() =>
+    (info()?.roots ?? []).find((item) => {
+      const project = historyProject()
+      if (!project) return false
+      return (
+        item.projectID === project.id ||
+        item.sessionWorktreeDirectory === project.directory ||
+        item.sourceDirectory === project.directory
+      )
+    }),
+  )
   const historyCurrentCommit = createMemo(() =>
     gitHistory().items.find((item) => item.refs.some((ref) => ref.kind === "head")),
   )
   const historyCurrentBranch = createMemo(() => {
+    if (gitHistoryVcs().branch) return gitHistoryVcs().branch
+
+    if (historyRoot()?.branch) return historyRoot()?.branch
+
     const head = historyCurrentCommit()
     const ref =
       head?.refs.find((item) => item.kind === "local") ??
       head?.refs.find((item) => item.kind === "remote")
     if (ref?.name) return ref.name
 
-    const project = historyProject()
-    if (!project) return sessionSyncData().vcs?.branch || gitHistoryVcs().branch
-    if (project.id === currentProject()?.id) return sessionSyncData().vcs?.branch || gitHistoryVcs().branch
-    if (project.directory === currentProject()?.worktree) return sessionSyncData().vcs?.branch || gitHistoryVcs().branch
-    return gitHistoryVcs().branch
+    return sessionSyncData().vcs?.branch
   })
 
   const historyPath = (path: string) => {
@@ -1681,18 +1687,27 @@ export default function Page() {
       () =>
         [
           historyWorkspaceID(),
-          currentProject()?.id,
-          currentProject()?.worktree,
+          info()?.projectID,
           sessionDirectoryRoot(),
           sdk.url,
           auth.token,
-          layout
-            .projects
-            .list()
-            .map((item) => [item.id, item.worktree, item.name, item.vcs].filter(Boolean).join(":"))
+          (info()?.roots ?? [])
+            .map((item) =>
+              [
+                item.projectID,
+                item.slug,
+                item.name,
+                item.sourceDirectory,
+                item.sessionWorktreeDirectory,
+                item.branch,
+                item.primary,
+              ]
+                .filter(Boolean)
+                .join(":"),
+            )
             .join("|"),
         ] as const,
-      async ([workspaceID, projectID, projectDir, sessionDir]) => {
+      async ([workspaceID, sessionProjectID, sessionDir]) => {
         const request = ++gitHistoryProjectsRequest
         const prefix = (directory: string) => {
           if (!sessionDir || directory === sessionDir) return ""
@@ -1710,26 +1725,41 @@ export default function Page() {
 
         const fallback = [
           {
-            id: projectID || projectDir || sessionDir || "default",
-            directory: projectDir || sessionDir,
-            label: currentProject()?.name || getFilename(projectDir || sessionDir),
-            prefix: prefix(projectDir || sessionDir),
+            id: sessionProjectID || sessionDir || "default",
+            directory: sessionDir,
+            label: currentProject()?.name || getFilename(sessionDir),
+            prefix: prefix(sessionDir),
           },
         ].filter((item): item is GitHistoryProject => !!item.directory)
-        const local = layout.projects
-          .list()
-          .filter((item) => !!item.worktree && item.vcs === "git")
+        const roots = (info()?.roots ?? [])
+          .filter((item) => !!item.projectID && !!item.sessionWorktreeDirectory)
           .map((item) => ({
-            id: item.id || item.worktree,
-            directory: item.worktree,
-            label: item.name?.trim() || getFilename(item.worktree),
-            prefix: prefix(item.worktree),
+            id: item.projectID,
+            directory: item.sessionWorktreeDirectory,
+            label: item.name?.trim() || item.slug || getFilename(item.sourceDirectory),
+            prefix: prefix(item.sessionWorktreeDirectory),
+            branch: item.branch,
           }))
 
-        const workspaceKey = workspaceID || projectID
+        if (roots.length > 0) {
+          if (request !== gitHistoryProjectsRequest) return
+          const next = mergeProjects(roots)
+          setGitHistoryProjects(next)
+          setSelectedHistoryProject((prev) => {
+            if (prev && next.some((item) => item.id === prev)) return prev
+            const current = next.find((item) => item.id === sessionProjectID)
+            if (current) return current.id
+            const primary = (info()?.roots ?? []).find((item) => item.primary)
+            if (primary && next.some((item) => item.id === primary.projectID)) return primary.projectID
+            return next[0]?.id
+          })
+          return
+        }
+
+        const workspaceKey = workspaceID
         if (!workspaceKey) {
           if (request !== gitHistoryProjectsRequest) return
-          const next = mergeProjects([...local, ...fallback])
+          const next = mergeProjects(fallback)
           setGitHistoryProjects(next)
           setSelectedHistoryProject(next[0]?.id)
           return
@@ -1743,14 +1773,14 @@ export default function Page() {
 
         if (request !== gitHistoryProjectsRequest) return
         if (!workspace?.projects?.length) {
-          const next = mergeProjects([...local, ...fallback])
+          const next = mergeProjects(fallback)
           setGitHistoryProjects(next)
           setSelectedHistoryProject(next[0]?.id)
           return
         }
 
         const projects = workspace.projects
-          .filter((item) => item.vcs === "git")
+          .filter((item) => !!item.sourceDirectory)
           .map((item) => ({
             id: item.projectID,
             directory: item.sourceDirectory,
@@ -1758,11 +1788,11 @@ export default function Page() {
             prefix: prefix(item.sourceDirectory),
           }))
 
-        const next = mergeProjects([...projects, ...local, ...fallback])
+        const next = mergeProjects(projects.length > 0 ? projects : fallback)
         setGitHistoryProjects(next)
         setSelectedHistoryProject((prev) => {
           if (prev && next.some((item) => item.id === prev)) return prev
-          const current = next.find((item) => item.directory === sessionDir)
+          const current = next.find((item) => item.id === sessionProjectID)
           if (current) return current.id
           return next[0]?.id
         })
@@ -2229,12 +2259,9 @@ export default function Page() {
 
   createEffect(
     on(
-      () => [layout.fileTree.opened(), fileTreeTab(), layout.fileTree.width(), isDesktop()] as const,
-      ([opened, tab, width, desktop]) => {
-        if (!opened || !desktop) return
+      () => [gitHistoryProjects(), selectedHistoryProject(), fileTreeTab()] as const,
+      ([projects, selected, tab]) => {
         if (tab !== "history") return
-        if (width >= 760) return
-        layout.fileTree.resize(760)
       },
       { defer: true },
     ),

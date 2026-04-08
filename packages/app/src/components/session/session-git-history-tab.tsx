@@ -182,7 +182,6 @@ export function SessionGitHistoryTab(props: {
   const workingTreeOffset = createMemo(() => (props.workingTree ? 1 : 0))
   const workingTreeRow = createMemo(() => (props.workingTree ? graph().rows[0] : undefined))
   const graphColumnWidth = createMemo(() => graphOffset + graphWidth() + 8)
-  const contentMinWidth = createMemo(() => `${graphColumnWidth() + 760}px`)
   const rowClass =
     "group grid h-[68px] w-full items-stretch gap-0 border-b border-border-weak-base text-left transition-colors hover:bg-surface-raised-base-hover"
   const rowGridStyle = createMemo(() => ({
@@ -241,15 +240,16 @@ export function SessionGitHistoryTab(props: {
           </div>
         </div>
         <div class="flex items-center gap-1">
-          <Show when={(props.projects?.length ?? 0) > 1}>
+          <Show when={(props.projects?.length ?? 0) > 0}>
             <Select
               options={props.projects ?? []}
               current={(props.projects ?? []).find((item) => item.id === props.currentProject)}
               value={(item) => item.id}
               label={(item) => item.label}
               onSelect={(item) => item && props.onSelectProject?.(item.id)}
+              disabled={(props.projects?.length ?? 0) <= 1}
               variant="ghost"
-              class="max-w-[170px]"
+              class="max-w-[220px]"
               valueClass="truncate"
               aria-label={props.projectLabel}
             />
@@ -284,7 +284,7 @@ export function SessionGitHistoryTab(props: {
           }
         >
           <div class="min-h-0 flex-1 overflow-auto" data-scrollable>
-            <div style={{ "min-width": contentMinWidth() }}>
+            <div>
               <div
                 class="grid border-b border-border-weak-base px-3 py-2 text-[11px] font-medium text-text-weaker"
                 style={rowGridStyle()}
