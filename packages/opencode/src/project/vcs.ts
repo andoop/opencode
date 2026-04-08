@@ -38,6 +38,7 @@ export namespace Vcs {
   export const Info = z
     .object({
       branch: z.string(),
+      tracking: z.string().optional(),
       worktree: z.string().optional(),
       submodules: z.array(SubmoduleInfo).optional(),
       branches: z.array(z.string()).optional(),
@@ -71,6 +72,22 @@ export namespace Vcs {
 
   function withGitTimeout<T>(p: Promise<T>, fallback: T): Promise<T> {
     return Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), GIT_TIMEOUT_MS))])
+  }
+
+  async function upstreamBranch() {
+    const primary = Instance.roots?.find((item) => item.primary) ?? Instance.roots?.[0]
+    const cwd = primary ? primary.sessionWorktreeDirectory : Instance.worktree
+    return withGitTimeout(
+      $`git rev-parse --abbrev-ref --symbolic-full-name @{upstream}`
+        .quiet()
+        .nothrow()
+        .cwd(cwd)
+        .text()
+        .then((x) => x.trim())
+        .then((x) => (x && x !== "@{upstream}" ? x : undefined))
+        .catch(() => undefined),
+      undefined,
+    )
   }
 
   async function getSubmoduleBranches(submodulePath: string) {
@@ -275,5 +292,9 @@ export namespace Vcs {
 
   export async function branch() {
     return await state().then((s) => s.branch())
+  }
+
+  export async function trackingBranch() {
+    return await upstreamBranch()
   }
 }

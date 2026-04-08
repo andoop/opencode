@@ -483,7 +483,12 @@ export namespace Server {
             const timeout = <T>(p: Promise<T>, ms: number, fallback: T) =>
               Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))])
 
-            const [submodules, branches] = await Promise.all([
+            const [tracking, submodules, branches] = await Promise.all([
+              timeout(
+                Vcs.trackingBranch().catch(() => undefined),
+                3000,
+                undefined,
+              ),
               timeout(
                 Vcs.getSubmodules().catch(() => []),
                 5000,
@@ -498,6 +503,7 @@ export namespace Server {
 
             return c.json({
               branch,
+              tracking,
               worktree,
               submodules: submodules.length > 0 ? submodules : undefined,
               branches: branches.length > 0 ? branches : undefined,

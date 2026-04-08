@@ -97,30 +97,47 @@ function groupBranchesByDir(branches: string[]): Map<string, string[]> {
 }
 
 function BranchGroups(props: { branches: string[]; current?: string }) {
+  const language = useLanguage()
   const groups = createMemo(() => {
     const m = groupBranchesByDir(props.branches)
     return [...m.entries()].sort(([a], [b]) => (a || "\0").localeCompare(b || "\0"))
   })
   return (
-    <div class="flex flex-col gap-1.5">
+    <div class="flex flex-col gap-2">
       <For each={groups()}>
         {([dir, list]) => (
-          <div class="flex flex-col gap-0.5">
+          <div class="rounded-lg border border-border-base bg-background-base p-2">
             <Show when={dir}>
-              <span class="text-12-regular text-text-weak">{dir}</span>
+              <div class="mb-1 flex items-center gap-2">
+                <Icon name="folder" size="small" class="shrink-0 text-icon-weak" />
+                <span class="text-12-medium text-text-weak">{dir}</span>
+              </div>
             </Show>
-            <div class="flex flex-col gap-0.5" style={dir ? { "padding-left": "8px" } : undefined}>
+            <div class="flex flex-col gap-1" style={dir ? { "padding-left": "8px" } : undefined}>
               <For each={list}>
                 {(b) => (
-                  <span
+                  <div
+                    class="flex items-center gap-2 rounded-md px-2 py-1"
                     classList={{
-                      "text-12-regular": true,
-                      "text-text-strong": b === props.current,
-                      "text-text-weak": b !== props.current,
+                      "bg-background-frame": b === props.current,
                     }}
                   >
-                    {b}
-                  </span>
+                    <Icon name="branch" size="small" class="shrink-0 text-icon-weak" />
+                    <span
+                      classList={{
+                        "min-w-0 flex-1 truncate text-12-mono": true,
+                        "text-text-strong": b === props.current,
+                        "text-text-weak": b !== props.current,
+                      }}
+                    >
+                      {b}
+                    </span>
+                    <Show when={b === props.current}>
+                      <span class="shrink-0 rounded border border-border-base bg-background-base px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-weak">
+                        {language.t("dialog.branch.current")}
+                      </span>
+                    </Show>
+                  </div>
                 )}
               </For>
             </div>
@@ -167,7 +184,7 @@ function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
     <div class="flex flex-col">
       <button
         type="button"
-        class="flex items-center gap-1.5 h-6 w-full text-left rounded"
+        class="flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left transition-colors"
         classList={{ "cursor-pointer": expandable() }}
         style={{ "padding-left": `${depth() * 16}px` }}
         onClick={() => expandable() && setExpanded((v) => !v)}
@@ -180,7 +197,9 @@ function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
         <div class={`size-2 rounded-full shrink-0 ${SUBMODULE_COLORS[colorIndex()]}`} />
         <span class="text-12-medium text-text-strong truncate flex-1 min-w-0">{getFilename(props.submodule.path)}</span>
         <Show when={props.submodule.branch}>
-          <span class="text-12-regular text-text-weak shrink-0">{props.submodule.branch}</span>
+          <span class="shrink-0 rounded border border-border-base bg-background-base px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-weak">
+            {props.submodule.branch}
+          </span>
         </Show>
         <Show when={props.submodule.commit}>
           <span class="text-12-mono text-text-weak shrink-0">{props.submodule.commit}</span>
@@ -189,20 +208,23 @@ function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
 
       <Show when={expanded()}>
         <Show when={branches().length > 0}>
-          <div class="flex flex-col" style={{ "padding-left": `${depth() * 16 + 22}px` }}>
+          <div
+            class="flex flex-col gap-1 rounded-lg border border-border-base bg-background-base px-2 py-1.5"
+            style={{ "margin-left": `${depth() * 16 + 22}px` }}
+          >
             <For each={branches()}>
               {(branch) => (
-                <div class="flex items-center gap-1.5 h-5">
+                <div class="flex h-5 items-center gap-1.5">
                   <Icon
                     name="branch"
                     size="small"
                     class="text-icon-weak shrink-0"
                     style={{ width: "12px", height: "12px" }}
                   />
-                  <span class="text-12-regular text-text-weak truncate">{branch.name}</span>
-                  <Show when={branch.type === "remote"}>
-                    <span class="text-12-regular text-text-weakest shrink-0">remote</span>
-                  </Show>
+                  <span class="min-w-0 flex-1 truncate text-12-regular text-text-weak">{branch.name}</span>
+                  <span class="shrink-0 rounded border border-border-base bg-background-frame px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-weak">
+                    {branch.type}
+                  </span>
                 </div>
               )}
             </For>
@@ -457,6 +479,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
   const [detailedVcs, setDetailedVcs] = createSignal<{
     loading: boolean
+    tracking?: string
     submodules?: SubmoduleData[]
     branches?: string[]
   }>({ loading: false })
@@ -476,6 +499,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       const data = await res.json()
       setDetailedVcs({
         loading: false,
+        tracking: data.tracking,
         submodules: data.submodules,
         branches: data.branches,
       })
@@ -486,6 +510,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const submodules = createMemo(() => detailedVcs().submodules)
   const branches = createMemo(() => detailedVcs().branches)
+  const trackingBranch = createMemo(() => detailedVcs().tracking)
   const worktree = createMemo(() => {
     return sessionSyncData().vcs?.worktree
   })
@@ -2303,38 +2328,70 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               </Show>
               <Show when={showGitInfo()}>
                 <Popover
-                  title="Git Information"
+                  title={language.t("prompt.git.title")}
+                  description={language.t("prompt.git.description")}
                   placement="top"
                   gutter={8}
-                  style={{ "max-width": "560px", "min-width": "360px" }}
+                  style={{ "max-width": "640px", "min-width": "420px" }}
                   triggerAs={Button}
                   triggerProps={{
                     variant: "ghost",
                     class: "size-6 px-1",
-                    "aria-label": "Git branch and worktree information",
+                    "aria-label": language.t("prompt.git.aria"),
                   }}
                   trigger={<Icon name="branch" class="size-4.5" />}
                   onOpenChange={(open) => {
                     if (open) fetchDetailedVcs()
                   }}
                 >
-                  <div class="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
-                    {/* Main Project Info */}
-                    <div class="flex flex-col gap-0.5">
-                      <span class="text-14-medium text-text-strong">
-                        {projectName() || worktreeDisplay() || getFilename(currentDirectory() || sdk.directory)}
-                      </span>
-                      <div class="flex items-center gap-3 text-12-regular text-text-weak">
+                  <div class="flex max-h-[460px] flex-col gap-3 overflow-y-auto pr-1">
+                    <div class="rounded-xl border border-border-base bg-background-base p-3 shadow-sm">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                          <span class="block truncate text-14-medium text-text-strong">
+                            {projectName() || worktreeDisplay() || getFilename(currentDirectory() || sdk.directory)}
+                          </span>
+                          <span class="mt-0.5 block truncate text-12-regular text-text-weak">
+                            {currentDirectory() || sdk.directory}
+                          </span>
+                        </div>
+                        <div class="rounded-full border border-border-base bg-background-frame px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-text-weak">
+                          {language.t("prompt.git.badge")}
+                        </div>
+                      </div>
+
+                      <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <Show when={currentBranch()}>
-                          <div class="flex items-center gap-1">
-                            <Icon name="branch" size="small" class="text-icon-weak shrink-0" />
-                            <span>{currentBranch()}</span>
+                          <div class="rounded-lg border border-border-base bg-background-frame p-2.5">
+                            <div class="mb-1 flex items-center gap-1.5">
+                              <Icon name="branch" size="small" class="shrink-0 text-icon-weak" />
+                              <span class="text-[11px] font-medium uppercase tracking-wide text-text-weak">
+                                {language.t("prompt.git.currentBranch")}
+                              </span>
+                            </div>
+                            <div class="truncate text-12-mono text-text-strong">{currentBranch()}</div>
+                          </div>
+                        </Show>
+                        <Show when={trackingBranch()}>
+                          <div class="rounded-lg border border-border-base bg-background-frame p-2.5">
+                            <div class="mb-1 flex items-center gap-1.5">
+                              <Icon name="branch" size="small" class="shrink-0 text-icon-weak" />
+                              <span class="text-[11px] font-medium uppercase tracking-wide text-text-weak">
+                                {language.t("prompt.git.trackingRemote")}
+                              </span>
+                            </div>
+                            <div class="truncate text-12-mono text-text-strong">{trackingBranch()}</div>
                           </div>
                         </Show>
                         <Show when={worktree()}>
-                          <div class="flex items-center gap-1">
-                            <Icon name="folder" size="small" class="text-icon-weak shrink-0" />
-                            <span class="truncate">{getFilename(worktree()!)}</span>
+                          <div class="rounded-lg border border-border-base bg-background-frame p-2.5 sm:col-span-2">
+                            <div class="mb-1 flex items-center gap-1.5">
+                              <Icon name="folder" size="small" class="shrink-0 text-icon-weak" />
+                              <span class="text-[11px] font-medium uppercase tracking-wide text-text-weak">
+                                {language.t("prompt.git.worktree")}
+                              </span>
+                            </div>
+                            <div class="truncate text-12-mono text-text-strong">{worktree()}</div>
                           </div>
                         </Show>
                       </div>
@@ -2343,25 +2400,33 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     <Show
                       when={!detailedVcs().loading}
                       fallback={
-                        <div class="flex items-center justify-center py-2">
-                          <div class="size-4 border-2 border-icon-base border-t-transparent rounded-full animate-spin" />
-                          <span class="ml-2 text-12-regular text-text-weak">Loading...</span>
+                        <div class="flex items-center justify-center rounded-lg border border-border-base bg-background-base py-4">
+                          <div class="size-4 animate-spin rounded-full border-2 border-icon-base border-t-transparent" />
+                          <span class="ml-2 text-12-regular text-text-weak">{language.t("prompt.git.loading")}</span>
                         </div>
                       }
                     >
-                      {/* Branches */}
                       <Show when={branches() && branches()!.length > 0}>
-                        <div class="flex flex-col gap-1">
-                          <span class="text-12-medium text-text-weak">Branches</span>
+                        <div class="flex flex-col gap-2 rounded-xl border border-border-base bg-background-base p-3">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-12-medium text-text-strong">{language.t("prompt.git.branches")}</span>
+                            <span class="rounded-full border border-border-base bg-background-frame px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-weak">
+                              {branches()!.length}
+                            </span>
+                          </div>
                           <BranchGroups branches={branches()!} current={currentBranch()} />
                         </div>
                       </Show>
 
-                      {/* Submodules */}
                       <Show when={submodules() && submodules()!.length > 0}>
-                        <div class="flex flex-col gap-0.5">
-                          <span class="text-12-medium text-text-weak">Submodules</span>
-                          <div class="flex flex-col">
+                        <div class="flex flex-col gap-2 rounded-xl border border-border-base bg-background-base p-3">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-12-medium text-text-strong">{language.t("prompt.git.submodules")}</span>
+                            <span class="rounded-full border border-border-base bg-background-frame px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-weak">
+                              {submodules()!.length}
+                            </span>
+                          </div>
+                          <div class="flex flex-col gap-1">
                             <For each={submodules()}>{(submodule) => <SubmoduleItem submodule={submodule} />}</For>
                           </div>
                         </div>
