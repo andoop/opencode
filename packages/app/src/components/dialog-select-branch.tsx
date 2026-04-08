@@ -4,6 +4,7 @@ import { List } from "@opencode-ai/ui/list"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { Tabs } from "@opencode-ai/ui/tabs"
 import { createMemo, createResource, createSignal, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
@@ -20,14 +21,11 @@ type BranchItem = {
 }
 
 function toItems(data: { local: string[]; remote: string[]; current?: string }): BranchItem[] {
-  const seen = new Set<string>()
   const result: BranchItem[] = []
   for (const name of data.local) {
-    seen.add(name)
     result.push({ name, group: "local", current: name === data.current })
   }
   for (const name of data.remote) {
-    if (seen.has(name)) continue
     result.push({ name, group: "remote", current: false })
   }
   return result
@@ -56,12 +54,16 @@ export function DialogSelectBranch(props: {
       onClient: (c) => addAuthInterceptor(c, () => auth.token),
     })
 
-  const [raw, { refetch }] = createResource(
-    () => props.directory,
-    async (dir) => {
-      const r = await open(dir).branch.list({ directory: dir })
-      if (r.data) return r.data
-      const e = r.error
+  const load = async (dir: string, fresh?: boolean) => {
+    const client = open(dir)
+    const result = fresh
+      ? await client.branch.refresh({ body_directory: dir }).catch(() => undefined)
+      : await client.branch.list({ directory: dir })
+    if (result?.data) return result.data
+    if (fresh) {
+      const fallback = await client.branch.list({ directory: dir })
+      if (fallback.data) return fallback.data
+      const e = fallback.error
       const msg =
         typeof e === "string"
           ? e
@@ -69,7 +71,20 @@ export function DialogSelectBranch(props: {
             ? String((e as { message: unknown }).message)
             : language.t("common.requestFailed")
       throw new Error(msg)
-    },
+    }
+    const e = result?.error
+    const msg =
+      typeof e === "string"
+        ? e
+        : e && typeof e === "object" && "message" in e
+          ? String((e as { message: unknown }).message)
+          : language.t("common.requestFailed")
+    throw new Error(msg)
+  }
+
+  const [raw, { refetch }] = createResource(
+    () => props.directory,
+    async (dir) => load(dir, true),
   )
 
   const items = createMemo(() => {
@@ -77,6 +92,8 @@ export function DialogSelectBranch(props: {
     if (!data) return [] as BranchItem[]
     return toItems(data)
   })
+  const remoteItems = createMemo(() => items().filter((item) => item.group === "remote"))
+  const localItems = createMemo(() => items().filter((item) => item.group === "local"))
 
   const refresh = async () => {
     if (raw.loading) return
@@ -131,32 +148,58 @@ export function DialogSelectBranch(props: {
         </Show>
 
         <Show when={!raw.loading && !raw.error}>
-          <List
-            class="flex-1 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0"
-            search={{
-              placeholder: language.t("dialog.branch.search.placeholder"),
-              autofocus: true,
-            }}
-            emptyMessage={language.t("dialog.branch.empty")}
-            key={(x) => `${x.group}/${x.name}`}
-            items={items()}
-            filterKeys={["name"]}
-            groupBy={(x) =>
-              x.group === "local" ? language.t("dialog.branch.local") : language.t("dialog.branch.remote")
-            }
-            sortGroupsBy={(a, b) => a.category.localeCompare(b.category)}
-            onSelect={select}
-          >
-            {(item) => (
-              <div class="flex w-full items-center gap-2">
-                <Icon name="branch" size="small" class="shrink-0 text-icon-base" />
-                <span class="min-w-0 flex-1 truncate text-left font-normal">{item.name}</span>
-                <Show when={item.current}>
-                  <span class="shrink-0 text-12-regular text-text-weak">{language.t("dialog.branch.current")}</span>
-                </Show>
-              </div>
-            )}
-          </List>
+          <Tabs defaultValue="remote" class="flex min-h-0 flex-1 flex-col">
+            <Tabs.List class="mb-2 shrink-0">
+              <Tabs.Trigger value="remote">{language.t("dialog.branch.remote")}</Tabs.Trigger>
+              <Tabs.Trigger value="local">{language.t("dialog.branch.local")}</Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value="remote" class="flex min-h-0 flex-1">
+              <List
+                class="flex-1 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0"
+                search={{
+                  placeholder: language.t("dialog.branch.search.placeholder"),
+                  autofocus: true,
+                }}
+                emptyMessage={language.t("dialog.branch.empty")}
+                key={(x) => `${x.group}/${x.name}`}
+                items={remoteItems()}
+                filterKeys={["name"]}
+                onSelect={select}
+              >
+                {(item) => (
+                  <div class="flex w-full items-center gap-2">
+                    <Icon name="branch" size="small" class="shrink-0 text-icon-base" />
+                    <span class="min-w-0 flex-1 truncate text-left font-normal">{item.name}</span>
+                  </div>
+                )}
+              </List>
+            </Tabs.Content>
+            <Tabs.Content value="local" class="flex min-h-0 flex-1">
+              <List
+                class="flex-1 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0"
+                search={{
+                  placeholder: language.t("dialog.branch.search.placeholder"),
+                }}
+                emptyMessage={language.t("dialog.branch.empty")}
+                key={(x) => `${x.group}/${x.name}`}
+                items={localItems()}
+                filterKeys={["name"]}
+                onSelect={select}
+              >
+                {(item) => (
+                  <div class="flex w-full items-center gap-2">
+                    <Icon name="branch" size="small" class="shrink-0 text-icon-base" />
+                    <span class="min-w-0 flex-1 truncate text-left font-normal">{item.name}</span>
+                    <Show when={item.current}>
+                      <span class="shrink-0 text-12-regular text-text-weak">
+                        {language.t("dialog.branch.current")}
+                      </span>
+                    </Show>
+                  </div>
+                )}
+              </List>
+            </Tabs.Content>
+          </Tabs>
         </Show>
       </div>
     </Dialog>
