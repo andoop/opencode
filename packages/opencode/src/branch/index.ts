@@ -138,7 +138,7 @@ export namespace Branch {
   export async function refresh(directory: string) {
     const cwd = await resolveGitWorktree(directory)
     if (fs.existsSync(cwd)) {
-      const r = await spawnGit(cwd, ["fetch"])
+      const r = await spawnGit(cwd, ["fetch", "--all", "--prune", "--tags"])
       if (r.code !== 0) log.warn("branch.refresh.fetchFailed", { cwd, stderr: r.err.slice(0, 240) })
     }
     return list(directory)

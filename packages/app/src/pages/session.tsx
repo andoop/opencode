@@ -52,7 +52,7 @@ import { DialogFork } from "@/components/dialog-fork"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useNavigate, useParams } from "@solidjs/router"
-import { UserMessage } from "@opencode-ai/sdk/v2"
+import { UserMessage, type File as GitStatusFile } from "@opencode-ai/sdk/v2"
 import type { FileDiff } from "@opencode-ai/sdk/v2/client"
 import type { QuestionAnswer } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
@@ -105,6 +105,7 @@ type GitHistoryVcs = {
   tracking?: string
   worktree?: string
 }
+const HISTORY_WORKING_TREE_ID = "__working_tree__"
 
 const createSessionState = () => ({
   open: false,
@@ -771,11 +772,15 @@ export default function Page() {
   const [gitHistoryCommitLoading, setGitHistoryCommitLoading] = createSignal(false)
   const [gitHistoryProjects, setGitHistoryProjects] = createSignal<GitHistoryProject[]>([])
   const [gitHistoryVcs, setGitHistoryVcs] = createSignal<GitHistoryVcs>({ loading: false })
+  const [gitHistoryStatus, setGitHistoryStatus] = createSignal<GitStatusFile[]>([])
+  const [gitHistoryDiffs, setGitHistoryDiffs] = createSignal<FileDiff[]>([])
+  const [gitHistoryDiffsReady, setGitHistoryDiffsReady] = createSignal(false)
   const [selectedHistoryProject, setSelectedHistoryProject] = createSignal<string>()
   const [selectedHistoryCommit, setSelectedHistoryCommit] = createSignal<string>()
   let gitStatusRequest = 0
   let gitHistoryRequest = 0
   let gitCommitRequest = 0
+  let gitHistoryStatusRequest = 0
   let gitHistoryProjectsRequest = 0
   const reviewCount = createMemo(() => gitDiffs().length)
   const hasReview = createMemo(() => reviewCount() > 0)
@@ -1600,21 +1605,76 @@ export default function Page() {
     return gitHistoryVcs().branch
   })
 
-  const withHistoryPath = (detail: SessionGitCommitDetailValue) => {
+  const historyPath = (path: string) => {
     const prefix = historyProject()?.prefix
-    if (!prefix) return detail
+    return prefix ? `${prefix}/${path}` : path
+  }
+
+  const withHistoryPath = (detail: SessionGitCommitDetailValue) => {
     return {
       ...detail,
       files: detail.files.map((file) => ({
         ...file,
-        path: `${prefix}/${file.path}`,
+        path: historyPath(file.path),
       })),
       diffs: detail.diffs.map((diff) => ({
         ...diff,
-        file: `${prefix}/${diff.file}`,
+        file: historyPath(diff.file),
       })),
     }
   }
+
+  const historyWorkingTreeCounts = createMemo(() => {
+    const out = {
+      added: 0,
+      modified: 0,
+      deleted: 0,
+    }
+    for (const file of gitHistoryStatus()) {
+      if (file.status === "added") out.added += 1
+      else if (file.status === "deleted") out.deleted += 1
+      else out.modified += 1
+    }
+    return out
+  })
+
+  const historyWorkingTreeSummary = createMemo(() => {
+    const count = historyWorkingTreeCounts()
+    const parts = [
+      count.modified ? `${count.modified} modified` : "",
+      count.added ? `${count.added} added` : "",
+      count.deleted ? `${count.deleted} deleted` : "",
+    ].filter(Boolean)
+    if (parts.length > 0) return parts.join(" · ")
+    if (gitHistoryDiffsReady()) return "Clean working tree"
+    return "Loading working tree"
+  })
+
+  const historyWorkingTreeDetail = createMemo<SessionGitCommitDetailValue | undefined>(() => {
+    if (!gitHistoryDiffsReady() && gitHistoryStatus().length === 0 && gitHistoryDiffs().length === 0) return
+    return {
+      oid: HISTORY_WORKING_TREE_ID,
+      short: "working-tree",
+      parents: [],
+      author_name: "Working tree",
+      author_email: "",
+      authored_at: Date.now(),
+      refs: [
+        { kind: "head", name: "HEAD" },
+        ...(historyCurrentBranch() ? [{ kind: "local" as const, name: historyCurrentBranch()! }] : []),
+        ...(gitHistoryVcs().tracking ? [{ kind: "remote" as const, name: gitHistoryVcs().tracking! }] : []),
+      ],
+      subject: "Working tree",
+      body: historyWorkingTreeSummary(),
+      files: gitHistoryStatus().map((file) => ({
+        path: file.path,
+        additions: file.added,
+        deletions: file.removed,
+        status: file.status,
+      })),
+      diffs: gitHistoryDiffs(),
+    }
+  })
 
   createEffect(
     on(
@@ -1688,33 +1748,41 @@ export default function Page() {
     else setGitHistoryLoading(true)
 
     try {
-      const search = new URLSearchParams({
-        directory: dir,
-        limit: "80",
+      const items: SessionGitHistoryEntry[] = cursor ? [...gitHistory().items] : []
+      let next = cursor
+
+      while (true) {
+        const search = new URLSearchParams({
+          directory: dir,
+          limit: "200",
+        })
+        if (next) search.set("cursor", next)
+
+        const res = await (platform.fetch ?? fetch)(`${String(sdk.url)}/git/history?${search.toString()}`, {
+          headers: gitHeaders(),
+        })
+        if (!res.ok) throw new Error(res.statusText)
+
+        const data = (await res.json()) as GitHistoryPage
+        if (request !== gitHistoryRequest) return
+        items.push(...data.items)
+        next = data.next
+        if (!next) break
+      }
+
+      setGitHistory({
+        items,
+        next: undefined,
       })
-      if (cursor) search.set("cursor", cursor)
-
-      const res = await (platform.fetch ?? fetch)(`${String(sdk.url)}/git/history?${search.toString()}`, {
-        headers: gitHeaders(),
-      })
-      if (!res.ok) throw new Error(res.statusText)
-
-      const data = (await res.json()) as GitHistoryPage
-      if (request !== gitHistoryRequest) return
-
-      setGitHistory((prev) => ({
-        items: cursor ? [...prev.items, ...data.items] : data.items,
-        next: data.next,
-      }))
 
       const current = selectedHistoryCommit()
       if (cursor) return
-      if (!current && data.items[0]) {
-        setSelectedHistoryCommit(data.items[0].oid)
+      if (!current && items[0]) {
+        setSelectedHistoryCommit(items[0].oid)
         return
       }
-      if (current && data.items.some((item) => item.oid === current)) return
-      setSelectedHistoryCommit(data.items[0]?.oid)
+      if (current && items.some((item) => item.oid === current)) return
+      setSelectedHistoryCommit(items[0]?.oid)
     } catch {
       if (request !== gitHistoryRequest) return
       if (!cursor) {
@@ -1754,7 +1822,44 @@ export default function Page() {
     }
   }
 
+  const fetchHistoryWorkingTree = async () => {
+    const dir = historyVcsDirectory()
+    if (!dir) return
+
+    const request = ++gitHistoryStatusRequest
+    setGitHistoryDiffsReady(false)
+    try {
+      const [status, diffs] = await Promise.all([
+        sdk.client.file.status({ directory: dir }),
+        (platform.fetch ?? fetch)(`${String(sdk.url)}/file/diff?directory=${encodeURIComponent(dir)}`, {
+          headers: gitHeaders(),
+        }).then((res) => {
+          if (!res.ok) throw new Error(res.statusText)
+          return res.json() as Promise<FileDiff[]>
+        }),
+      ])
+      if (request !== gitHistoryStatusRequest) return
+      setGitHistoryStatus((status.data ?? []).map((item) => ({ ...item, path: historyPath(item.path) })))
+      setGitHistoryDiffs(diffs.map((item) => ({ ...item, file: historyPath(item.file) })))
+    } catch {
+      if (request !== gitHistoryStatusRequest) return
+      setGitHistoryStatus([])
+      setGitHistoryDiffs([])
+    } finally {
+      if (request !== gitHistoryStatusRequest) return
+      setGitHistoryDiffsReady(true)
+      if (!selectedHistoryCommit() && gitHistoryStatus().length > 0) {
+        setSelectedHistoryCommit(HISTORY_WORKING_TREE_ID)
+      }
+    }
+  }
+
   const fetchSelectedCommit = async (oid: string) => {
+    if (oid === HISTORY_WORKING_TREE_ID) {
+      setGitHistoryCommit(historyWorkingTreeDetail())
+      setGitHistoryCommitLoading(false)
+      return
+    }
     const dir = historyDirectory()
     if (!dir) return
 
@@ -1784,8 +1889,20 @@ export default function Page() {
   }
 
   const refreshGitHistory = async () => {
+    const dir = historyDirectory()
+    if (dir) {
+      await (platform.fetch ?? fetch)(`${String(sdk.url)}/branch/refresh`, {
+        method: "POST",
+        headers: {
+          ...gitHeaders(),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ directory: dir }),
+      }).catch(() => undefined)
+    }
     await fetchGitHistory()
     await fetchHistoryVcs()
+    await fetchHistoryWorkingTree()
     const oid = selectedHistoryCommit()
     if (!oid) return
     await fetchSelectedCommit(oid)
@@ -2080,6 +2197,20 @@ export default function Page() {
         if (!dir) return
         void fetchGitHistory()
         void fetchHistoryVcs()
+        void fetchHistoryWorkingTree()
+      },
+      { defer: true },
+    ),
+  )
+
+  createEffect(
+    on(
+      () => [layout.fileTree.opened(), fileTreeTab(), layout.fileTree.width(), isDesktop()] as const,
+      ([opened, tab, width, desktop]) => {
+        if (!opened || !desktop) return
+        if (tab !== "history") return
+        if (width >= 760) return
+        layout.fileTree.resize(760)
       },
       { defer: true },
     ),
@@ -3827,6 +3958,13 @@ export default function Page() {
                         currentBranch={historyCurrentBranch()}
                         trackingBranch={gitHistoryVcs().tracking}
                         currentCommit={historyCurrentCommit()}
+                        workingTree={{
+                          id: HISTORY_WORKING_TREE_ID,
+                          label: historyCurrentBranch() || "HEAD",
+                          summary: historyWorkingTreeSummary(),
+                          files: gitHistoryStatus().length,
+                          selected: selectedHistoryCommit() === HISTORY_WORKING_TREE_ID,
+                        }}
                         commits={gitHistory().items}
                         selected={selectedHistoryCommit()}
                         loading={gitHistoryLoading()}
@@ -3847,6 +3985,9 @@ export default function Page() {
                           setSelectedHistoryCommit(undefined)
                           setGitHistory({ items: [], next: undefined })
                           setGitHistoryCommit(undefined)
+                          setGitHistoryStatus([])
+                          setGitHistoryDiffs([])
+                          setGitHistoryDiffsReady(false)
                         }}
                         onLoadMore={loadMoreGitHistory}
                       />
@@ -3858,7 +3999,7 @@ export default function Page() {
                   edge="start"
                   size={layout.fileTree.width()}
                   min={200}
-                  max={480}
+                  max={Math.max(760, window.innerWidth * 0.72)}
                   collapseThreshold={160}
                   onResize={layout.fileTree.resize}
                   onCollapse={layout.fileTree.close}
