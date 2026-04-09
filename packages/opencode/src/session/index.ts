@@ -88,6 +88,34 @@ export namespace Session {
     return `rc/${branchUser()}/${branchTime(input.created)}/${branchTail(input.baseBranch)}`
   }
 
+  const BranchTarget = z.object({
+    name: z.string(),
+    group: z.enum(["local", "remote"]),
+  })
+
+  const BranchSelection = z.union([z.string(), BranchTarget])
+
+  type BranchSelection = z.infer<typeof BranchSelection>
+  type PickedBranch = {
+    name: string
+    group?: "local" | "remote"
+  }
+
+  function normalizeBranchSelection(branch: BranchSelection | undefined) {
+    if (!branch) return
+    if (typeof branch === "string") {
+      const name = branch.trim()
+      if (!name) return
+      return { name } satisfies PickedBranch
+    }
+    const name = branch.name.trim()
+    if (!name) return
+    return {
+      name,
+      group: branch.group,
+    } satisfies PickedBranch
+  }
+
   function sessionKey(workspaceID: string, sessionID: string): string[] {
     return ["session", workspaceID, sessionID]
   }
@@ -487,13 +515,16 @@ export namespace Session {
     return text.trim() || undefined
   }
 
-  async function resolvePickedBranch(directory: string, branch: string) {
-    const local = await gitText(directory, ["rev-parse", branch])
-    if (local) return { ref: branch, commit: local }
-    const remote = await gitText(directory, ["rev-parse", `origin/${branch}`])
-    if (remote) return { ref: `origin/${branch}`, commit: remote }
-    const fullRemote = await gitText(directory, ["rev-parse", `refs/remotes/origin/${branch}`])
-    if (fullRemote) return { ref: `refs/remotes/origin/${branch}`, commit: fullRemote }
+  async function resolvePickedBranch(directory: string, branch: PickedBranch) {
+    if (branch.group !== "remote") {
+      const local = await gitText(directory, ["rev-parse", branch.name])
+      if (local) return { ref: branch.name, commit: local }
+      if (branch.group === "local") return
+    }
+    const remote = await gitText(directory, ["rev-parse", `origin/${branch.name}`])
+    if (remote) return { ref: `origin/${branch.name}`, commit: remote }
+    const fullRemote = await gitText(directory, ["rev-parse", `refs/remotes/origin/${branch.name}`])
+    if (fullRemote) return { ref: `refs/remotes/origin/${branch.name}`, commit: fullRemote }
     return
   }
 
@@ -501,7 +532,7 @@ export namespace Session {
     workspaceProject: Workspace.ProjectInfo
     sessionID: string
     sessionDirectory: string
-    baseBranch?: string
+    baseBranch?: BranchSelection
     created: number
   }) {
     const sessionWorktreeDirectory = path.join(input.sessionDirectory, "roots", input.workspaceProject.slug)
@@ -523,11 +554,11 @@ export namespace Session {
         vcs: input.workspaceProject.vcs,
       })
     }
-    const picked = input.baseBranch?.trim()
+    const picked = normalizeBranchSelection(input.baseBranch)
     let baseBranch: string
     let baseCommit: string | undefined
     if (picked) {
-      baseBranch = picked
+      baseBranch = picked.name
       const resolved = await resolvePickedBranch(userWorktreeDirectory, picked)
       baseCommit = resolved?.commit
     } else {
@@ -537,7 +568,7 @@ export namespace Session {
     }
     if (!baseCommit) {
       throw new Error(
-        `Could not resolve base commit for ${input.workspaceProject.slug} (${input.workspaceProject.projectID}); branch=${picked ?? baseBranch}`,
+        `Could not resolve base commit for ${input.workspaceProject.slug} (${input.workspaceProject.projectID}); branch=${picked?.name ?? baseBranch}`,
       )
     }
     const branch = branchName({
@@ -602,7 +633,7 @@ export namespace Session {
         title: z.string().optional(),
         permission: Info.shape.permission,
         workspaceID: z.string().optional(),
-        branches: z.record(z.string(), z.string()).optional(),
+        branches: z.record(z.string(), BranchSelection).optional(),
       })
       .optional(),
     async (input) => {
@@ -673,7 +704,7 @@ export namespace Session {
     permission?: PermissionNext.Ruleset
     userID?: string
     workspaceID?: string
-    branches?: Record<string, string>
+    branches?: Record<string, BranchSelection>
   }) {
     const userID = input.userID ?? currentUserID()
     const sessionID = Identifier.descending("session", input.id)

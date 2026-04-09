@@ -4492,7 +4492,12 @@ export type SessionCreateData = {
     permission?: PermissionRuleset
     workspaceID?: string
     branches?: {
-      [key: string]: string
+      [key: string]:
+        | string
+        | {
+            name: string
+            group: "local" | "remote"
+          }
     }
   }
   path?: never

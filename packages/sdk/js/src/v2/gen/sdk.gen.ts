@@ -2012,7 +2012,12 @@ export class Session extends HeyApiClient {
       permission?: PermissionRuleset
       workspaceID?: string
       branches?: {
-        [key: string]: string
+        [key: string]:
+          | string
+          | {
+              name: string
+              group: "local" | "remote"
+            }
       }
     },
     options?: Options<never, ThrowOnError>,

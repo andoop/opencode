@@ -3043,7 +3043,7 @@ export default function Layout(props: ParentProps) {
       return { cancelled: false, branches: undefined, workspaceID: workspace?.id }
     }
 
-    const branches: Record<string, string> = {}
+    const branches: Record<string, Extract<BranchDialogConfirm, { kind: "pick" }>["branch"]> = {}
     const total = gitProjects.length
     let i = 0
     for (const p of gitProjects) {

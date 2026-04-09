@@ -12,11 +12,21 @@ import { useGlobalSDK } from "@/context/global-sdk"
 import { usePlatform } from "@/context/platform"
 import { addAuthInterceptor, useAuth } from "@/context/auth"
 
-export type BranchDialogConfirm = { kind: "pick"; branch: string } | { kind: "skip" }
+export type BranchGroup = "local" | "remote"
+
+export type BranchDialogConfirm =
+  | {
+      kind: "pick"
+      branch: {
+        name: string
+        group: BranchGroup
+      }
+    }
+  | { kind: "skip" }
 
 type BranchItem = {
   name: string
-  group: "local" | "remote"
+  group: BranchGroup
   current: boolean
 }
 
@@ -105,7 +115,7 @@ export function DialogSelectBranch(props: {
 
   const select = (item: BranchItem | undefined) => {
     if (!item) return
-    props.onConfirm({ kind: "pick", branch: item.name })
+    props.onConfirm({ kind: "pick", branch: { name: item.name, group: item.group } })
     dialog.close()
   }
 
