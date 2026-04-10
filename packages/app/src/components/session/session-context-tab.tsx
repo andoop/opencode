@@ -16,6 +16,7 @@ import { useLanguage } from "@/context/language"
 
 interface SessionContextTabProps {
   messages: () => Message[]
+  parts: (messageID: string) => Part[]
   visibleUserMessages: () => UserMessage[]
   view: () => ReturnType<ReturnType<typeof useLayout>["view"]>
   info: () => ReturnType<ReturnType<typeof useSync>["session"]["get"]>
@@ -35,29 +36,42 @@ export function SessionContextTab(props: SessionContextTabProps) {
   )
 
   const ctx = createMemo(() => {
-    const last = findLast(props.messages(), (x) => {
+    const lastAssistant = findLast(props.messages(), (x) => x.role === "assistant") as AssistantMessage | undefined
+    const measured = findLast(props.messages(), (x) => {
       if (x.role !== "assistant") return false
       const total = x.tokens.input + x.tokens.output + x.tokens.reasoning + x.tokens.cache.read + x.tokens.cache.write
       return total > 0
-    }) as AssistantMessage
-    if (!last) return
+    }) as AssistantMessage | undefined
+    const lastUser = props.visibleUserMessages().at(-1)
+    const ref =
+      measured ??
+      lastAssistant ??
+      (lastUser?.model
+        ? {
+            providerID: lastUser.model.providerID,
+            modelID: lastUser.model.modelID,
+          }
+        : undefined)
+    if (!ref) return
 
-    const provider = sync.data.provider.all.find((x) => x.id === last.providerID)
-    const model = provider?.models[last.modelID]
+    const provider = sync.data.provider.all.find((x) => x.id === ref.providerID)
+    const model = provider?.models[ref.modelID]
     const limit = model?.limit.context
 
-    const input = last.tokens.input
-    const output = last.tokens.output
-    const reasoning = last.tokens.reasoning
-    const cacheRead = last.tokens.cache.read
-    const cacheWrite = last.tokens.cache.write
+    const input = measured?.tokens.input ?? 0
+    const output = measured?.tokens.output ?? 0
+    const reasoning = measured?.tokens.reasoning ?? 0
+    const cacheRead = measured?.tokens.cache.read ?? 0
+    const cacheWrite = measured?.tokens.cache.write ?? 0
     const total = input + output + reasoning + cacheRead + cacheWrite
     const usage = limit ? Math.round((total / limit) * 100) : null
 
     return {
-      message: last,
+      message: measured ?? lastAssistant,
       provider,
       model,
+      providerID: ref.providerID,
+      modelID: ref.modelID,
       limit,
       input,
       output,
@@ -66,6 +80,8 @@ export function SessionContextTab(props: SessionContextTabProps) {
       cacheWrite,
       total,
       usage,
+      measured: !!measured,
+      lastActivity: (measured ?? lastAssistant)?.time.created ?? props.messages().at(-1)?.time.created,
     }
   })
 
@@ -114,19 +130,19 @@ export function SessionContextTab(props: SessionContextTabProps) {
   const providerLabel = createMemo(() => {
     const c = ctx()
     if (!c) return "—"
-    return c.provider?.name ?? c.message.providerID
+    return c.provider?.name ?? c.providerID
   })
 
   const modelLabel = createMemo(() => {
     const c = ctx()
     if (!c) return "—"
     if (c.model?.name) return c.model.name
-    return c.message.modelID
+    return c.modelID
   })
 
   const breakdown = createMemo(
     on(
-      () => [ctx()?.message.id, ctx()?.input, props.messages().length, systemPrompt()],
+      () => [ctx()?.message?.id, ctx()?.input, props.messages().length, systemPrompt()],
       () => {
         const c = ctx()
         if (!c) return []
@@ -141,7 +157,7 @@ export function SessionContextTab(props: SessionContextTabProps) {
         }
 
         for (const msg of props.messages()) {
-          const parts = (sync.data.part[msg.id] ?? []) as Part[]
+          const parts = props.parts(msg.id)
 
           if (msg.role === "user") {
             for (const part of parts) {
@@ -272,13 +288,13 @@ export function SessionContextTab(props: SessionContextTabProps) {
       },
       { label: language.t("context.stats.totalCost"), value: cost() },
       { label: language.t("context.stats.sessionCreated"), value: time(props.info()?.time.created) },
-      { label: language.t("context.stats.lastActivity"), value: time(c?.message.time.created) },
+      { label: language.t("context.stats.lastActivity"), value: time(c?.lastActivity) },
     ] satisfies { label: string; value: JSX.Element }[]
   })
 
   function RawMessageContent(msgProps: { message: Message }) {
     const file = createMemo(() => {
-      const parts = (sync.data.part[msgProps.message.id] ?? []) as Part[]
+      const parts = props.parts(msgProps.message.id)
       const contents = JSON.stringify({ message: msgProps.message, parts }, null, 2)
       return {
         name: `${msgProps.message.role}-${msgProps.message.id}.json`,

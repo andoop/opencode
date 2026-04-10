@@ -474,6 +474,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!dir) return sync.data
     return globalSync.child(dir)[0]
   })
+  const sessionMessages = createMemo(() => {
+    const sessionID = params.id
+    if (!sessionID) return []
+    return sessionSyncData().message[sessionID] ?? []
+  })
   const currentBranch = createMemo(() => {
     return sessionSyncData().vcs?.branch
   })
@@ -2311,7 +2316,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             />
             <div class="flex items-center gap-1 mr-1">
               <Show when={auth.canFeature("files")}>
-                <SessionContextUsage />
+                <SessionContextUsage messages={sessionMessages} />
               </Show>
               <Show when={auth.canFeature("files") && store.mode === "normal"}>
                 <Tooltip placement="top" value={language.t("prompt.action.attachFile")}>

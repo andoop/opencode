@@ -3,7 +3,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { ProgressCircle } from "@opencode-ai/ui/progress-circle"
 import { Button } from "@opencode-ai/ui/button"
 import { useParams } from "@solidjs/router"
-import { AssistantMessage } from "@opencode-ai/sdk/v2/client"
+import { AssistantMessage, Message } from "@opencode-ai/sdk/v2/client"
 import { findLast } from "@opencode-ai/util/array"
 
 import { useLayout } from "@/context/layout"
@@ -12,6 +12,7 @@ import { useLanguage } from "@/context/language"
 
 interface SessionContextUsageProps {
   variant?: "button" | "indicator"
+  messages?: () => Message[]
 }
 
 export function SessionContextUsage(props: SessionContextUsageProps) {
@@ -23,7 +24,7 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
   const variant = createMemo(() => props.variant ?? "button")
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const tabs = createMemo(() => layout.tabs(sessionKey))
-  const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
+  const messages = createMemo(() => props.messages?.() ?? (params.id ? (sync.data.message[params.id] ?? []) : []))
 
   const usd = createMemo(
     () =>
@@ -40,15 +41,33 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
 
   const context = createMemo(() => {
     const locale = language.locale()
-    const last = findLast(messages(), (x) => {
+    const lastAssistant = findLast(messages(), (x) => x.role === "assistant") as AssistantMessage | undefined
+    const measured = findLast(messages(), (x) => {
       if (x.role !== "assistant") return false
       const total = x.tokens.input + x.tokens.output + x.tokens.reasoning + x.tokens.cache.read + x.tokens.cache.write
       return total > 0
-    }) as AssistantMessage
-    if (!last) return
-    const total =
-      last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
-    const model = sync.data.provider.all.find((x) => x.id === last.providerID)?.models[last.modelID]
+    }) as AssistantMessage | undefined
+    const lastUser = findLast(messages(), (x) => x.role === "user" && !!x.model) as
+      | (Message & { role: "user"; model: { providerID: string; modelID: string } })
+      | undefined
+    const ref =
+      measured ??
+      lastAssistant ??
+      (lastUser?.model
+        ? {
+            providerID: lastUser.model.providerID,
+            modelID: lastUser.model.modelID,
+          }
+        : undefined)
+    if (!ref) return
+    const total = measured
+      ? measured.tokens.input +
+        measured.tokens.output +
+        measured.tokens.reasoning +
+        measured.tokens.cache.read +
+        measured.tokens.cache.write
+      : 0
+    const model = sync.data.provider.all.find((x) => x.id === ref.providerID)?.models[ref.modelID]
     return {
       tokens: total.toLocaleString(locale),
       percentage: model?.limit.context ? Math.round((total / model.limit.context) * 100) : null,

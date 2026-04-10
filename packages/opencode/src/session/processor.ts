@@ -17,7 +17,7 @@ import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 
 export namespace SessionProcessor {
-  const DOOM_LOOP_THRESHOLD = 3
+  const DOOM_LOOP_THRESHOLD = 100
   const log = Log.create({ service: "session.processor" })
 
   function incompleteTurnUserMessage(

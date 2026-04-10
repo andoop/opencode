@@ -6,6 +6,7 @@ import { bridgeCommand, bridgeToolNames, prefixTool } from "./bridge"
 import { Installation } from "@/installation"
 import { KiroToolCall, instructions, parse, surface, toolPrompt } from "./toolcall"
 import { Identifier } from "@/id/id"
+import { addPromptUsage, extractPromptUsageInfo, type PromptUsage } from "@/util/prompt-usage"
 
 const log = Log.create({ service: "kiro-cli" })
 
@@ -489,6 +490,18 @@ export namespace KiroCLI {
     let roundNativeToolActivity = false
     let textBuffered = false
     let streamedUpTo = 0
+    let promptUsage: PromptUsage | undefined
+    let promptProviderMetadata: Record<string, unknown> | undefined
+    let stepUsage: PromptUsage | undefined
+    let stepProviderMetadata: Record<string, unknown> | undefined
+    function rememberUsage(value: unknown) {
+      const result = extractPromptUsageInfo(value)
+      if (!result) return
+      if (!stepUsage || result.usage.totalTokens >= stepUsage.totalTokens) {
+        stepUsage = result.usage
+      }
+      if (result.providerMetadata) stepProviderMetadata = result.providerMetadata
+    }
     function trace(id: string) {
       const item = toolTrace.get(id) ?? {}
       toolTrace.set(id, item)
@@ -678,6 +691,7 @@ export namespace KiroCLI {
         if (msg.method !== "session/update") return
         const update = msg.params?.update
         if (!update) return
+        rememberUsage(update)
         logSessionUpdate(update)
         switch (update.sessionUpdate) {
           case "agent_message_chunk": {
@@ -839,12 +853,13 @@ export namespace KiroCLI {
           queue.push({
             type: "finish-step",
             finishReason: reason,
-            usage: {
+            usage: promptUsage ?? {
               inputTokens: 0,
               outputTokens: 0,
               totalTokens: 0,
               reasoningTokens: 0,
             },
+            providerMetadata: promptProviderMetadata,
           })
           queue.push({ type: "finish" })
           queue.finish()
@@ -929,6 +944,8 @@ export namespace KiroCLI {
           textOpen = false
           reasoningOpen = false
           streamedUpTo = 0
+          stepUsage = undefined
+          stepProviderMetadata = undefined
           if (steps > 0) {
             queue.push({ type: "start-step" })
           }
@@ -946,6 +963,9 @@ export namespace KiroCLI {
               },
             ],
           })
+          rememberUsage(response)
+          promptUsage = addPromptUsage(promptUsage, stepUsage)
+          if (stepProviderMetadata) promptProviderMetadata = stepProviderMetadata
           promptReturnedAt = Date.now()
           await waitForTrailingToolUpdates("session_prompt_completed")
           if (!textBuffered && streamedUpTo < roundText.length) {

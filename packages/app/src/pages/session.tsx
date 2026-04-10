@@ -795,6 +795,7 @@ export default function Page() {
     const msgs = data.message[id] ?? []
     return msgs
   })
+  const parts = (messageID: string) => sessionSyncData().part[messageID] ?? []
   const messagesReady = createMemo(() => {
     const id = params.id
     if (!id) return true
@@ -3342,7 +3343,7 @@ export default function Page() {
                               onMiddleClick={() => tabs().close("context")}
                             >
                               <div class="flex items-center gap-2">
-                                <SessionContextUsage variant="indicator" />
+                                <SessionContextUsage variant="indicator" messages={messages} />
                                 <div>{language.t("session.tab.context")}</div>
                               </div>
                             </Tabs.Trigger>
@@ -3395,6 +3396,7 @@ export default function Page() {
                             <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                               <SessionContextTab
                                 messages={messages}
+                                parts={parts}
                                 visibleUserMessages={visibleUserMessages}
                                 view={view}
                                 info={info}
