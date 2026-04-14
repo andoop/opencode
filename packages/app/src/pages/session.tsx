@@ -38,12 +38,13 @@ import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, close
 import type { DragEvent } from "@thisbeyond/solid-dnd"
 import { useSync } from "@/context/sync"
 import { useTerminal, type LocalPTY } from "@/context/terminal"
-import { useLayout } from "@/context/layout"
+import { useLayout, type LocalProject } from "@/context/layout"
 import { Terminal } from "@/components/terminal"
 import { checksum, base64Encode } from "@opencode-ai/util/encode"
 import { findLast } from "@opencode-ai/util/array"
 import { Binary } from "@opencode-ai/util/binary"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { DialogSelectBranch, type BranchDialogConfirm } from "@/components/dialog-select-branch"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import FileTree from "@/components/file-tree"
 import { DialogSelectModel } from "@/components/dialog-select-model"
@@ -107,6 +108,7 @@ type GitHistoryVcs = {
   worktree?: string
 }
 const HISTORY_WORKING_TREE_ID = "__working_tree__"
+type BranchDialogOutcome = BranchDialogConfirm | { kind: "cancel" }
 
 const createSessionState = () => ({
   open: false,
@@ -595,8 +597,84 @@ export default function Page() {
     return "pending"
   }
 
-  const startSessionCreation = async (project: { worktree: string }) => {
+  const selectBranch = (directory: string, projectName: string, titleSuffix?: string) =>
+    new Promise<BranchDialogOutcome>((resolve) => {
+      let resolved = false
+      const finish = (value: BranchDialogOutcome) => {
+        if (resolved) return
+        resolved = true
+        resolve(value)
+      }
+      dialog.show(
+        () => (
+          <DialogSelectBranch
+            directory={directory}
+            projectName={projectName}
+            titleSuffix={titleSuffix}
+            onConfirm={(value) => finish(value)}
+          />
+        ),
+        () => finish({ kind: "cancel" }),
+      )
+    })
+
+  const collectSessionBranches = async (project: LocalProject) => {
+    const workspace = project.id
+      ? await workspaceFetch<WorkspaceInfo>(
+          globalSDK.url,
+          `/workspace/${encodeURIComponent(project.id)}`,
+          { token: auth.token ?? undefined, fetchFn: platform.fetch ?? fetch },
+        ).catch(() => undefined)
+      : undefined
+
+    const gitProjects: { projectID: string; directory: string; label: string }[] = []
+
+    if (workspace?.projects?.length) {
+      for (const item of workspace.projects) {
+        if (item.vcs !== "git") continue
+        gitProjects.push({
+          projectID: item.projectID,
+          directory: item.sourceDirectory,
+          label: item.name?.trim() || item.slug || getFilename(item.sourceDirectory),
+        })
+      }
+    } else if (project.vcs === "git" && project.id) {
+      gitProjects.push({
+        projectID: project.id,
+        directory: project.worktree,
+        label: project.name || getFilename(project.worktree),
+      })
+    }
+
+    if (gitProjects.length === 0) {
+      return { cancelled: false, branches: undefined, workspaceID: workspace?.id }
+    }
+
+    const branches: Record<string, Extract<BranchDialogConfirm, { kind: "pick" }>["branch"]> = {}
+    const total = gitProjects.length
+    let i = 0
+    for (const item of gitProjects) {
+      i += 1
+      const suffix = total > 1 ? ` (${i}/${total})` : ""
+      const outcome = await selectBranch(item.directory, item.label, suffix)
+      if (outcome.kind === "cancel") return { cancelled: true }
+      if (outcome.kind === "pick") branches[item.projectID] = outcome.branch
+    }
+
+    return {
+      cancelled: false,
+      branches: Object.keys(branches).length ? branches : undefined,
+      workspaceID: workspace?.id,
+    }
+  }
+
+  const startSessionCreation = async (project: LocalProject) => {
     if (ui.creating.open && ui.creating.status === "running") return
+
+    const branchPick = await collectSessionBranches(project)
+    if (branchPick.cancelled) return
+
+    const { branches, workspaceID } = branchPick
 
     setUi("creating", {
       ...createSessionState(),
@@ -612,7 +690,7 @@ export default function Page() {
     }
 
     const created = await sdk.client.session
-      .create({})
+      .create({ branches, workspaceID })
       .then((x) => x.data)
       .catch((err) => {
         fail(err instanceof Error ? err.message : String(err), "create")
