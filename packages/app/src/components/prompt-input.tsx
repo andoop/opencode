@@ -733,6 +733,23 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const xhr = new XMLHttpRequest()
     form.append("file", file)
 
+    const fail = (message: string) => {
+      setUpload(
+        "tasks",
+        (task) => task.id === id,
+        produce((task) => {
+          task.status = "error"
+          task.error = message
+          task.xhr = undefined
+        }),
+      )
+      showToast({
+        variant: "error",
+        title: language.t("prompt.toast.attachmentUploadFailed.title"),
+        description: message,
+      })
+    }
+
     setUpload("tasks", (tasks) => [
       ...tasks.filter((task) => task.id !== id),
       {
@@ -758,15 +775,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        setUpload(
-          "tasks",
-          (task) => task.id === id,
-          produce((task) => {
-            task.status = "error"
-            task.error = xhr.responseText || xhr.statusText
-            task.xhr = undefined
-          }),
-        )
+        fail(xhr.responseText || xhr.statusText || language.t("prompt.toast.attachmentUploadFailed.description"))
         return
       }
 
@@ -778,15 +787,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         }
       })()
       if (!result) {
-        setUpload(
-          "tasks",
-          (task) => task.id === id,
-          produce((task) => {
-            task.status = "error"
-            task.error = language.t("prompt.toast.attachmentUploadFailed.description")
-            task.xhr = undefined
-          }),
-        )
+        fail(language.t("prompt.toast.attachmentUploadFailed.description"))
         return
       }
       const attachment: UploadedAttachmentPart = {
@@ -803,15 +804,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       void Promise.all([files.tree.refresh(""), files.tree.refresh(".tmp"), files.tree.refresh(".tmp/attachments")])
     }
     xhr.onerror = () => {
-      setUpload(
-        "tasks",
-        (task) => task.id === id,
-        produce((task) => {
-          task.status = "error"
-          task.error = language.t("prompt.toast.attachmentUploadFailed.network")
-          task.xhr = undefined
-        }),
-      )
+      fail(language.t("prompt.toast.attachmentUploadFailed.network"))
     }
 
     const url = new URL(`/session/${session.id}/attachment`, sdk.url)
