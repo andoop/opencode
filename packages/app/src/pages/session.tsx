@@ -856,6 +856,7 @@ export default function Page() {
   const [gitHistoryDiffsReady, setGitHistoryDiffsReady] = createSignal(false)
   const [selectedHistoryProject, setSelectedHistoryProject] = createSignal<string>()
   const [selectedHistoryCommit, setSelectedHistoryCommit] = createSignal<string>()
+  const [fileTreeRefreshing, setFileTreeRefreshing] = createSignal(false)
   let gitStatusRequest = 0
   let gitHistoryRequest = 0
   let gitCommitRequest = 0
@@ -2041,6 +2042,26 @@ export default function Page() {
     await fetchSelectedCommit(oid)
   }
 
+  const refreshFileTree = async () => {
+    if (fileTreeRefreshing()) return
+    setFileTreeRefreshing(true)
+    try {
+      const tab = fileTreeTab()
+      if (tab === "history") {
+        await refreshGitHistory()
+        return
+      }
+      if (tab === "git") {
+        setGitRefresh((x) => x + 1)
+        await file.tree.refresh("")
+        return
+      }
+      await Promise.all([file.tree.refresh(""), file.tree.refresh(".tmp"), file.tree.refresh(".tmp/attachments")])
+    } finally {
+      setFileTreeRefreshing(false)
+    }
+  }
+
   const showAllFiles = () => {
     if (!auth.canFeature("files")) return
     if (fileTreeTab() !== "git") return
@@ -2740,6 +2761,7 @@ export default function Page() {
         if (part.type === "file") return `[file:${part.path}]`
         if (part.type === "agent") return `@${part.name}`
         if (part.type === "image") return `[image:${part.filename}]`
+        if (part.type === "attachment") return `[attachment:${part.filename}]`
         return part.content
       })
       .join("")
@@ -4041,18 +4063,32 @@ export default function Page() {
                     class="h-full"
                     data-scope="filetree"
                   >
-                    <Tabs.List>
-                      <Tabs.Trigger value="git" class="flex-1" classes={{ button: "w-full" }}>
-                        {gitStatus().length ? `${gitStatus().length} ` : ""}
-                        {language.t("session.files.git")}
-                      </Tabs.Trigger>
-                      <Tabs.Trigger value="history" class="flex-1" classes={{ button: "w-full" }}>
-                        {language.t("session.files.history")}
-                      </Tabs.Trigger>
-                      <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
-                        {language.t("session.files.all")}
-                      </Tabs.Trigger>
-                    </Tabs.List>
+                    <div class="flex items-center gap-1 px-2 pt-2">
+                      <Tabs.List class="min-w-0 flex-1">
+                        <Tabs.Trigger value="git" class="flex-1" classes={{ button: "w-full" }}>
+                          {gitStatus().length ? `${gitStatus().length} ` : ""}
+                          {language.t("session.files.git")}
+                        </Tabs.Trigger>
+                        <Tabs.Trigger value="history" class="flex-1" classes={{ button: "w-full" }}>
+                          {language.t("session.files.history")}
+                        </Tabs.Trigger>
+                        <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
+                          {language.t("session.files.all")}
+                        </Tabs.Trigger>
+                      </Tabs.List>
+                      <Tooltip placement="bottom" value={language.t("session.files.refresh")}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          class="h-7 shrink-0 px-2 text-11-medium"
+                          disabled={fileTreeRefreshing()}
+                          onClick={() => void refreshFileTree()}
+                          aria-label={language.t("session.files.refresh")}
+                        >
+                          {fileTreeRefreshing() ? language.t("session.files.refreshing") : language.t("session.files.refresh")}
+                        </Button>
+                      </Tooltip>
+                    </div>
                     <Tabs.Content value="git" class="bg-background-base px-3 py-0">
                       <Show
                         when={gitStatus().length > 0}

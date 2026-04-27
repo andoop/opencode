@@ -57,5 +57,62 @@ describe("workspace session flow", () => {
     }
     const sessions = (await listed.json()) as Session.Info[]
     expect(sessions.some((item) => item.id === session.id)).toBe(true)
-  })
+  }, 30000)
+
+  test("uploads attachments into the session temp directory", async () => {
+    await using first = await tmpdir({ git: true })
+
+    const app = Server.App()
+    const sessionResponse = await app.request(`/session?directory=${encodeURIComponent(first.path)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    expect(sessionResponse.status).toBe(200)
+    const session = (await sessionResponse.json()) as Session.Info
+
+    const form = new FormData()
+    form.append("file", new File(["hello"], "../log.zip", { type: "application/zip" }))
+    const response = await app.request(`/session/${session.id}/attachment`, {
+      method: "POST",
+      headers: {
+        "x-opencode-directory": session.directory,
+      },
+      body: form,
+    })
+
+    if (response.status !== 200) {
+      throw new Error(await response.text())
+    }
+    const attachment = (await response.json()) as { path: string; url: string; filename: string; size: number }
+    expect(attachment.filename).toBe("../log.zip")
+    expect(attachment.size).toBe(5)
+    expect(attachment.url).toBe(`file://${attachment.path}`)
+    expect(attachment.path.startsWith(path.join(session.directory, ".tmp", "attachments"))).toBe(true)
+    expect(path.basename(attachment.path)).not.toContain("..")
+    expect(await Bun.file(attachment.path).text()).toBe("hello")
+  }, 30000)
+
+  test("rejects attachments larger than 500MB", async () => {
+    await using first = await tmpdir({ git: true })
+
+    const app = Server.App()
+    const sessionResponse = await app.request(`/session?directory=${encodeURIComponent(first.path)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    expect(sessionResponse.status).toBe(200)
+    const session = (await sessionResponse.json()) as Session.Info
+
+    const response = await app.request(`/session/${session.id}/attachment`, {
+      method: "POST",
+      headers: {
+        "x-opencode-attachment-size": String(501 * 1024 * 1024),
+        "x-opencode-directory": session.directory,
+      },
+    })
+
+    expect(response.status).toBe(413)
+  }, 30000)
 })

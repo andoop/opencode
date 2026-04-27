@@ -1,4 +1,5 @@
 import { Log } from "@/util/log"
+import path from "path"
 import { Context } from "../util/context"
 import { Project } from "./project"
 import { State } from "./state"
@@ -117,6 +118,8 @@ export const Instance = {
    */
   containsPath(filepath: string) {
     if (Filesystem.contains(Instance.directory, filepath)) return true
+    const session = Instance.session
+    if (session && Filesystem.contains(path.join(session.directory, ".tmp"), filepath)) return true
     if (Instance.roots?.some((item) => Filesystem.contains(item.sessionWorktreeDirectory, filepath))) return true
     // Non-git projects set worktree to "/" which would match ANY absolute path.
     // Skip worktree check in this case to preserve external_directory permissions.

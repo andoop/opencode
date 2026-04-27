@@ -25,6 +25,7 @@ import {
   ImageAttachmentPart,
   AgentPart,
   FileAttachmentPart,
+  UploadedAttachmentPart,
 } from "@/context/prompt"
 import { useLayout } from "@/context/layout"
 import { useSDK } from "@/context/sdk"
@@ -63,6 +64,16 @@ import { base64Encode } from "@opencode-ai/util/encode"
 
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 const ACCEPTED_FILE_TYPES = [...ACCEPTED_IMAGE_TYPES, "application/pdf"]
+const UPLOAD_INLINE_MAX_BYTES = 10 * 1024 * 1024
+const UPLOAD_MAX_BYTES = 500 * 1024 * 1024
+const UPLOAD_MAX_FILES = 5
+
+function formatBytes(bytes: number) {
+  const units = ["B", "KB", "MB", "GB"]
+  const index = Math.min(Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)), units.length - 1)
+  const value = bytes / 1024 ** index
+  return `${index === 0 ? value : value.toFixed(value >= 10 ? 0 : 1)} ${units[index]}`
+}
 
 const SUBMODULE_COLORS = [
   "bg-icon-purple-base",
@@ -242,6 +253,24 @@ function SubmoduleItem(props: { submodule: SubmoduleData; depth?: number }) {
 type PendingPrompt = {
   abort: AbortController
   cleanup: VoidFunction
+}
+
+type UploadTask = {
+  id: string
+  file: File
+  status: "uploading" | "error"
+  progress: number
+  uploaded: number
+  error?: string
+  xhr?: XMLHttpRequest
+}
+
+type UploadedAttachmentResponse = {
+  filename: string
+  mime: string
+  size: number
+  path: string
+  url: string
 }
 
 const pending = new Map<string, PendingPrompt>()
@@ -447,10 +476,20 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     return { type: "idle" as const }
   })
+  const [upload, setUpload] = createStore<{
+    tasks: UploadTask[]
+  }>({
+    tasks: [],
+  })
   const working = createMemo(() => status()?.type !== "idle")
   const imageAttachments = createMemo(
     () => prompt.current().filter((part) => part.type === "image") as ImageAttachmentPart[],
   )
+  const uploadedAttachments = createMemo(
+    () => prompt.current().filter((part) => part.type === "attachment") as UploadedAttachmentPart[],
+  )
+  const pendingUploads = createMemo(() => upload.tasks.some((task) => task.status === "uploading"))
+  const failedUploads = createMemo(() => upload.tasks.some((task) => task.status === "error"))
 
   // Git branch and worktree info
   // Get session directory (may be worktree) for correct Git info
@@ -585,6 +624,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     prompt.map((part) => {
       if (part.type === "text") return { ...part }
       if (part.type === "image") return { ...part }
+      if (part.type === "attachment") return { ...part }
       if (part.type === "agent") return { ...part }
       return {
         ...part,
@@ -657,6 +697,156 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     reader.readAsDataURL(file)
   }
 
+  const removeUploadedAttachment = (id: string) => {
+    prompt.set(
+      prompt.current().filter((part) => part.type !== "attachment" || part.id !== id),
+      prompt.cursor(),
+    )
+  }
+
+  const cancelUpload = (id: string) => {
+    const task = upload.tasks.find((item) => item.id === id)
+    task?.xhr?.abort()
+    setUpload("tasks", (tasks) => tasks.filter((item) => item.id !== id))
+  }
+
+  const uploadAttachment = (file: File, existingID?: string) => {
+    const session = info()
+    if (!session) {
+      showToast({
+        title: language.t("prompt.toast.attachmentUploadFailed.title"),
+        description: language.t("prompt.toast.attachmentUploadFailed.noSession"),
+      })
+      return
+    }
+
+    if (file.size > UPLOAD_MAX_BYTES) {
+      showToast({
+        title: language.t("prompt.toast.attachmentTooLarge.title"),
+        description: language.t("prompt.toast.attachmentTooLarge.description", { size: formatBytes(UPLOAD_MAX_BYTES) }),
+      })
+      return
+    }
+
+    const id = existingID ?? crypto.randomUUID()
+    const form = new FormData()
+    const xhr = new XMLHttpRequest()
+    form.append("file", file)
+
+    setUpload("tasks", (tasks) => [
+      ...tasks.filter((task) => task.id !== id),
+      {
+        id,
+        file,
+        status: "uploading" as const,
+        progress: 0,
+        uploaded: 0,
+        xhr,
+      },
+    ])
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      setUpload(
+        "tasks",
+        (task) => task.id === id,
+        produce((task) => {
+          task.uploaded = event.loaded
+          task.progress = Math.round((event.loaded / event.total) * 100)
+        }),
+      )
+    }
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        setUpload(
+          "tasks",
+          (task) => task.id === id,
+          produce((task) => {
+            task.status = "error"
+            task.error = xhr.responseText || xhr.statusText
+            task.xhr = undefined
+          }),
+        )
+        return
+      }
+
+      const result = (() => {
+        try {
+          return JSON.parse(xhr.responseText) as UploadedAttachmentResponse
+        } catch {
+          return undefined
+        }
+      })()
+      if (!result) {
+        setUpload(
+          "tasks",
+          (task) => task.id === id,
+          produce((task) => {
+            task.status = "error"
+            task.error = language.t("prompt.toast.attachmentUploadFailed.description")
+            task.xhr = undefined
+          }),
+        )
+        return
+      }
+      const attachment: UploadedAttachmentPart = {
+        type: "attachment",
+        id,
+        filename: result.filename,
+        mime: result.mime,
+        size: result.size,
+        path: result.path,
+        url: result.url,
+      }
+      setUpload("tasks", (tasks) => tasks.filter((task) => task.id !== id))
+      prompt.set([...prompt.current(), attachment], prompt.cursor() ?? getCursorPosition(editorRef))
+      void Promise.all([files.tree.refresh(""), files.tree.refresh(".tmp"), files.tree.refresh(".tmp/attachments")])
+    }
+    xhr.onerror = () => {
+      setUpload(
+        "tasks",
+        (task) => task.id === id,
+        produce((task) => {
+          task.status = "error"
+          task.error = language.t("prompt.toast.attachmentUploadFailed.network")
+          task.xhr = undefined
+        }),
+      )
+    }
+
+    const url = new URL(`/session/${session.id}/attachment`, sdk.url)
+    xhr.open("POST", url.toString())
+    const directory = /[^\x00-\x7F]/.test(session.directory) ? encodeURIComponent(session.directory) : session.directory
+    xhr.setRequestHeader("x-opencode-directory", directory)
+    xhr.setRequestHeader("x-opencode-attachment-size", String(file.size))
+    if (auth.token) xhr.setRequestHeader("Authorization", `Bearer ${auth.token}`)
+    xhr.send(form)
+  }
+
+  const retryUpload = (id: string) => {
+    const task = upload.tasks.find((item) => item.id === id)
+    if (!task) return
+    uploadAttachment(task.file, id)
+  }
+
+  const addAttachmentFiles = async (files: File[]) => {
+    const available = UPLOAD_MAX_FILES - uploadedAttachments().length - upload.tasks.length
+    if (files.length > available) {
+      showToast({
+        title: language.t("prompt.toast.attachmentLimit.title"),
+        description: language.t("prompt.toast.attachmentLimit.description", { count: UPLOAD_MAX_FILES }),
+      })
+    }
+
+    for (const file of files.slice(0, Math.max(available, 0))) {
+      if (ACCEPTED_FILE_TYPES.includes(file.type) && file.size <= UPLOAD_INLINE_MAX_BYTES) {
+        await addImageAttachment(file)
+        continue
+      }
+      uploadAttachment(file)
+    }
+  }
+
   const removeImageAttachment = (id: string) => {
     const current = prompt.current()
     const next = current.filter((part) => part.type !== "image" || part.id !== id)
@@ -673,21 +863,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     const items = Array.from(clipboardData.items)
     const fileItems = items.filter((item) => item.kind === "file")
-    const imageItems = fileItems.filter((item) => ACCEPTED_FILE_TYPES.includes(item.type))
+    const attachments = fileItems.map((item) => item.getAsFile()).filter((file): file is File => !!file)
 
-    if (imageItems.length > 0) {
-      for (const item of imageItems) {
-        const file = item.getAsFile()
-        if (file) await addImageAttachment(file)
-      }
-      return
-    }
-
-    if (fileItems.length > 0) {
-      showToast({
-        title: language.t("prompt.toast.pasteUnsupported.title"),
-        description: language.t("prompt.toast.pasteUnsupported.description"),
-      })
+    if (attachments.length > 0) {
+      await addAttachmentFiles(attachments)
       return
     }
 
@@ -724,11 +903,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const dropped = event.dataTransfer?.files
     if (!dropped) return
 
-    for (const file of Array.from(dropped)) {
-      if (ACCEPTED_FILE_TYPES.includes(file.type)) {
-        await addImageAttachment(file)
-      }
-    }
+    await addAttachmentFiles(Array.from(dropped))
   }
 
   onMount(() => {
@@ -1446,9 +1621,18 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const currentPrompt = prompt.current()
     const text = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
     const images = imageAttachments().slice()
+    const uploads = uploadedAttachments().slice()
     const mode = store.mode
 
-    if (text.trim().length === 0 && images.length === 0 && commentCount() === 0) {
+    if (!working() && (pendingUploads() || failedUploads())) {
+      showToast({
+        title: language.t("prompt.toast.attachmentPending.title"),
+        description: language.t("prompt.toast.attachmentPending.description"),
+      })
+      return
+    }
+
+    if (text.trim().length === 0 && images.length === 0 && uploads.length === 0 && commentCount() === 0) {
       if (working()) abort()
       return
     }
@@ -1539,7 +1723,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       return
     }
 
-    if (text.startsWith("/")) {
+    if (text.startsWith("/") && uploads.length === 0) {
       const [cmdName, ...args] = text.split(" ")
       const commandName = cmdName.slice(1)
       const customCommand = sync.data.command.find((c) => c.name === commandName && commandEnabled(c.name))
@@ -1686,6 +1870,21 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       url: attachment.dataUrl,
       filename: attachment.filename,
     }))
+    const uploadAttachmentParts = uploads.flatMap((attachment) => [
+      {
+        id: Identifier.ascending("part"),
+        type: "text" as const,
+        text: `User attached ${attachment.filename}. It is saved at ${attachment.path}. Use this path when inspecting the attachment; for archives, extract under the same .tmp directory before analyzing the contents.`,
+        synthetic: true,
+      },
+      {
+        id: Identifier.ascending("part"),
+        type: "file" as const,
+        mime: attachment.mime,
+        url: attachment.url,
+        filename: attachment.filename,
+      },
+    ])
 
     const messageID = Identifier.ascending("message")
     const textPart = {
@@ -1699,6 +1898,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       ...contextParts,
       ...agentAttachmentParts,
       ...imageAttachmentParts,
+      ...uploadAttachmentParts,
     ]
 
     const optimisticParts = requestParts.map((part) => ({
@@ -2019,7 +2219,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         <Show when={store.dragging}>
           <div class="absolute inset-0 z-10 flex items-center justify-center bg-surface-raised-stronger-non-alpha/90 pointer-events-none">
             <div class="flex flex-col items-center gap-2 text-text-weak">
-              <Icon name="photo" class="size-8" />
+              <Icon name="folder-add-left" class="size-8" />
               <span class="text-14-regular">{language.t("prompt.dropzone.label")}</span>
             </div>
           </div>
@@ -2129,6 +2329,86 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <div class="absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-black/50 rounded-b-md">
                     <span class="text-10-regular text-white truncate block">{attachment.filename}</span>
                   </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+        <Show when={uploadedAttachments().length > 0 || upload.tasks.length > 0}>
+          <div class="flex flex-wrap gap-2 px-3 pt-3">
+            <For each={uploadedAttachments()}>
+              {(attachment) => (
+                <div class="group flex max-w-[260px] items-center gap-2 rounded-md border border-border-base bg-surface-base px-2 py-1.5">
+                  <Icon name="folder" class="size-4 shrink-0 text-text-weak" />
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-12-medium text-text-strong">{attachment.filename}</div>
+                    <div class="text-10-regular text-text-weak">{formatBytes(attachment.size)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeUploadedAttachment(attachment.id)}
+                    class="size-5 shrink-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-raised-base-hover"
+                    aria-label={language.t("prompt.attachment.remove")}
+                  >
+                    <Icon name="close" class="size-3 text-text-weak" />
+                  </button>
+                </div>
+              )}
+            </For>
+            <For each={upload.tasks}>
+              {(task) => (
+                <div class="flex w-[260px] items-center gap-2 rounded-md border border-border-base bg-surface-base px-2 py-1.5">
+                  <Icon name="folder" class="size-4 shrink-0 text-text-weak" />
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-12-medium text-text-strong">{task.file.name}</div>
+                    <div class="flex items-center gap-2 text-10-regular text-text-weak">
+                      <Show
+                        when={task.status === "uploading"}
+                        fallback={<span>{task.error ?? language.t("prompt.attachment.uploadFailed")}</span>}
+                      >
+                        <span>
+                          {task.progress}% · {formatBytes(task.uploaded)} / {formatBytes(task.file.size)}
+                        </span>
+                      </Show>
+                    </div>
+                    <div class="mt-1 h-1 overflow-hidden rounded-full bg-background-frame">
+                      <div
+                        class="h-full rounded-full bg-icon-primary transition-all"
+                        style={{ width: `${task.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                  <Show
+                    when={task.status === "uploading"}
+                    fallback={
+                      <div class="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => retryUpload(task.id)}
+                          class="text-10-medium text-text-primary hover:text-text-strong"
+                        >
+                          {language.t("prompt.attachment.retry")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cancelUpload(task.id)}
+                          class="size-5 rounded-full flex items-center justify-center hover:bg-surface-raised-base-hover"
+                          aria-label={language.t("prompt.attachment.remove")}
+                        >
+                          <Icon name="close" class="size-3 text-text-weak" />
+                        </button>
+                      </div>
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => cancelUpload(task.id)}
+                      class="size-5 shrink-0 rounded-full flex items-center justify-center hover:bg-surface-raised-base-hover"
+                      aria-label={language.t("prompt.attachment.cancel")}
+                    >
+                      <Icon name="close" class="size-3 text-text-weak" />
+                    </button>
+                  </Show>
                 </div>
               )}
             </For>
@@ -2306,11 +2586,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             <input
               ref={fileInputRef}
               type="file"
-              accept={ACCEPTED_FILE_TYPES.join(",")}
+              multiple
               class="hidden"
               onChange={(e) => {
-                const file = e.currentTarget.files?.[0]
-                if (file) addImageAttachment(file)
+                const files = e.currentTarget.files
+                if (files) void addAttachmentFiles(Array.from(files))
                 e.currentTarget.value = ""
               }}
             />
@@ -2327,7 +2607,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     onClick={() => fileInputRef.click()}
                     aria-label={language.t("prompt.action.attachFile")}
                   >
-                    <Icon name="photo" class="size-4.5" />
+                    <Icon name="folder-add-left" class="size-4.5" />
                   </Button>
                 </Tooltip>
               </Show>
@@ -2443,7 +2723,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             </div>
             <Tooltip
               placement="top"
-              inactive={!prompt.dirty() && !working()}
+              inactive={!prompt.dirty() && !working() && !pendingUploads() && !failedUploads()}
               value={
                 <Switch>
                   <Match when={working()}>
@@ -2451,6 +2731,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       <span>{language.t("prompt.action.stop")}</span>
                       <span class="text-icon-base text-12-medium text-[10px]!">{language.t("common.key.esc")}</span>
                     </div>
+                  </Match>
+                  <Match when={pendingUploads() || failedUploads()}>
+                    <span>{language.t("prompt.attachment.pending")}</span>
                   </Match>
                   <Match when={true}>
                     <div class="flex items-center gap-2">
@@ -2463,7 +2746,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             >
               <IconButton
                 type="submit"
-                disabled={!prompt.dirty() && !working() && commentCount() === 0}
+                disabled={
+                  (pendingUploads() || failedUploads() || (!prompt.dirty() && !working() && commentCount() === 0)) &&
+                  !working()
+                }
                 icon={working() ? "stop" : "arrow-up"}
                 variant="primary"
                 class="h-6 w-4.5"

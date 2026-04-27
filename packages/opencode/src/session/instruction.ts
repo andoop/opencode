@@ -19,7 +19,7 @@ const FILES = [
 const WORKSPACE_BOUNDARY_PROMPT = `
 工作空间边界规则：
 - 当前 session workspace 中的每个项目都使用独立的 git worktree。
-- 只允许读取和修改当前 session workspace 及其 session roots 内的文件。
+- 只允许读取和修改当前 session workspace、session roots，以及当前 session 的 .tmp 临时附件目录内的文件。
 - 严禁修改任何项目的仓库共享源码母体、主 git worktree、上级源码目录，或任何不属于当前 session workspace 的文件。
 - 对所有待修改路径、绝对路径、相对路径、符号链接目标、shell 命令工作目录，都必须先确认它们属于当前 session workspace。
 - 任何超出当前 session workspace 的路径都视为越界；除非系统明确授予所需权限，否则不得继续操作。

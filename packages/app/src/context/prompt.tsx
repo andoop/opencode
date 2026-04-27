@@ -35,7 +35,17 @@ export interface ImageAttachmentPart {
   dataUrl: string
 }
 
-export type ContentPart = TextPart | FileAttachmentPart | AgentPart | ImageAttachmentPart
+export interface UploadedAttachmentPart {
+  type: "attachment"
+  id: string
+  filename: string
+  mime: string
+  size: number
+  path: string
+  url: string
+}
+
+export type ContentPart = TextPart | FileAttachmentPart | AgentPart | ImageAttachmentPart | UploadedAttachmentPart
 export type Prompt = ContentPart[]
 
 export type FileContextItem = {
@@ -81,6 +91,9 @@ export function isPromptEqual(promptA: Prompt, promptB: Prompt): boolean {
     if (partA.type === "image" && partA.id !== (partB as ImageAttachmentPart).id) {
       return false
     }
+    if (partA.type === "attachment" && partA.id !== (partB as UploadedAttachmentPart).id) {
+      return false
+    }
   }
   return true
 }
@@ -93,6 +106,7 @@ function cloneSelection(selection?: FileSelection) {
 function clonePart(part: ContentPart): ContentPart {
   if (part.type === "text") return { ...part }
   if (part.type === "image") return { ...part }
+  if (part.type === "attachment") return { ...part }
   if (part.type === "agent") return { ...part }
   return {
     ...part,

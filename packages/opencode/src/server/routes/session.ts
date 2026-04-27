@@ -2,6 +2,8 @@ import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
+import path from "path"
+import fs from "fs/promises"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
@@ -20,6 +22,24 @@ import { User } from "@/user"
 import { Workspace } from "@/workspace"
 
 const log = Log.create({ service: "server" })
+const ATTACHMENT_MAX_BYTES = 500 * 1024 * 1024
+
+const AttachmentUpload = z
+  .object({
+    filename: z.string(),
+    mime: z.string(),
+    size: z.number(),
+    path: z.string(),
+    url: z.string(),
+  })
+  .meta({
+    ref: "SessionAttachmentUpload",
+  })
+
+function safeAttachmentName(name: string) {
+  const base = path.basename(name.replaceAll("\\", "/")).replace(/[^\w .@()-]/g, "_")
+  return base.replace(/^\.+/, "").trim() || "attachment"
+}
 
 function requireAdmin() {
   return async (c: any, next: any) => {
@@ -201,7 +221,7 @@ export const SessionRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 413),
         },
       }),
       validator(
@@ -384,6 +404,68 @@ export const SessionRoutes = lazy(() =>
         )
 
         return c.json(updatedSession)
+      },
+    )
+    .post(
+      "/:sessionID/attachment",
+      describeRoute({
+        summary: "Upload session attachment",
+        description: "Upload a file to the session temporary attachments directory.",
+        operationId: "session.attachment",
+        responses: {
+          200: {
+            description: "Uploaded attachment",
+            content: {
+              "application/json": {
+                schema: resolver(AttachmentUpload),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        }),
+      ),
+      async (c) => {
+        const length = Number(c.req.header("content-length") ?? "0")
+        const size = Number(c.req.header("x-opencode-attachment-size") ?? "0")
+        if (size > ATTACHMENT_MAX_BYTES || length > ATTACHMENT_MAX_BYTES + 1024 * 1024) {
+          return c.json({ message: "Attachment exceeds the 500MB limit" }, 413)
+        }
+
+        const form = await c.req.formData()
+        const file = form.get("file")
+        if (!(file instanceof File)) {
+          return c.json({ message: "Missing file" }, 400)
+        }
+        if (file.size > ATTACHMENT_MAX_BYTES) {
+          return c.json({ message: "Attachment exceeds the 500MB limit" }, 413)
+        }
+
+        const session = await Session.get(c.req.valid("param").sessionID)
+        const dir = path.join(session.directory, ".tmp", "attachments")
+        const filename = `${Date.now()}-${crypto.randomUUID()}-${safeAttachmentName(file.name)}`
+        const target = path.join(dir, filename)
+
+        await fs.mkdir(dir, { recursive: true })
+        try {
+          await Bun.write(target, file)
+        } catch (error) {
+          await fs.unlink(target).catch(() => {})
+          throw error
+        }
+
+        return c.json({
+          filename: file.name || filename,
+          mime: file.type || "application/octet-stream",
+          size: file.size,
+          path: target,
+          url: `file://${target}`,
+        })
       },
     )
     .post(

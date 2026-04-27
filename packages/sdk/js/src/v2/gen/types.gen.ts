@@ -2486,6 +2486,14 @@ export type SessionAdminConversationMessage = {
   parts: Array<SessionAdminConversationPart>
 }
 
+export type SessionAttachmentUpload = {
+  filename: string
+  mime: string
+  size: number
+  path: string
+  url: string
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -4813,6 +4821,42 @@ export type SessionTodoResponses = {
 }
 
 export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
+
+export type SessionAttachmentData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/attachment"
+}
+
+export type SessionAttachmentErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionAttachmentError = SessionAttachmentErrors[keyof SessionAttachmentErrors]
+
+export type SessionAttachmentResponses = {
+  /**
+   * Uploaded attachment
+   */
+  200: SessionAttachmentUpload
+}
+
+export type SessionAttachmentResponse = SessionAttachmentResponses[keyof SessionAttachmentResponses]
 
 export type SessionInitData = {
   body?: {

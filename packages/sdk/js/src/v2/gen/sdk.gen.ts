@@ -151,6 +151,8 @@ import type {
   SessionAdminMessagesResponses,
   SessionAdminSummaryErrors,
   SessionAdminSummaryResponses,
+  SessionAttachmentErrors,
+  SessionAttachmentResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandErrors,
@@ -2224,6 +2226,36 @@ export class Session extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<SessionTodoResponses, SessionTodoErrors, ThrowOnError>({
       url: "/session/{sessionID}/todo",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Upload session attachment
+   *
+   * Upload a file to the session temporary attachments directory.
+   */
+  public attachment<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionAttachmentResponses, SessionAttachmentErrors, ThrowOnError>({
+      url: "/session/{sessionID}/attachment",
       ...options,
       ...params,
     })
