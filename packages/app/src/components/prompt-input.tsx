@@ -62,9 +62,6 @@ import { Binary } from "@opencode-ai/util/binary"
 import { showToast } from "@opencode-ai/ui/toast"
 import { base64Encode } from "@opencode-ai/util/encode"
 
-const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
-const ACCEPTED_FILE_TYPES = [...ACCEPTED_IMAGE_TYPES, "application/pdf"]
-const UPLOAD_INLINE_MAX_BYTES = 10 * 1024 * 1024
 const UPLOAD_MAX_BYTES = 500 * 1024 * 1024
 const UPLOAD_MAX_FILES = 5
 
@@ -678,25 +675,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const [composing, setComposing] = createSignal(false)
   const isImeComposing = (event: KeyboardEvent) => event.isComposing || composing() || event.keyCode === 229
 
-  const addImageAttachment = async (file: File) => {
-    if (!ACCEPTED_FILE_TYPES.includes(file.type)) return
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const attachment: ImageAttachmentPart = {
-        type: "image",
-        id: crypto.randomUUID(),
-        filename: file.name,
-        mime: file.type,
-        dataUrl,
-      }
-      const cursorPosition = prompt.cursor() ?? getCursorPosition(editorRef)
-      prompt.set([...prompt.current(), attachment], cursorPosition)
-    }
-    reader.readAsDataURL(file)
-  }
-
   const removeUploadedAttachment = (id: string) => {
     prompt.set(
       prompt.current().filter((part) => part.type !== "attachment" || part.id !== id),
@@ -728,7 +706,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       return
     }
 
-    const id = existingID ?? crypto.randomUUID()
+    const id = existingID ?? Identifier.ascending("part")
     const form = new FormData()
     const xhr = new XMLHttpRequest()
     form.append("file", file)
@@ -832,10 +810,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     for (const file of files.slice(0, Math.max(available, 0))) {
-      if (ACCEPTED_FILE_TYPES.includes(file.type) && file.size <= UPLOAD_INLINE_MAX_BYTES) {
-        await addImageAttachment(file)
-        continue
-      }
       uploadAttachment(file)
     }
   }
