@@ -1870,21 +1870,54 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       url: attachment.dataUrl,
       filename: attachment.filename,
     }))
-    const uploadAttachmentParts = uploads.flatMap((attachment) => [
-      {
-        id: Identifier.ascending("part"),
-        type: "text" as const,
-        text: `User attached ${attachment.filename}. It is saved at ${attachment.path}. Use this path when inspecting the attachment; for archives, extract under the same .tmp directory before analyzing the contents.`,
-        synthetic: true,
-      },
-      {
+    const imageAttachmentNoteParts =
+      images.length === 0
+        ? []
+        : [
+            {
+              id: Identifier.ascending("part"),
+              type: "text" as const,
+              text: [
+                "The user attached inline file(s) to this message.",
+                "These inline attachments are included as file parts and should be inspected when relevant.",
+                ...images.map((attachment) => `- ${attachment.filename} (${attachment.mime})`),
+              ].join("\n"),
+              synthetic: true,
+            },
+          ]
+    const uploadAttachmentParts = [
+      ...(uploads.length === 0
+        ? []
+        : [
+            {
+              id: Identifier.ascending("part"),
+              type: "text" as const,
+              text: [
+                "The user attached local file(s) to this message. Treat these attachments as required context for the user's request.",
+                "Use the exact local path(s) below with read or terminal tools when inspecting the attachments.",
+                "For archives such as zip, tar, gz, or tgz files, extract them under the same .tmp directory before analyzing their contents.",
+                "Do not ask the user to re-upload these files unless a listed path is missing or unreadable.",
+                "",
+                ...uploads.map((attachment) =>
+                  [
+                    `- filename: ${attachment.filename}`,
+                    `  mime: ${attachment.mime}`,
+                    `  size: ${formatBytes(attachment.size)}`,
+                    `  path: ${attachment.path}`,
+                  ].join("\n"),
+                ),
+              ].join("\n"),
+              synthetic: true,
+            },
+          ]),
+      ...uploads.map((attachment) => ({
         id: Identifier.ascending("part"),
         type: "file" as const,
         mime: attachment.mime,
         url: attachment.url,
         filename: attachment.filename,
-      },
-    ])
+      })),
+    ]
 
     const messageID = Identifier.ascending("message")
     const textPart = {
@@ -1897,6 +1930,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       ...fileAttachmentParts,
       ...contextParts,
       ...agentAttachmentParts,
+      ...imageAttachmentNoteParts,
       ...imageAttachmentParts,
       ...uploadAttachmentParts,
     ]
