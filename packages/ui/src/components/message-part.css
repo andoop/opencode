@@ -46,8 +46,13 @@
     }
 
     &[data-type="file"] {
-      width: 48px;
-      height: 48px;
+      width: auto;
+      max-width: 260px;
+      height: 40px;
+      flex-direction: row;
+      justify-content: flex-start;
+      gap: 8px;
+      padding: 0 10px;
     }
   }
 
@@ -58,8 +63,9 @@
   }
 
   [data-slot="user-message-attachment-icon"] {
-    width: 100%;
-    height: 100%;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -69,6 +75,21 @@
       width: 20px;
       height: 20px;
     }
+  }
+
+  [data-slot="user-message-attachment-meta"] {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  [data-slot="user-message-attachment-filename"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-base);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-small);
   }
 
   [data-slot="user-message-text"] {

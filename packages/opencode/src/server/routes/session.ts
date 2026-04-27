@@ -37,8 +37,27 @@ const AttachmentUpload = z
   })
 
 function safeAttachmentName(name: string) {
-  const base = path.basename(name.replaceAll("\\", "/")).replace(/[^\w .@()-]/g, "_")
-  return base.replace(/^\.+/, "").trim() || "attachment"
+  const base = path.basename(name.replaceAll("\\", "/")).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+  const safe = base.replace(/^\.+/, "").trim() || "attachment"
+  const parsed = path.parse(safe)
+  const ext = parsed.ext.slice(0, 24)
+  const stem = (parsed.name || "attachment").slice(0, Math.max(1, 80 - ext.length))
+  return stem + ext
+}
+
+async function uniqueAttachmentName(dir: string, name: string) {
+  const safe = safeAttachmentName(name)
+  const ext = path.extname(safe)
+  const stem = safe.slice(0, safe.length - ext.length) || "attachment"
+  for (const index of Array.from({ length: 1000 }, (_, i) => i)) {
+    const filename = index === 0 ? safe : `${stem}-${index}${ext}`
+    try {
+      await fs.access(path.join(dir, filename))
+    } catch {
+      return filename
+    }
+  }
+  return `${stem}-${Date.now().toString(36)}${ext}`
 }
 
 function requireAdmin() {
@@ -448,10 +467,10 @@ export const SessionRoutes = lazy(() =>
 
         const session = await Session.get(c.req.valid("param").sessionID)
         const dir = path.join(session.directory, ".tmp", "attachments")
-        const filename = `${Date.now()}-${crypto.randomUUID()}-${safeAttachmentName(file.name)}`
-        const target = path.join(dir, filename)
 
         await fs.mkdir(dir, { recursive: true })
+        const filename = await uniqueAttachmentName(dir, file.name)
+        const target = path.join(dir, filename)
         try {
           await Bun.write(target, file)
         } catch (error) {
@@ -460,7 +479,7 @@ export const SessionRoutes = lazy(() =>
         }
 
         return c.json({
-          filename: file.name || filename,
+          filename,
           mime: file.type || "application/octet-stream",
           size: file.size,
           path: target,

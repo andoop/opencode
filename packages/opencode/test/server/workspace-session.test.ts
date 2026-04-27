@@ -85,12 +85,26 @@ describe("workspace session flow", () => {
       throw new Error(await response.text())
     }
     const attachment = (await response.json()) as { path: string; url: string; filename: string; size: number }
-    expect(attachment.filename).toBe("../log.zip")
+    expect(attachment.filename).toBe("log.zip")
     expect(attachment.size).toBe(5)
     expect(attachment.url).toBe(`file://${attachment.path}`)
     expect(attachment.path.startsWith(path.join(session.directory, ".tmp", "attachments"))).toBe(true)
     expect(path.basename(attachment.path)).not.toContain("..")
     expect(await Bun.file(attachment.path).text()).toBe("hello")
+
+    const duplicate = new FormData()
+    duplicate.append("file", new File(["world"], "../log.zip", { type: "application/zip" }))
+    const duplicateResponse = await app.request(`/session/${session.id}/attachment`, {
+      method: "POST",
+      headers: {
+        "x-opencode-directory": session.directory,
+      },
+      body: duplicate,
+    })
+    expect(duplicateResponse.status).toBe(200)
+    const duplicateAttachment = (await duplicateResponse.json()) as { path: string; filename: string }
+    expect(duplicateAttachment.filename).toBe("log-1.zip")
+    expect(await Bun.file(duplicateAttachment.path).text()).toBe("world")
   }, 30000)
 
   test("rejects attachments larger than 500MB", async () => {

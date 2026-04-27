@@ -78,6 +78,7 @@ function same<T>(a: readonly T[], b: readonly T[]) {
 
 function isAttachment(part: PartType | undefined) {
   if (part?.type !== "file") return false
+  if ((part as FilePart).metadata?.attachment === true) return true
   const mime = (part as FilePart).mime ?? ""
   return mime.startsWith("image/") || mime === "application/pdf"
 }

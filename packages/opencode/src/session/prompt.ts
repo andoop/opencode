@@ -1233,6 +1233,7 @@ export namespace SessionPrompt {
                   mime: part.mime,
                   filename: part.filename!,
                   source: part.source,
+                  metadata: part.metadata,
                 },
               ]
           }

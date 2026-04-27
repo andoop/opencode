@@ -1232,11 +1232,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const handleInput = () => {
     const rawParts = parseFromDOM()
     const images = imageAttachments()
+    const uploads = uploadedAttachments()
     const cursorPosition = getCursorPosition(editorRef)
     const rawText = rawParts.map((p) => ("content" in p ? p.content : "")).join("")
     const trimmed = rawText.replace(/\u200B/g, "").trim()
     const hasNonText = rawParts.some((part) => part.type !== "text")
-    const shouldReset = trimmed.length === 0 && !hasNonText && images.length === 0
+    const shouldReset = trimmed.length === 0 && !hasNonText && images.length === 0 && uploads.length === 0
 
     if (shouldReset) {
       setStore("popover", null)
@@ -1277,7 +1278,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     mirror.input = true
-    prompt.set([...rawParts, ...images], cursorPosition)
+    prompt.set([...rawParts, ...images, ...uploads], cursorPosition)
     queueScroll()
   }
 
@@ -1837,67 +1838,57 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       url: attachment.dataUrl,
       filename: attachment.filename,
     }))
-    const imageAttachmentNoteParts =
-      images.length === 0
-        ? []
+    const uploadAttachmentParts = uploads.map((attachment) => ({
+      id: Identifier.ascending("part"),
+      type: "file" as const,
+      mime: attachment.mime,
+      url: attachment.url,
+      filename: attachment.filename,
+      metadata: {
+        attachment: true,
+        path: attachment.path,
+        size: attachment.size,
+      },
+    }))
+
+    const relativeAttachmentPath = (attachment: UploadedAttachmentPart) =>
+      attachment.path.startsWith(sessionDirectory + "/")
+        ? attachment.path.slice(sessionDirectory.length + 1)
+        : attachment.path
+
+    const messageText = text.trimEnd()
+    const attachmentText =
+      images.length === 0 && uploads.length === 0
+        ? ""
         : [
-            {
-              id: Identifier.ascending("part"),
-              type: "text" as const,
-              text: [
-                "The user attached inline file(s) to this message.",
-                "These inline attachments are included as file parts and should be inspected when relevant.",
-                ...images.map((attachment) => `- ${attachment.filename} (${attachment.mime})`),
+            messageText ? "\n\n" : "",
+            "有附件，信息如下：",
+            ...images.map((attachment) =>
+              [`- 文件名：${attachment.filename}`, `  类型：${attachment.mime}`, "  内容：图片已随本条消息一起发送"].join(
+                "\n",
+              ),
+            ),
+            ...uploads.map((attachment) =>
+              [
+                `- 文件名：${attachment.filename}`,
+                `  类型：${attachment.mime}`,
+                `  大小：${formatBytes(attachment.size)}`,
+                `  路径：${relativeAttachmentPath(attachment)}`,
               ].join("\n"),
-              synthetic: true,
-            },
-          ]
-    const uploadAttachmentParts = [
-      ...(uploads.length === 0
-        ? []
-        : [
-            {
-              id: Identifier.ascending("part"),
-              type: "text" as const,
-              text: [
-                "The user attached local file(s) to this message. Treat these attachments as required context for the user's request.",
-                "Use the exact local path(s) below with read or terminal tools when inspecting the attachments.",
-                "For archives such as zip, tar, gz, or tgz files, extract them under the same .tmp directory before analyzing their contents.",
-                "Do not ask the user to re-upload these files unless a listed path is missing or unreadable.",
-                "",
-                ...uploads.map((attachment) =>
-                  [
-                    `- filename: ${attachment.filename}`,
-                    `  mime: ${attachment.mime}`,
-                    `  size: ${formatBytes(attachment.size)}`,
-                    `  path: ${attachment.path}`,
-                  ].join("\n"),
-                ),
-              ].join("\n"),
-              synthetic: true,
-            },
-          ]),
-      ...uploads.map((attachment) => ({
-        id: Identifier.ascending("part"),
-        type: "file" as const,
-        mime: attachment.mime,
-        url: attachment.url,
-        filename: attachment.filename,
-      })),
-    ]
+            ),
+          ].join("\n")
 
     const messageID = Identifier.ascending("message")
     const textPart = {
       id: Identifier.ascending("part"),
       type: "text" as const,
-      text,
+      text: messageText + attachmentText,
     }
     const requestParts = [
       textPart,
       ...fileAttachmentParts,
       ...contextParts,
       ...agentAttachmentParts,
-      ...imageAttachmentNoteParts,
       ...imageAttachmentParts,
       ...uploadAttachmentParts,
     ]

@@ -50,6 +50,7 @@ import { checksum } from "@opencode-ai/util/encode"
 import { Tooltip } from "./tooltip"
 import { IconButton } from "./icon-button"
 import { List } from "./list"
+import { FileIcon } from "./file-icon"
 import { createAutoScroll } from "../hooks"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 
@@ -348,7 +349,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
   const attachments = createMemo(() =>
     files()?.filter((f) => {
       const mime = f.mime
-      return mime.startsWith("image/") || mime === "application/pdf"
+      return f.metadata?.attachment === true || mime.startsWith("image/") || mime === "application/pdf"
     }),
   )
 
@@ -398,7 +399,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
                   when={file.mime.startsWith("image/") && file.url}
                   fallback={
                     <div data-slot="user-message-attachment-icon">
-                      <Icon name="folder" />
+                      <FileIcon node={{ path: file.filename ?? "attachment", type: "file" }} />
                     </div>
                   }
                 >
@@ -407,6 +408,11 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
                     src={file.url}
                     alt={file.filename ?? i18n.t("ui.message.attachment.alt")}
                   />
+                </Show>
+                <Show when={!file.mime.startsWith("image/")}>
+                  <div data-slot="user-message-attachment-meta">
+                    <span data-slot="user-message-attachment-filename">{file.filename ?? "attachment"}</span>
+                  </div>
                 </Show>
               </div>
             )}

@@ -456,6 +456,9 @@ export type FilePart = {
   filename?: string
   url: string
   source?: FilePartSource
+  metadata?: {
+    [key: string]: unknown
+  }
 }
 
 export type ToolStatePending = {
@@ -2516,6 +2519,9 @@ export type FilePartInput = {
   filename?: string
   url: string
   source?: FilePartSource
+  metadata?: {
+    [key: string]: unknown
+  }
 }
 
 export type AgentPartInput = {
@@ -5354,6 +5360,9 @@ export type SessionCommandData = {
       filename?: string
       url: string
       source?: FilePartSource
+      metadata?: {
+        [key: string]: unknown
+      }
     }>
   }
   path: {

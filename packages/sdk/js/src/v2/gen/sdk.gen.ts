@@ -2668,6 +2668,9 @@ export class Session extends HeyApiClient {
         filename?: string
         url: string
         source?: FilePartSource
+        metadata?: {
+          [key: string]: unknown
+        }
       }>
     },
     options?: Options<never, ThrowOnError>,
