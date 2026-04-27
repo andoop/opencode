@@ -487,8 +487,13 @@ export namespace MessageV2 {
               type: "text",
               text: part.text,
             })
-          // text/plain and directory files are converted into text parts, ignore them
-          if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory")
+          // text/plain/directory files and path-only uploaded attachments are already represented by text.
+          if (
+            part.type === "file" &&
+            part.mime !== "text/plain" &&
+            part.mime !== "application/x-directory" &&
+            !(part.metadata?.attachment === true && part.url.startsWith("file://"))
+          )
             userMessage.parts.push({
               type: "file",
               url: part.url,

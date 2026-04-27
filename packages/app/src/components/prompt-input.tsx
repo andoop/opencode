@@ -1705,13 +1705,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             agent,
             model: `${model.providerID}/${model.modelID}`,
             variant,
-            parts: images.map((attachment) => ({
-              id: Identifier.ascending("part"),
-              type: "file" as const,
-              mime: attachment.mime,
-              url: attachment.dataUrl,
-              filename: attachment.filename,
-            })),
+            parts: [],
           })
           .catch((err) => {
             showToast({
@@ -1831,13 +1825,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       addContextFile({ path: item.path, selection: item.selection, comment: item.comment })
     }
 
-    const imageAttachmentParts = images.map((attachment) => ({
-      id: Identifier.ascending("part"),
-      type: "file" as const,
-      mime: attachment.mime,
-      url: attachment.dataUrl,
-      filename: attachment.filename,
-    }))
     const uploadAttachmentParts = uploads.map((attachment) => ({
       id: Identifier.ascending("part"),
       type: "file" as const,
@@ -1864,7 +1851,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             messageText ? "\n\n" : "",
             "有附件，信息如下：",
             ...images.map((attachment) =>
-              [`- 文件名：${attachment.filename}`, `  类型：${attachment.mime}`, "  内容：图片已随本条消息一起发送"].join(
+              [`- 文件名：${attachment.filename}`, `  类型：${attachment.mime}`, "  路径：未保存，请重新上传该图片"].join(
                 "\n",
               ),
             ),
@@ -1889,7 +1876,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       ...fileAttachmentParts,
       ...contextParts,
       ...agentAttachmentParts,
-      ...imageAttachmentParts,
       ...uploadAttachmentParts,
     ]
 

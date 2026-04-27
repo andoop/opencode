@@ -353,6 +353,8 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
     }),
   )
 
+  const canPreviewImage = (file: FilePart) => file.mime.startsWith("image/") && file.metadata?.attachment !== true
+
   const inlineFiles = createMemo(() =>
     files().filter((f) => {
       const mime = f.mime
@@ -388,15 +390,15 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
             {(file) => (
               <div
                 data-slot="user-message-attachment"
-                data-type={file.mime.startsWith("image/") ? "image" : "file"}
+                data-type={canPreviewImage(file) ? "image" : "file"}
                 onClick={() => {
-                  if (file.mime.startsWith("image/") && file.url) {
+                  if (canPreviewImage(file) && file.url) {
                     openImagePreview(file.url, file.filename)
                   }
                 }}
               >
                 <Show
-                  when={file.mime.startsWith("image/") && file.url}
+                  when={canPreviewImage(file) && file.url}
                   fallback={
                     <div data-slot="user-message-attachment-icon">
                       <FileIcon node={{ path: file.filename ?? "attachment", type: "file" }} />
@@ -409,7 +411,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
                     alt={file.filename ?? i18n.t("ui.message.attachment.alt")}
                   />
                 </Show>
-                <Show when={!file.mime.startsWith("image/")}>
+                <Show when={!canPreviewImage(file)}>
                   <div data-slot="user-message-attachment-meta">
                     <span data-slot="user-message-attachment-filename">{file.filename ?? "attachment"}</span>
                   </div>

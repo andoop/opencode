@@ -1213,6 +1213,17 @@ export namespace SessionPrompt {
                 ]
               }
 
+              if (part.metadata?.attachment === true) {
+                return [
+                  {
+                    ...part,
+                    id: part.id ?? Identifier.ascending("part"),
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                  },
+                ]
+              }
+
               const file = Bun.file(filepath)
               FileTime.read(input.sessionID, filepath)
               return [
