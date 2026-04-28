@@ -35,6 +35,10 @@ const BRIDGED = new Set([
   "question",
   "select",
   "ls",
+  "mcp_status",
+  "mcp_search_tools",
+  "mcp_tool_details",
+  "mcp_call_tool",
 ])
 
 type BridgeContext = {

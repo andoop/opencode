@@ -33,6 +33,7 @@ import { TaskStatusTool } from "./task-status"
 import { TaskRetryTool } from "./task-retry"
 import { TaskCancelTool } from "./task-cancel"
 import { ProfileTool } from "./profile"
+import { McpCallToolTool, McpSearchToolsTool, McpStatusTool, McpToolDetailsTool } from "./mcp"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -126,6 +127,10 @@ export namespace ToolRegistry {
       TaskRetryTool,
       TaskCancelTool,
       ProfileTool,
+      McpStatusTool,
+      McpSearchToolsTool,
+      McpToolDetailsTool,
+      McpCallToolTool,
       ...(Flag.OPENCODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.OPENCODE_EXPERIMENTAL_PLAN_MODE && Flag.OPENCODE_CLIENT === "cli" ? [PlanExitTool, PlanEnterTool] : []),

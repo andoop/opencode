@@ -24,6 +24,10 @@ const NATIVE = new Set([
   "question",
   "select",
   "ls",
+  "mcp_status",
+  "mcp_search_tools",
+  "mcp_tool_details",
+  "mcp_call_tool",
 ])
 
 const TAG = "opencode_tool_call"
@@ -237,10 +241,20 @@ export async function surface(input: { sessionID: string; agent: string; allowed
 export function instructions(tools: CursorTool[], mode: "full" | "reminder" = "full") {
   if (tools.length === 0) return ""
   const names = tools.map((t) => t.name).join(", ")
+  const hasMcpCatalog = tools.some((t) => t.name.startsWith("opencode_mcp_"))
+  const mcpCatalogHint = hasMcpCatalog
+    ? [
+        `Use the exact tool names listed below, including the opencode_ prefix.`,
+        `Even though you are running inside Cursor CLI, OpenCode parses these XML blocks from your text output and executes them for you. Emitting the XML block IS the tool call.`,
+        `MCP discovery flow: use opencode_mcp_status to inspect server state, opencode_mcp_search_tools to find MCP tool ids, opencode_mcp_tool_details to inspect one id, then opencode_mcp_call_tool to execute it.`,
+        `Do NOT emit discovered MCP tool ids as XML tool names. They are arguments to opencode_mcp_tool_details or opencode_mcp_call_tool.`,
+      ]
+    : []
   if (mode === "reminder") {
     return [
       `REMINDER: The following tools are ONLY callable via <${TAG}> XML blocks: ${names}`,
       `They are NOT available as native function calls, MCP calls, or shell commands. You MUST use the XML protocol.`,
+      ...mcpCatalogHint,
       `Format: <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
     ].join("\n")
   }
@@ -261,6 +275,7 @@ export function instructions(tools: CursorTool[], mode: "full" | "reminder" = "f
     `### WRONG (will fail):`,
     `- bash: \`opencode_android____android_history\` ← NOT a shell command`,
     `- Native function call / tool_use / MCP call to these tool names ← NOT supported`,
+    `- Saying "I cannot call this because Cursor did not register the tool" ← WRONG; emit the XML block instead`,
     `- Telling the user a tool is "unavailable" or "cannot be executed" and asking them to type manually instead`,
     "",
     `### CORRECT:`,
@@ -271,6 +286,7 @@ export function instructions(tools: CursorTool[], mode: "full" | "reminder" = "f
     `- Tools like opencode_select and opencode_question block until the user responds. This is expected behavior, not an error.`,
     `- Do NOT claim these tools are unavailable, unsupported, or blocking. They work exactly as designed.`,
     `- If you need the user to choose from a list, you MUST use the select/question tool — never ask via plain text instead.`,
+    ...mcpCatalogHint,
     "",
     "### Available tools:",
     ...tools.map((item) => `- ${item.name}: ${item.description}\n  Schema: ${stringifySchema(item.inputSchema)}`),

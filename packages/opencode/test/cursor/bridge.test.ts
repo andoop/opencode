@@ -8,6 +8,7 @@ afterEach(() => {
 test("prefixes bridged tool names", () => {
   expect(prefixTool("read")).toBe("opencode_read")
   expect(prefixTool("foo:bar")).toBe("opencode_foo_bar")
+  expect(prefixTool("mcp_search_tools")).toBe("opencode_mcp_search_tools")
 })
 
 test("builds bridge command with session context", () => {
