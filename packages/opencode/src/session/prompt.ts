@@ -618,28 +618,30 @@ export namespace SessionPrompt {
       }
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: sessionMessages })
+      const system = [
+        ...(await SystemPrompt.environment(model)),
+        ...(await SystemPrompt.projectContext()),
+        ...(await InstructionPrompt.system()),
+      ]
+      const modelMessages = [
+        ...MessageV2.toModelMessages(sessionMessages, model),
+        ...(isLastStep
+          ? [
+              {
+                role: "assistant" as const,
+                content: MAX_STEPS,
+              },
+            ]
+          : []),
+      ]
 
       const result = await processor.process({
         user: lastUser,
         agent,
         abort,
         sessionID,
-        system: [
-          ...(await SystemPrompt.environment(model)),
-          ...(await SystemPrompt.projectContext()),
-          ...(await InstructionPrompt.system()),
-        ],
-        messages: [
-          ...MessageV2.toModelMessages(sessionMessages, model),
-          ...(isLastStep
-            ? [
-                {
-                  role: "assistant" as const,
-                  content: MAX_STEPS,
-                },
-              ]
-            : []),
-        ],
+        system,
+        messages: modelMessages,
         tools,
         model,
       })
@@ -773,10 +775,12 @@ export namespace SessionPrompt {
       },
     })
 
-    for (const item of await ToolRegistry.tools(
+    const registry = await ToolRegistry.tools(
       { modelID: input.model.api.id, providerID: input.model.providerID },
       input.agent,
-    )) {
+    )
+
+    for (const item of registry) {
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
       tools[item.id] = tool({
         id: item.id as any,
@@ -810,7 +814,14 @@ export namespace SessionPrompt {
       })
     }
 
-    for (const [key, item] of Object.entries(await MCP.tools())) {
+    if (input.model.providerID === "cursor-cli") {
+      // Cursor CLI receives tool access through the dedicated bridge; listing MCP tools here only delays startup.
+      return tools
+    }
+
+    const mcp = await MCP.tools()
+
+    for (const [key, item] of Object.entries(mcp)) {
       const execute = item.execute
       if (!execute) continue
 

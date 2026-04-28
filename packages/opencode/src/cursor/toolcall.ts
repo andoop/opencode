@@ -181,6 +181,8 @@ export async function surface(input: { sessionID: string; agent: string; allowed
     }
   }
 
+  if (allowed.size > 0) return out
+
   for (const [key, item] of Object.entries(await MCP.tools())) {
     if (allowed.size > 0 && !allowed.has(key)) continue
     const execute = item.execute

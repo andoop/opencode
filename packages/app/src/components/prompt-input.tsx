@@ -423,16 +423,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   // exists in the worktree store, NOT in the project root store. Use resolvedSessionDir
   // prop (from session.tsx) to look in the right place.
   const findSession = (sessionID: string) => {
-    // Try project root store first
-    const root = sync.session.get(sessionID)
-    if (root) return root
-    // Try the resolved session directory's store (worktree)
+    // Prefer the resolved directory. The root store can hold a stale copy for
+    // worktree sessions, which sends prompts to the wrong directory.
     const dir = props.resolvedSessionDir
-    if (dir && dir !== sdk.directory) {
+    if (dir) {
       const [store] = globalSync.child(dir, { bootstrap: false })
       const match = Binary.search(store.session, sessionID, (s) => s.id)
       if (match.found) return store.session[match.index]
     }
+    const root = sync.session.get(sessionID)
+    if (root) return root
     return undefined
   }
 
@@ -1802,15 +1802,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       if (!comment && usedUrls.has(url)) return
       usedUrls.add(url)
 
-      if (comment) {
-        contextParts.push({
-          id: Identifier.ascending("part"),
-          type: "text",
-          text: commentNote(input.path, input.selection, comment),
-          synthetic: true,
-        })
-      }
-
       contextParts.push({
         id: Identifier.ascending("part"),
         type: "file",
@@ -1843,7 +1834,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         ? attachment.path.slice(sessionDirectory.length + 1)
         : attachment.path
 
-    const messageText = text.trimEnd()
+    const messageText = [
+      text.trimEnd(),
+      ...commentItems.map((item) => commentNote(item.path, item.selection, item.comment!.trim())),
+    ]
+      .filter(Boolean)
+      .join("\n\n")
     const attachmentText =
       images.length === 0 && uploads.length === 0
         ? ""

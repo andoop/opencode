@@ -2085,7 +2085,11 @@ export default function Page() {
                 onScrollRef={setReviewScroll}
                 focusedFile={activeDiff()}
                 readFile={file.readFile}
-                onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
+                onLineComment={
+                  auth.canFeature("files")
+                    ? (comment) => addCommentToContext({ ...comment, origin: "review" })
+                    : undefined
+                }
                 comments={comments.all()}
                 focusedComment={comments.focus()}
                 onFocusedCommentChange={comments.setFocus}
@@ -2880,7 +2884,11 @@ export default function Page() {
                                 view={view}
                                 diffStyle="unified"
                                 focusedFile={activeDiff()}
-                                onLineComment={(comment) => addCommentToContext({ ...comment, origin: "review" })}
+                                onLineComment={
+                                  auth.canFeature("files")
+                                    ? (comment) => addCommentToContext({ ...comment, origin: "review" })
+                                    : undefined
+                                }
                                 comments={comments.all()}
                                 focusedComment={comments.focus()}
                                 onFocusedCommentChange={comments.setFocus}
@@ -3645,11 +3653,34 @@ export default function Page() {
                             return root
                           }
 
+                          const findSide = (element: HTMLElement): "additions" | "deletions" | undefined => {
+                            const typed = element.closest("[data-line-type]")
+                            if (typed instanceof HTMLElement) {
+                              const type = typed.dataset.lineType
+                              if (type === "change-deletion") return "deletions"
+                              if (type === "change-addition" || type === "change-additions") return "additions"
+                            }
+
+                            const code = element.closest("[data-code]")
+                            if (!(code instanceof HTMLElement)) return
+                            return code.hasAttribute("data-deletions") ? "deletions" : "additions"
+                          }
+
                           const findMarker = (root: ShadowRoot, range: SelectedLineRange) => {
-                            const line = Math.max(range.start, range.end)
-                            const node = root.querySelector(`[data-line="${line}"]`)
-                            if (!(node instanceof HTMLElement)) return
-                            return node
+                            const marker = (line: number, side?: "additions" | "deletions") => {
+                              const nodes = Array.from(
+                                root.querySelectorAll(`[data-line="${line}"], [data-alt-line="${line}"]`),
+                              ).filter((node): node is HTMLElement => node instanceof HTMLElement)
+                              if (nodes.length === 0) return
+                              if (!side) return nodes[0]
+                              return nodes.find((node) => findSide(node) === side) ?? nodes[0]
+                            }
+
+                            const a = marker(range.start, range.side)
+                            const b = marker(range.end, range.endSide ?? range.side)
+                            if (!a) return b
+                            if (!b) return a
+                            return a.getBoundingClientRect().top > b.getBoundingClientRect().top ? a : b
                           }
 
                           const markerTop = (wrapper: HTMLElement, marker: HTMLElement) => {
@@ -3738,7 +3769,7 @@ export default function Page() {
                                   contents: source,
                                   cacheKey: cacheKey(),
                                 }}
-                                enableLineSelection
+                                enableLineSelection={auth.canFeature("files")}
                                 selectedLines={selectedLines()}
                                 commentedLines={commentedLines()}
                                 onRendered={() => {

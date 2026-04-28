@@ -146,7 +146,14 @@ function renderContent(content: ModelMessage["content"]): string {
         case "reasoning":
           return `<reasoning>\n${part.text}\n</reasoning>`
         case "file":
-          return `<file name="${part.filename ?? "attachment"}" mime="${part.mediaType}">\n${String((part as any).url ?? (part as any).data ?? "")}\n</file>`
+          const file = part as { url?: unknown; data?: unknown; filename?: string; mediaType?: string }
+          const value = typeof file.url === "string" ? file.url : typeof file.data === "string" ? file.data : ""
+          if (value.startsWith("data:")) {
+            const comma = value.indexOf(",")
+            const bytes = comma === -1 ? value.length : value.length - comma - 1
+            return `<file name="${file.filename ?? "attachment"}" mime="${file.mediaType}" encoded_bytes="${bytes}">\nData URL content omitted from Cursor CLI transcript.\n</file>`
+          }
+          return `<file name="${file.filename ?? "attachment"}" mime="${file.mediaType}">\n${value}\n</file>`
         case "tool-call":
           return `<tool_call name="${part.toolName}">\n${part.input}\n</tool_call>`
         case "tool-result":
@@ -173,8 +180,9 @@ async function serializePrompt(input: {
   }
   prompt.push("The following transcript is the full conversation context for this turn.")
   for (const message of input.messages) {
+    const rendered = renderContent(message.content)
     prompt.push(`<${message.role}>`)
-    prompt.push(renderContent(message.content))
+    prompt.push(rendered)
     prompt.push(`</${message.role}>`)
   }
   if (input.localToolsReminder) prompt.push(input.localToolsReminder)
@@ -280,6 +288,7 @@ class Rpc {
   private nextId = 1
   private pending = new Map<number, RpcPending>()
   private sessions = new Set<string>()
+  private closed = false
   private rl
 
   constructor(
@@ -346,6 +355,10 @@ class Rpc {
     })
   }
 
+  setUpdateHandler(handler: (msg: any) => void) {
+    this.onUpdate = handler
+  }
+
   request(method: string, params: Record<string, unknown>) {
     const id = this.nextId++
     this.proc.stdin?.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n")
@@ -367,6 +380,8 @@ class Rpc {
   }
 
   close() {
+    if (this.closed) return
+    this.closed = true
     if (this.pending.size > 0) {
       this.slog.warn("acp rpc closing with pending requests", {
         pendingCount: this.pending.size,
@@ -379,6 +394,32 @@ class Rpc {
     this.rl.close()
     this.proc.kill("SIGTERM")
   }
+}
+
+type CursorSession = {
+  key: string
+  proc: ReturnType<typeof spawn>
+  rpc: Rpc
+  cursorSessionID: string
+  bridgeReadyFile?: string
+  idle?: ReturnType<typeof setTimeout>
+}
+
+const sessions = new Map<string, CursorSession>()
+const SESSION_IDLE_MS = 2 * 60 * 1000
+
+function closeSession(key: string) {
+  const session = sessions.get(key)
+  if (!session) return
+  sessions.delete(key)
+  if (session.idle) clearTimeout(session.idle)
+  session.rpc.close()
+}
+
+function scheduleClose(session: CursorSession) {
+  if (session.idle) clearTimeout(session.idle)
+  session.idle = setTimeout(() => closeSession(session.key), SESSION_IDLE_MS)
+  session.idle.unref?.()
 }
 
 export namespace CursorCLI {
@@ -436,13 +477,24 @@ export namespace CursorCLI {
       localToolsFull: instructions(mcpTools, "full"),
       localToolsReminder: instructions(mcpTools, "reminder"),
     })
-    const proc = spawn(bin, ["acp"], {
+    const cacheKey = JSON.stringify({
+      sessionID: input.sessionID,
       cwd: input.cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: {
-        ...process.env,
-      },
+      agent: input.agent,
+      modelID: input.modelID,
+      allowedTools: input.allowedTools.toSorted(),
     })
+    const cached = sessions.get(cacheKey)
+    if (cached?.idle) clearTimeout(cached.idle)
+    const proc =
+      cached?.proc ??
+      spawn(bin, ["acp"], {
+        cwd: input.cwd,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: {
+          ...process.env,
+        },
+      })
     const ctx = { sessionID: input.sessionID, modelID: input.modelID }
     const slog: CursorStreamLog = {
       warn: (m, e) => log.warn(m, { ...ctx, ...e }),
@@ -458,7 +510,7 @@ export namespace CursorCLI {
     })
     let stderrLines = 0
     const stderrMax = 10
-    if (proc.stderr) {
+    if (!cached && proc.stderr) {
       const errRl = createInterface({ input: proc.stderr })
       errRl.on("line", (line) => {
         const t = line.trim()
@@ -473,7 +525,6 @@ export namespace CursorCLI {
     let textChars = 0
     let reasoningChars = 0
     const streamStartedAt = Date.now()
-    let promptReturnedAt = 0
     let closeStartedAt = 0
     let abortStartedAt = 0
     const seenToolInput = new Set<string>()
@@ -687,12 +738,15 @@ export namespace CursorCLI {
     })
     const textId = "cursor-text"
     const reasoningId = "cursor-reasoning"
-    const rpc = new Rpc(
-      proc,
-      (msg) => {
+    let bridgeUpdateAt = 0
+    const bridgeUpdateWaiters = new Set<() => void>()
+    const updateHandler = (msg: any) => {
         if (msg.method !== "session/update") return
         const update = msg.params?.update
         if (!update) return
+        bridgeUpdateAt = Date.now()
+        for (const waiter of bridgeUpdateWaiters) waiter()
+        bridgeUpdateWaiters.clear()
         rememberUsage(update)
         logSessionUpdate(update)
         switch (update.sessionUpdate) {
@@ -825,10 +879,24 @@ export namespace CursorCLI {
           default:
             return
         }
-      },
-      slog,
-    )
+      }
+    const rpc = cached?.rpc ?? new Rpc(proc, updateHandler, slog)
+    rpc.setUpdateHandler(updateHandler)
 
+    let streamFailed = false
+    const abortHandler = () => {
+      slog.info("cursor-cli stream aborted by client", {
+        duration: Date.now() - streamStartedAt,
+        unsettledTools: [...seenToolCall]
+          .filter((id) => !settledToolCalls.has(id))
+          .map((id) => ({
+            toolCallId: id,
+            ...traceSummary(id),
+          })),
+      })
+      closeSession(cacheKey)
+    }
+    input.abort.addEventListener("abort", abortHandler, { once: true })
     const text = (async () => {
       try {
         function emitReasoning(text: string) {
@@ -870,73 +938,98 @@ export namespace CursorCLI {
 
         queue.push({ type: "start" })
         queue.push({ type: "start-step" })
-        const init = await rpc.request("initialize", {
-          protocolVersion: 1,
-          clientCapabilities: {
-            fs: { readTextFile: false, writeTextFile: false },
-            terminal: false,
-          },
-          clientInfo: {
-            name: "opencode",
-            version: Installation.VERSION,
-          },
-        })
-        slog.info("cursor initialize completed", {
-          authMethods: (init?.authMethods ?? []).map((item: any) => item.methodId).join(","),
-        })
-        const cursorLogin = init?.authMethods?.find((item: any) => item.methodId === "cursor_login")
-        if (cursorLogin) {
-          await rpc.request("authenticate", { methodId: "cursor_login" }).catch((error) => {
-            log.debug("cursor authenticate failed", { error })
-          })
-        }
-        const session = await rpc.request("session/new", {
-          cwd: input.cwd,
-          mcpServers: [
-            {
-              name: "OpenCode",
-              command: bridge.command,
-              args: bridge.args,
-              env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
+        let sessionId = cached?.cursorSessionID
+        if (!cached) {
+          const init = await rpc.request("initialize", {
+            protocolVersion: 1,
+            clientCapabilities: {
+              fs: { readTextFile: false, writeTextFile: false },
+              terminal: false,
             },
-          ],
-        })
-        const sessionId = session.sessionId as string
-        rpc.trackSession(sessionId)
-        slog.info("cursor session created", {
-          cursorSessionID: sessionId,
-          modes: (session.modes?.availableModes ?? []).map((m: any) => `${m.id}:${m.name}`).join(","),
-          currentModeId: session.modes?.currentModeId ?? "",
-        })
-        const modes = session.modes?.availableModes as Array<{ id: string; name: string }> | undefined
-        const target = modes?.find((m) => m.name === input.agent)
-        if (target && target.id !== session.modes?.currentModeId) {
-          slog.info("cursor session set mode", {
-            cursorSessionID: sessionId,
-            modeId: target.id,
-            modeName: target.name,
+            clientInfo: {
+              name: "opencode",
+              version: Installation.VERSION,
+            },
           })
-          await rpc.request("session/set_mode", {
-            sessionId,
-            modeId: target.id,
+          slog.info("cursor initialize completed", {
+            authMethods: (init?.authMethods ?? []).map((item: any) => item.methodId).join(","),
           })
-        }
-        // Wait for the MCP bridge subprocess to finish registering tools with Cursor.
-        // Without this, Cursor's AI may not see opencode tools (like select/question)
-        // because the bridge hasn't connected yet when the first prompt is sent.
-        if (bridge.readyFile) {
-          const deadline = Date.now() + 10_000
-          while (Date.now() < deadline) {
-            if (await Bun.file(bridge.readyFile).exists()) {
-              slog.info("cursor bridge ready", { waitedMs: Date.now() - (deadline - 10_000) })
-              break
-            }
-            await new Promise((r) => setTimeout(r, 100))
+          const cursorLogin = init?.authMethods?.find((item: any) => item.methodId === "cursor_login")
+          if (cursorLogin) {
+            await rpc.request("authenticate", { methodId: "cursor_login" }).catch((error) => {
+              log.debug("cursor authenticate failed", { error })
+            })
           }
-          Bun.file(bridge.readyFile)
-            .unlink()
-            .catch(() => {})
+          const session = await rpc.request("session/new", {
+            cwd: input.cwd,
+            mcpServers: [
+              {
+                name: "OpenCode",
+                command: bridge.command,
+                args: bridge.args,
+                env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
+              },
+            ],
+          })
+          sessionId = session.sessionId as string
+          rpc.trackSession(sessionId)
+          slog.info("cursor session created", {
+            cursorSessionID: sessionId,
+            modes: (session.modes?.availableModes ?? []).map((m: any) => `${m.id}:${m.name}`).join(","),
+            currentModeId: session.modes?.currentModeId ?? "",
+          })
+          const modes = session.modes?.availableModes as Array<{ id: string; name: string }> | undefined
+          const target = modes?.find((m) => m.name === input.agent)
+          if (target && target.id !== session.modes?.currentModeId) {
+            slog.info("cursor session set mode", {
+              cursorSessionID: sessionId,
+              modeId: target.id,
+              modeName: target.name,
+            })
+            await rpc.request("session/set_mode", {
+              sessionId,
+              modeId: target.id,
+            })
+          }
+          // Wait for the MCP bridge subprocess to finish registering tools with Cursor.
+          // Without this, Cursor's AI may not see opencode tools (like select/question)
+          // because the bridge hasn't connected yet when the first prompt is sent.
+          if (bridge.readyFile) {
+            const bridgeStarted = Date.now()
+            const deadline = bridgeStarted + 10_000
+            let ready = false
+            let update = bridgeUpdateAt > bridgeStarted
+            while (!ready && !update && Date.now() < deadline) {
+              ready = await Bun.file(bridge.readyFile).exists()
+              if (ready) break
+              let resolveUpdate: (() => void) | undefined
+              await Promise.race([
+                new Promise<void>((resolve) => {
+                  resolveUpdate = resolve
+                  bridgeUpdateWaiters.add(resolve)
+                }),
+                new Promise((resolve) => setTimeout(resolve, 100)),
+              ])
+              if (resolveUpdate) bridgeUpdateWaiters.delete(resolveUpdate)
+              update = bridgeUpdateAt > bridgeStarted
+            }
+            if (ready) slog.info("cursor bridge ready", { waitedMs: Date.now() - bridgeStarted })
+            Bun.file(bridge.readyFile)
+              .unlink()
+              .catch(() => {})
+          }
+          sessions.set(cacheKey, {
+            key: cacheKey,
+            proc,
+            rpc,
+            cursorSessionID: sessionId!,
+            bridgeReadyFile: bridge.readyFile,
+          })
+          proc.once("exit", () => {
+            if (sessions.get(cacheKey)?.proc === proc) sessions.delete(cacheKey)
+          })
         }
+        if (!sessionId) throw new Error("Cursor session was not initialized")
 
         let next = prompt
         let steps = 0
@@ -970,7 +1063,6 @@ export namespace CursorCLI {
           rememberUsage(response)
           promptUsage = addPromptUsage(promptUsage, stepUsage)
           if (stepProviderMetadata) promptProviderMetadata = stepProviderMetadata
-          promptReturnedAt = Date.now()
           await waitForTrailingToolUpdates("session_prompt_completed")
           if (!textBuffered && streamedUpTo < roundText.length) {
             const remaining = roundText.slice(streamedUpTo)
@@ -1148,6 +1240,7 @@ export namespace CursorCLI {
           return finish(chunks.join(""), finishReason(response?.stopReason ?? "end_turn"))
         }
       } catch (error) {
+        streamFailed = true
         const err = error instanceof Error ? error : new Error(String(error))
         settleOpenToolCalls(truncate(`Stream ended before tool finished: ${err.message}`, 400))
         slog.error("cursor-cli stream failed", {
@@ -1158,26 +1251,16 @@ export namespace CursorCLI {
         queue.fail(err)
         throw err
       } finally {
-        rpc.close()
+        input.abort.removeEventListener("abort", abortHandler)
+        if (streamFailed || input.abort.aborted) {
+          closeSession(cacheKey)
+        } else {
+          rpc.setUpdateHandler(() => {})
+          const session = sessions.get(cacheKey)
+          if (session) scheduleClose(session)
+        }
       }
     })()
-
-    input.abort.addEventListener(
-      "abort",
-      () => {
-        slog.info("cursor-cli stream aborted by client", {
-          duration: Date.now() - streamStartedAt,
-          unsettledTools: [...seenToolCall]
-            .filter((id) => !settledToolCalls.has(id))
-            .map((id) => ({
-              toolCallId: id,
-              ...traceSummary(id),
-            })),
-        })
-        rpc.close()
-      },
-      { once: true },
-    )
 
     return {
       text,

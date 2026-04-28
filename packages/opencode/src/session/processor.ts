@@ -118,7 +118,6 @@ export namespace SessionProcessor {
                     delete reasoningMap[value.id]
                   }
                   break
-
                 case "tool-input-start":
                   const part = await Session.updatePart({
                     id: toolcalls[value.id]?.id ?? Identifier.ascending("part"),

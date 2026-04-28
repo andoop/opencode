@@ -30,6 +30,7 @@ export namespace SessionSummary {
     const msgWithParts = messages.find((m) => m.info.id === input.messageID)!
     const userMsg = msgWithParts.info as MessageV2.User
     userMsg.summary ??= {}
+    if (userMsg.model.providerID === "cursor-cli") return
 
     const textPart = msgWithParts.parts.find((p) => p.type === "text" && !p.synthetic) as MessageV2.TextPart
     if (textPart && !userMsg.summary?.title) {
