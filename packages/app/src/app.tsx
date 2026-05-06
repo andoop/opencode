@@ -156,6 +156,14 @@ export function AppInterface(props: { defaultUrl?: string }) {
     if (stored) return stored
     if (location.hostname.includes("opencode.ai")) return "http://localhost:4096"
     if (import.meta.env.DEV) {
+      const local =
+        location.hostname === "localhost" ||
+        location.hostname === "127.0.0.1" ||
+        /^10\.\d+\.\d+\.\d+$/.test(location.hostname) ||
+        /^192\.168\.\d+\.\d+$/.test(location.hostname) ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(location.hostname)
+      if (!local) return window.location.origin
+
       // 使用访问的主机名而不是固定的 localhost，这样从其他设备访问也能工作
       const host = import.meta.env.VITE_OPENCODE_SERVER_HOST ?? window.location.hostname
       const port = import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"

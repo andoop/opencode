@@ -70,8 +70,7 @@ function graphRows(items: Array<{ oid: string; parents: string[] }>) {
   const lanes: Array<string | undefined> = []
   const rows: GraphRow[] = []
   let width = 1
-  const active = (input: Array<string | undefined>) =>
-    input.flatMap((value, index) => (value ? [index] : []))
+  const active = (input: Array<string | undefined>) => input.flatMap((value, index) => (value ? [index] : []))
   const extent = (input: number[]) => (input.length > 0 ? Math.max(...input) + 1 : 0)
   const trim = (input: Array<string | undefined>) => {
     let end = input.length
@@ -212,22 +211,36 @@ export function SessionGitHistoryTab(props: {
                   </div>
                   <div class="flex flex-col gap-2 p-3">
                     <div>
-                      <div class="text-[11px] font-medium text-text-weaker">{props.currentBranchLabel || "Current branch"}</div>
-                      <div class="mt-0.5 break-all font-mono text-12-medium text-text-strong">{props.currentBranch || "-"}</div>
+                      <div class="text-[11px] font-medium text-text-weaker">
+                        {props.currentBranchLabel || "Current branch"}
+                      </div>
+                      <div class="mt-0.5 break-all font-mono text-12-medium text-text-strong">
+                        {props.currentBranch || "-"}
+                      </div>
                     </div>
-                  <Show when={props.trackingBranch}>
-                    <div>
-                      <div class="text-[11px] font-medium text-text-weaker">{props.trackingBranchLabel || "Tracking remote"}</div>
-                      <div class="mt-0.5 break-all font-mono text-12-medium text-text-strong">{props.trackingBranch}</div>
-                    </div>
-                  </Show>
-                  <Show when={props.currentCommit}>
-                    <div>
-                      <div class="text-[11px] font-medium text-text-weaker">{props.currentCommitLabel || "Current commit"}</div>
-                      <div class="mt-0.5 font-mono text-11-regular text-text-weaker">{props.currentCommit?.short}</div>
-                      <div class="mt-0.5 break-words text-12-medium text-text-strong">{props.currentCommit?.subject || props.currentCommit?.short}</div>
-                    </div>
-                  </Show>
+                    <Show when={props.trackingBranch}>
+                      <div>
+                        <div class="text-[11px] font-medium text-text-weaker">
+                          {props.trackingBranchLabel || "Tracking remote"}
+                        </div>
+                        <div class="mt-0.5 break-all font-mono text-12-medium text-text-strong">
+                          {props.trackingBranch}
+                        </div>
+                      </div>
+                    </Show>
+                    <Show when={props.currentCommit}>
+                      <div>
+                        <div class="text-[11px] font-medium text-text-weaker">
+                          {props.currentCommitLabel || "Current commit"}
+                        </div>
+                        <div class="mt-0.5 font-mono text-11-regular text-text-weaker">
+                          {props.currentCommit?.short}
+                        </div>
+                        <div class="mt-0.5 break-words text-12-medium text-text-strong">
+                          {props.currentCommit?.subject || props.currentCommit?.short}
+                        </div>
+                      </div>
+                    </Show>
                   </div>
                 </div>
               }
@@ -295,115 +308,16 @@ export function SessionGitHistoryTab(props: {
                 <div>Time</div>
               </div>
               <div class="relative">
-              <Show when={props.workingTree}>
-                {(workingTree) => (
-                  <button
-                    type="button"
-                    class={rowClass}
-                    style={rowGridStyle()}
-                    classList={{
-                      "bg-surface-base-active": !!workingTree().selected,
-                    }}
-                    onClick={() => props.onSelect(workingTree().id)}
-                  >
-                    <div class="flex items-stretch overflow-visible pl-3">
-                      <div class="relative -my-4 flex w-full items-center justify-center overflow-visible">
-                        <svg
-                          width={graphWidth()}
-                          height={rowHeight}
-                          viewBox={`0 -${bleed} ${graphWidth()} ${rowHeight + bleed * 2}`}
-                          class="overflow-visible"
-                        >
-                          <For each={workingTreeRow()?.before ?? []}>
-                            {(lane) => (
-                              <line
-                                x1={laneX(lane)}
-                                y1={-bleed}
-                                x2={laneX(lane)}
-                                y2={centerY}
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                class="text-border-strong-base"
-                              />
-                            )}
-                          </For>
-                          <For each={workingTreeRow()?.after ?? []}>
-                            {(lane) => (
-                              <line
-                                x1={laneX(lane)}
-                                y1={centerY}
-                                x2={laneX(lane)}
-                                y2={rowHeight + bleed}
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                class="text-border-strong-base"
-                              />
-                            )}
-                          </For>
-                          <For each={(workingTreeRow()?.parents ?? []).filter((lane) => lane !== workingTreeRow()?.lane)}>
-                            {(lane) => (
-                              <path
-                                d={`M ${laneX(workingTreeRow()?.lane ?? 0)} ${centerY} C ${laneX(workingTreeRow()?.lane ?? 0)} ${centerY + 8}, ${laneX(lane)} ${centerY + 8}, ${laneX(lane)} ${rowHeight + bleed}`}
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                fill="none"
-                                class="text-border-strong-base"
-                              />
-                            )}
-                          </For>
-                          <circle
-                            cx={laneX(workingTreeRow()?.lane ?? 0)}
-                            cy={centerY}
-                            r="5"
-                            fill="currentColor"
-                            class="text-text-primary"
-                          />
-                          <circle
-                            cx={laneX(workingTreeRow()?.lane ?? 0)}
-                            cy={centerY}
-                            r="8"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            fill="none"
-                            class="text-text-primary"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-
-                    <div class="min-w-0 border-l border-border-weak-base px-3 py-2.5">
-                      <div class="truncate text-12-medium leading-5 text-text-strong">Working tree</div>
-                      <div class="mt-1 flex flex-wrap gap-1 pr-2">
-                        <span class="inline-flex h-4 max-w-full items-center rounded border border-transparent bg-icon-success-base px-1.5 text-[9px] font-medium text-text-invert-base">
-                          {workingTree().label}
-                        </span>
-                      </div>
-                      <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-text-weaker">
-                        <span>{workingTree().summary}</span>
-                      </div>
-                    </div>
-
-                    <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker">{workingTree().files} files</div>
-                    <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker">now</div>
-                  </button>
-                )}
-              </Show>
-
-              <For each={props.commits}>
-                {(item, index) => {
-                  const row = () => graph().rows[index() + workingTreeOffset()]!
-                  return (
+                <Show when={props.workingTree}>
+                  {(workingTree) => (
                     <button
                       type="button"
                       class={rowClass}
                       style={rowGridStyle()}
                       classList={{
-                        "bg-surface-base-active": props.selected === item.oid,
+                        "bg-surface-base-active": !!workingTree().selected,
                       }}
-                      onClick={() => props.onSelect(item.oid)}
+                      onClick={() => props.onSelect(workingTree().id)}
                     >
                       <div class="flex items-stretch overflow-visible pl-3">
                         <div class="relative -my-4 flex w-full items-center justify-center overflow-visible">
@@ -413,7 +327,7 @@ export function SessionGitHistoryTab(props: {
                             viewBox={`0 -${bleed} ${graphWidth()} ${rowHeight + bleed * 2}`}
                             class="overflow-visible"
                           >
-                            <For each={row().before}>
+                            <For each={workingTreeRow()?.before ?? []}>
                               {(lane) => (
                                 <line
                                   x1={laneX(lane)}
@@ -427,7 +341,7 @@ export function SessionGitHistoryTab(props: {
                                 />
                               )}
                             </For>
-                            <For each={row().after}>
+                            <For each={workingTreeRow()?.after ?? []}>
                               {(lane) => (
                                 <line
                                   x1={laneX(lane)}
@@ -441,10 +355,12 @@ export function SessionGitHistoryTab(props: {
                                 />
                               )}
                             </For>
-                            <For each={row().parents.filter((lane) => lane !== row().lane)}>
+                            <For
+                              each={(workingTreeRow()?.parents ?? []).filter((lane) => lane !== workingTreeRow()?.lane)}
+                            >
                               {(lane) => (
                                 <path
-                                  d={`M ${laneX(row().lane)} ${centerY} C ${laneX(row().lane)} ${centerY + 8}, ${laneX(lane)} ${centerY + 8}, ${laneX(lane)} ${rowHeight + bleed}`}
+                                  d={`M ${laneX(workingTreeRow()?.lane ?? 0)} ${centerY} C ${laneX(workingTreeRow()?.lane ?? 0)} ${centerY + 8}, ${laneX(lane)} ${centerY + 8}, ${laneX(lane)} ${rowHeight + bleed}`}
                                   stroke="currentColor"
                                   stroke-width="1.5"
                                   stroke-linecap="round"
@@ -454,95 +370,201 @@ export function SessionGitHistoryTab(props: {
                               )}
                             </For>
                             <circle
-                              cx={laneX(row().lane)}
+                              cx={laneX(workingTreeRow()?.lane ?? 0)}
                               cy={centerY}
                               r="5"
                               fill="currentColor"
-                              class={props.selected === item.oid ? "text-text-primary" : "text-text-weak"}
+                              class="text-text-primary"
                             />
-                            <Show when={item.refs.some((ref) => ref.kind === "head")}>
-                              <circle
-                                cx={laneX(row().lane)}
-                                cy={centerY}
-                                r="8"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                fill="none"
-                                class="text-text-primary"
-                              />
-                            </Show>
+                            <circle
+                              cx={laneX(workingTreeRow()?.lane ?? 0)}
+                              cy={centerY}
+                              r="8"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              fill="none"
+                              class="text-text-primary"
+                            />
                           </svg>
                         </div>
                       </div>
 
-                      <Tooltip
-                        placement="bottom-start"
-                        contentClass={tooltipClass}
-                        value={
-                          <div class="flex w-[360px] max-w-[360px] flex-col">
-                            <div class="border-b border-border-weak-base px-3 py-2">
-                              <div class="break-words text-12-medium text-text-strong">{item.subject || item.short}</div>
-                              <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-11-regular text-text-weaker">
-                                <span class="font-mono">{item.short}</span>
-                                <span>{item.author_name}</span>
-                                <span>{historyTime(item.authored_at)}</span>
-                              </div>
-                            </div>
-                            <div class="flex flex-col gap-2 p-3">
-                              <Show when={item.refs.length > 0}>
-                                <div class="flex flex-wrap gap-1">
-                                  <For each={item.refs}>
-                                    {(ref) => (
-                                      <span class={`inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${refClass(ref.kind)}`}>
-                                        {refLabel(ref.kind)}: {ref.name}
-                                      </span>
-                                    )}
-                                  </For>
-                                </div>
-                              </Show>
-                            </div>
-                          </div>
-                        }
+                      <div class="min-w-0 border-l border-border-weak-base px-3 py-2.5">
+                        <div class="truncate text-12-medium leading-5 text-text-strong">Working tree</div>
+                        <div class="mt-1 flex flex-wrap gap-1 pr-2">
+                          <span class="inline-flex h-4 max-w-full items-center rounded border border-transparent bg-icon-success-base px-1.5 text-[9px] font-medium text-text-invert-base">
+                            {workingTree().label}
+                          </span>
+                        </div>
+                        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-text-weaker">
+                          <span>{workingTree().summary}</span>
+                        </div>
+                      </div>
+
+                      <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker">{workingTree().files} files</div>
+                      <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker">now</div>
+                    </button>
+                  )}
+                </Show>
+
+                <For each={props.commits}>
+                  {(item, index) => {
+                    const row = () => graph().rows[index() + workingTreeOffset()]!
+                    return (
+                      <button
+                        type="button"
+                        class={rowClass}
+                        style={rowGridStyle()}
+                        classList={{
+                          "bg-surface-base-active": props.selected === item.oid,
+                        }}
+                        onClick={() => props.onSelect(item.oid)}
                       >
-                        <div class="min-w-0 border-l border-border-weak-base px-3 py-2.5">
-                          <div
-                            class="truncate text-12-medium leading-5 text-text-strong transition-colors group-hover:text-text-primary"
-                            classList={{
-                              "text-text-primary": props.selected === item.oid,
-                            }}
-                          >
-                            {item.subject || item.short}
-                          </div>
-                          <Show when={item.refs.length > 0}>
-                            <div class="mt-1 flex flex-wrap gap-1 pr-2">
-                              <For each={item.refs}>
-                                {(ref) => (
-                                  <span
-                                    class={`inline-flex h-4 max-w-full items-center rounded border px-1.5 text-[9px] font-medium ${refClass(ref.kind)}`}
-                                    title={ref.name}
-                                  >
-                                    {ref.name}
-                                  </span>
+                        <div class="flex items-stretch overflow-visible pl-3">
+                          <div class="relative -my-4 flex w-full items-center justify-center overflow-visible">
+                            <svg
+                              width={graphWidth()}
+                              height={rowHeight}
+                              viewBox={`0 -${bleed} ${graphWidth()} ${rowHeight + bleed * 2}`}
+                              class="overflow-visible"
+                            >
+                              <For each={row().before}>
+                                {(lane) => (
+                                  <line
+                                    x1={laneX(lane)}
+                                    y1={-bleed}
+                                    x2={laneX(lane)}
+                                    y2={centerY}
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    class="text-border-strong-base"
+                                  />
                                 )}
                               </For>
-                            </div>
-                          </Show>
-                          <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-text-weaker">
-                            <span class="font-mono">{item.short}</span>
-                            <span aria-hidden="true">·</span>
-                            <span title={historyTime(item.authored_at)}>{historyTimeAgo(item.authored_at)}</span>
+                              <For each={row().after}>
+                                {(lane) => (
+                                  <line
+                                    x1={laneX(lane)}
+                                    y1={centerY}
+                                    x2={laneX(lane)}
+                                    y2={rowHeight + bleed}
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    class="text-border-strong-base"
+                                  />
+                                )}
+                              </For>
+                              <For each={row().parents.filter((lane) => lane !== row().lane)}>
+                                {(lane) => (
+                                  <path
+                                    d={`M ${laneX(row().lane)} ${centerY} C ${laneX(row().lane)} ${centerY + 8}, ${laneX(lane)} ${centerY + 8}, ${laneX(lane)} ${rowHeight + bleed}`}
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    fill="none"
+                                    class="text-border-strong-base"
+                                  />
+                                )}
+                              </For>
+                              <circle
+                                cx={laneX(row().lane)}
+                                cy={centerY}
+                                r="5"
+                                fill="currentColor"
+                                class={props.selected === item.oid ? "text-text-primary" : "text-text-weak"}
+                              />
+                              <Show when={item.refs.some((ref) => ref.kind === "head")}>
+                                <circle
+                                  cx={laneX(row().lane)}
+                                  cy={centerY}
+                                  r="8"
+                                  stroke="currentColor"
+                                  stroke-width="1.5"
+                                  fill="none"
+                                  class="text-text-primary"
+                                />
+                              </Show>
+                            </svg>
                           </div>
                         </div>
-                      </Tooltip>
 
-                      <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker">{item.author_name}</div>
-                      <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker" title={historyTime(item.authored_at)}>
-                        {historyTimeAgo(item.authored_at)}
-                      </div>
-                    </button>
-                  )
-                }}
-              </For>
+                        <Tooltip
+                          placement="bottom-start"
+                          contentClass={tooltipClass}
+                          value={
+                            <div class="flex w-[360px] max-w-[360px] flex-col">
+                              <div class="border-b border-border-weak-base px-3 py-2">
+                                <div class="break-words text-12-medium text-text-strong">
+                                  {item.subject || item.short}
+                                </div>
+                                <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-11-regular text-text-weaker">
+                                  <span class="font-mono">{item.short}</span>
+                                  <span>{item.author_name}</span>
+                                  <span>{historyTime(item.authored_at)}</span>
+                                </div>
+                              </div>
+                              <div class="flex flex-col gap-2 p-3">
+                                <Show when={item.refs.length > 0}>
+                                  <div class="flex flex-wrap gap-1">
+                                    <For each={item.refs}>
+                                      {(ref) => (
+                                        <span
+                                          class={`inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${refClass(ref.kind)}`}
+                                        >
+                                          {refLabel(ref.kind)}: {ref.name}
+                                        </span>
+                                      )}
+                                    </For>
+                                  </div>
+                                </Show>
+                              </div>
+                            </div>
+                          }
+                        >
+                          <div class="min-w-0 border-l border-border-weak-base px-3 py-2.5">
+                            <div
+                              class="truncate text-12-medium leading-5 text-text-strong transition-colors group-hover:text-text-primary"
+                              classList={{
+                                "text-text-primary": props.selected === item.oid,
+                              }}
+                            >
+                              {item.subject || item.short}
+                            </div>
+                            <Show when={item.refs.length > 0}>
+                              <div class="mt-1 flex flex-wrap gap-1 pr-2">
+                                <For each={item.refs}>
+                                  {(ref) => (
+                                    <span
+                                      class={`inline-flex h-4 max-w-full items-center rounded border px-1.5 text-[9px] font-medium ${refClass(ref.kind)}`}
+                                      title={ref.name}
+                                    >
+                                      {ref.name}
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </Show>
+                            <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-text-weaker">
+                              <span class="font-mono">{item.short}</span>
+                              <span aria-hidden="true">·</span>
+                              <span title={historyTime(item.authored_at)}>{historyTimeAgo(item.authored_at)}</span>
+                            </div>
+                          </div>
+                        </Tooltip>
+
+                        <div class="truncate px-3 py-2.5 text-[10px] text-text-weaker">{item.author_name}</div>
+                        <div
+                          class="truncate px-3 py-2.5 text-[10px] text-text-weaker"
+                          title={historyTime(item.authored_at)}
+                        >
+                          {historyTimeAgo(item.authored_at)}
+                        </div>
+                      </button>
+                    )
+                  }}
+                </For>
               </div>
 
               <Show when={props.hasMore}>

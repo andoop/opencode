@@ -231,6 +231,7 @@ export const dict = {
   "prompt.attachment.cancel": "Cancel upload",
   "prompt.attachment.retry": "Retry",
   "prompt.attachment.uploadFailed": "Upload failed",
+  "prompt.attachment.processing": "Processing on server...",
   "prompt.attachment.pending": "Wait for attachments to finish uploading",
   "prompt.git.title": "Git Information",
   "prompt.git.description": "Current repository status for this session",
@@ -259,7 +260,8 @@ export const dict = {
   "prompt.toast.attachmentLimit.title": "Too many attachments",
   "prompt.toast.attachmentLimit.description": "Attach up to {{count}} files per message.",
   "prompt.toast.attachmentPending.title": "Attachments still uploading",
-  "prompt.toast.attachmentPending.description": "Send the message after all attachments finish uploading, or remove failed uploads.",
+  "prompt.toast.attachmentPending.description":
+    "Send the message after all attachments finish uploading, or remove failed uploads.",
   "prompt.toast.attachmentUploadFailed.title": "Failed to upload attachment",
   "prompt.toast.attachmentUploadFailed.description": "The attachment could not be uploaded.",
   "prompt.toast.attachmentUploadFailed.network": "Network error while uploading.",

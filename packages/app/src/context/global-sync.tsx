@@ -1208,11 +1208,14 @@ function createGlobalSync() {
           ...(!auth.isAdmin
             ? [
                 task("command.config.list.inspect", () =>
-                  sdk.command.config.list().then((x) => {
-                    setGlobalStore("config", "commands", x.data?.commands ?? {})
-                  }).catch((err) => {
-                    throw err
-                  }),
+                  sdk.command.config
+                    .list()
+                    .then((x) => {
+                      setGlobalStore("config", "commands", x.data?.commands ?? {})
+                    })
+                    .catch((err) => {
+                      throw err
+                    }),
                 ),
               ]
             : []),

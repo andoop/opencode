@@ -108,7 +108,9 @@ export function DialogSelectBranch(props: {
   const refresh = async () => {
     if (raw.loading) return
     setRefreshing(true)
-    await open(props.directory).branch.refresh({ body_directory: props.directory }).catch(() => undefined)
+    await open(props.directory)
+      .branch.refresh({ body_directory: props.directory })
+      .catch(() => undefined)
     await refetch()
     setRefreshing(false)
   }
@@ -125,9 +127,7 @@ export function DialogSelectBranch(props: {
   }
 
   return (
-    <Dialog
-      title={`${language.t("dialog.branch.title")} — ${props.projectName}${props.titleSuffix ?? ""}`}
-    >
+    <Dialog title={`${language.t("dialog.branch.title")} — ${props.projectName}${props.titleSuffix ?? ""}`}>
       <div class="flex min-h-[360px] flex-col gap-2">
         <div class="flex shrink-0 justify-end gap-1">
           <Button variant="ghost" size="small" onClick={refresh} disabled={refreshing() || raw.loading}>
@@ -201,9 +201,7 @@ export function DialogSelectBranch(props: {
                     <Icon name="branch" size="small" class="shrink-0 text-icon-base" />
                     <span class="min-w-0 flex-1 truncate text-left font-normal">{item.name}</span>
                     <Show when={item.current}>
-                      <span class="shrink-0 text-12-regular text-text-weak">
-                        {language.t("dialog.branch.current")}
-                      </span>
+                      <span class="shrink-0 text-12-regular text-text-weak">{language.t("dialog.branch.current")}</span>
                     </Show>
                   </div>
                 )}

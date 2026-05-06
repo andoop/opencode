@@ -558,7 +558,10 @@ export namespace MCP {
       if (!client) return
 
       const loadedAt = Date.now()
-      const result = await withTimeout(client.listTools(), entry?.timeout ?? cfg.experimental?.mcp_timeout ?? DEFAULT_TIMEOUT)
+      const result = await withTimeout(
+        client.listTools(),
+        entry?.timeout ?? cfg.experimental?.mcp_timeout ?? DEFAULT_TIMEOUT,
+      )
         .then((x) => x)
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error)
@@ -656,7 +659,14 @@ export namespace MCP {
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
     return Object.fromEntries(
-      [...new Set([...Object.keys(config), ...Object.keys(s.status), ...Object.keys(s.clients), ...Object.keys(s.tools)])]
+      [
+        ...new Set([
+          ...Object.keys(config),
+          ...Object.keys(s.status),
+          ...Object.keys(s.clients),
+          ...Object.keys(s.tools),
+        ]),
+      ]
         .filter((name) => !config[name] || isMcpConfigured(config[name]))
         .map((name) => {
           const cache = s.tools[name]
@@ -689,9 +699,7 @@ export namespace MCP {
             ? 100
             : haystack.includes(lower)
               ? 10
-              : lower
-                  .split(/\s+/)
-                  .filter((word) => haystack.includes(word)).length
+              : lower.split(/\s+/).filter((word) => haystack.includes(word)).length
         return { tool, score }
       })
       .filter((item) => item.score > 0)
@@ -741,7 +749,9 @@ export namespace MCP {
 
     const cfg = await Config.get()
     const entry = cfg.mcp?.[tool.client]
-    const timeout = isMcpConfigured(entry) ? (entry.timeout ?? cfg.experimental?.mcp_timeout) : cfg.experimental?.mcp_timeout
+    const timeout = isMcpConfigured(entry)
+      ? (entry.timeout ?? cfg.experimental?.mcp_timeout)
+      : cfg.experimental?.mcp_timeout
     return client.callTool(
       {
         name: tool.name,

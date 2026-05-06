@@ -3,7 +3,12 @@ import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import path from "path"
+import { createWriteStream } from "fs"
 import fs from "fs/promises"
+import Busboy from "busboy"
+import { Readable } from "stream"
+import { pipeline } from "stream/promises"
+import type { ReadableStream as WebReadableStream } from "stream/web"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
@@ -23,6 +28,7 @@ import { Workspace } from "@/workspace"
 
 const log = Log.create({ service: "server" })
 const ATTACHMENT_MAX_BYTES = 500 * 1024 * 1024
+const ATTACHMENT_CHUNK_BYTES = 8 * 1024 * 1024
 
 const AttachmentUpload = z
   .object({
@@ -35,6 +41,44 @@ const AttachmentUpload = z
   .meta({
     ref: "SessionAttachmentUpload",
   })
+
+const AttachmentUploadInit = z
+  .object({
+    filename: z.string(),
+    mime: z.string().optional(),
+    size: z.number().int().min(0),
+  })
+  .meta({
+    ref: "SessionAttachmentUploadInit",
+  })
+
+const AttachmentUploadInitResponse = z
+  .object({
+    uploadID: z.string(),
+    chunkSize: z.number(),
+    received: z.number(),
+  })
+  .meta({
+    ref: "SessionAttachmentUploadInitResponse",
+  })
+
+const AttachmentUploadChunkResponse = z
+  .object({
+    received: z.number(),
+    complete: z.boolean(),
+  })
+  .meta({
+    ref: "SessionAttachmentUploadChunkResponse",
+  })
+
+const AttachmentUploadState = z.object({
+  filename: z.string(),
+  mime: z.string(),
+  size: z.number(),
+  received: z.number(),
+  chunkSize: z.number(),
+  createdAt: z.number(),
+})
 
 function safeAttachmentName(name: string) {
   const base = path.basename(name.replaceAll("\\", "/")).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
@@ -58,6 +102,218 @@ async function uniqueAttachmentName(dir: string, name: string) {
     }
   }
   return `${stem}-${Date.now().toString(36)}${ext}`
+}
+
+function attachmentUploadsDir(sessionDir: string) {
+  return path.join(sessionDir, ".tmp", "uploads")
+}
+
+function attachmentUploadDir(sessionDir: string, uploadID: string) {
+  return path.join(attachmentUploadsDir(sessionDir), uploadID)
+}
+
+function attachmentUploadStatePath(sessionDir: string, uploadID: string) {
+  return path.join(attachmentUploadDir(sessionDir, uploadID), "state.json")
+}
+
+function attachmentUploadBlobPath(sessionDir: string, uploadID: string) {
+  return path.join(attachmentUploadDir(sessionDir, uploadID), "blob")
+}
+
+async function attachmentUploadStateRead(sessionDir: string, uploadID: string) {
+  try {
+    return AttachmentUploadState.parse(await Bun.file(attachmentUploadStatePath(sessionDir, uploadID)).json())
+  } catch {
+    throw new AttachmentError("Upload not found", 404)
+  }
+}
+
+async function attachmentUploadStateWrite(
+  sessionDir: string,
+  uploadID: string,
+  state: z.infer<typeof AttachmentUploadState>,
+) {
+  await Bun.write(attachmentUploadStatePath(sessionDir, uploadID), JSON.stringify(state))
+}
+
+async function attachmentUploadCleanup(sessionDir: string, uploadID: string) {
+  await fs.rm(attachmentUploadDir(sessionDir, uploadID), { recursive: true, force: true })
+}
+
+async function attachmentUploadPrune(sessionDir: string) {
+  const root = attachmentUploadsDir(sessionDir)
+  const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        try {
+          const state = await AttachmentUploadState.parseAsync(
+            await Bun.file(path.join(root, entry.name, "state.json")).json(),
+          )
+          if (state.createdAt < cutoff) {
+            await fs.rm(path.join(root, entry.name), { recursive: true, force: true })
+          }
+        } catch {
+          await fs.rm(path.join(root, entry.name), { recursive: true, force: true }).catch(() => {})
+        }
+      }),
+  )
+}
+
+class AttachmentError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409 | 413,
+  ) {
+    super(message)
+  }
+}
+
+class AttachmentOffsetError extends AttachmentError {
+  constructor(
+    message: string,
+    readonly received: number,
+  ) {
+    super(message, 409)
+  }
+}
+
+async function uploadAttachment(req: Request, dir: string) {
+  if (!req.body) throw new AttachmentError("Missing file", 400)
+
+  let parser
+  try {
+    parser = Busboy({
+      headers: Object.fromEntries(req.headers.entries()),
+      limits: { files: 1, fileSize: ATTACHMENT_MAX_BYTES },
+    })
+  } catch {
+    throw new AttachmentError("Invalid multipart upload", 400)
+  }
+
+  let upload: Promise<void> | undefined
+  let result: z.infer<typeof AttachmentUpload> | undefined
+  let parseError: AttachmentError | undefined
+
+  parser.on("filesLimit", () => {
+    parseError = new AttachmentError("Only one file is allowed", 400)
+  })
+
+  parser.on(
+    "file",
+    (
+      _,
+      file: NodeJS.ReadableStream & {
+        truncated?: boolean
+      },
+      info: {
+        filename?: string
+        mimeType?: string
+      },
+    ) => {
+      upload = (async () => {
+        const filename = await uniqueAttachmentName(dir, info.filename || "attachment")
+        const target = path.join(dir, filename)
+        try {
+          await pipeline(file, createWriteStream(target))
+        } catch (error) {
+          await fs.unlink(target).catch(() => {})
+          throw error
+        }
+
+        if (file.truncated) {
+          await fs.unlink(target).catch(() => {})
+          throw new AttachmentError("Attachment exceeds the 500MB limit", 413)
+        }
+
+        const size = Number(req.headers.get("x-opencode-attachment-size") ?? "0")
+        result = {
+          filename,
+          mime: info.mimeType || "application/octet-stream",
+          size: size || Bun.file(target).size,
+          path: target,
+          url: `file://${target}`,
+        }
+      })()
+    },
+  )
+
+  await pipeline(Readable.fromWeb(req.body as unknown as WebReadableStream<Uint8Array>), parser)
+  if (parseError) throw parseError
+
+  if (!upload) throw new AttachmentError("Missing file", 400)
+  await upload
+  if (!result) throw new AttachmentError("Missing file", 400)
+  return result
+}
+
+async function uploadAttachmentChunk(req: Request, sessionDir: string, uploadID: string, offset: number) {
+  if (!req.body) throw new AttachmentError("Missing chunk body", 400)
+
+  const state = await attachmentUploadStateRead(sessionDir, uploadID)
+  if (offset !== state.received) {
+    throw new AttachmentOffsetError("Unexpected chunk offset", state.received)
+  }
+
+  const remaining = state.size - state.received
+  if (remaining <= 0) {
+    return { received: state.received, complete: true }
+  }
+
+  const max = Math.min(state.chunkSize, remaining)
+  const blob = attachmentUploadBlobPath(sessionDir, uploadID)
+  const file = await fs.open(blob, "a")
+  let written = 0
+
+  try {
+    const reader = req.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      written += value.byteLength
+      if (written > max) {
+        throw new AttachmentError("Chunk exceeds allowed size", 400)
+      }
+      await file.write(value)
+    }
+  } catch (error) {
+    await file.close().catch(() => {})
+    if (written > 0) {
+      await fs.truncate(blob, state.received).catch(() => {})
+    }
+    throw error
+  }
+
+  await file.close()
+  state.received += written
+  await attachmentUploadStateWrite(sessionDir, uploadID, state)
+  return {
+    received: state.received,
+    complete: state.received >= state.size,
+  }
+}
+
+async function uploadAttachmentComplete(sessionDir: string, uploadID: string, attachmentsDir: string) {
+  const state = await attachmentUploadStateRead(sessionDir, uploadID)
+  if (state.received !== state.size) {
+    throw new AttachmentOffsetError("Upload is incomplete", state.received)
+  }
+
+  await fs.mkdir(attachmentsDir, { recursive: true })
+  const filename = await uniqueAttachmentName(attachmentsDir, state.filename)
+  const target = path.join(attachmentsDir, filename)
+  await fs.rename(attachmentUploadBlobPath(sessionDir, uploadID), target)
+  await attachmentUploadCleanup(sessionDir, uploadID)
+  return {
+    filename,
+    mime: state.mime || "application/octet-stream",
+    size: state.size,
+    path: target,
+    url: `file://${target}`,
+  }
 }
 
 function requireAdmin() {
@@ -426,6 +682,183 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/attachment/init",
+      describeRoute({
+        summary: "Initialize attachment upload",
+        description: "Create an upload session for chunked attachment upload.",
+        operationId: "session.attachment.init",
+        responses: {
+          200: {
+            description: "Initialized attachment upload",
+            content: {
+              "application/json": {
+                schema: resolver(AttachmentUploadInitResponse),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        }),
+      ),
+      validator("json", AttachmentUploadInit),
+      async (c) => {
+        const body = c.req.valid("json")
+        if (body.size > ATTACHMENT_MAX_BYTES) {
+          return c.json({ message: "Attachment exceeds the 500MB limit" }, 413)
+        }
+
+        const session = await Session.get(c.req.valid("param").sessionID)
+        await fs.mkdir(attachmentUploadsDir(session.directory), { recursive: true })
+        await attachmentUploadPrune(session.directory)
+
+        const uploadID = crypto.randomUUID()
+        await fs.mkdir(attachmentUploadDir(session.directory, uploadID), { recursive: true })
+        await attachmentUploadStateWrite(session.directory, uploadID, {
+          filename: body.filename,
+          mime: body.mime || "application/octet-stream",
+          size: body.size,
+          received: 0,
+          chunkSize: ATTACHMENT_CHUNK_BYTES,
+          createdAt: Date.now(),
+        })
+
+        return c.json({
+          uploadID,
+          chunkSize: ATTACHMENT_CHUNK_BYTES,
+          received: 0,
+        })
+      },
+    )
+    .put(
+      "/:sessionID/attachment/:uploadID/chunk",
+      describeRoute({
+        summary: "Upload attachment chunk",
+        description: "Append a chunk to a chunked attachment upload.",
+        operationId: "session.attachment.chunk",
+        responses: {
+          200: {
+            description: "Uploaded chunk",
+            content: {
+              "application/json": {
+                schema: resolver(AttachmentUploadChunkResponse),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+          uploadID: z.string().min(1).meta({ description: "Upload ID" }),
+        }),
+      ),
+      validator(
+        "query",
+        z.object({
+          offset: z.coerce.number().int().min(0),
+        }),
+      ),
+      async (c) => {
+        const params = c.req.valid("param")
+        const query = c.req.valid("query")
+        const session = await Session.get(params.sessionID)
+
+        try {
+          return c.json(await uploadAttachmentChunk(c.req.raw, session.directory, params.uploadID, query.offset))
+        } catch (error) {
+          if (error instanceof AttachmentOffsetError) {
+            return c.json({ message: error.message, received: error.received }, error.status)
+          }
+          if (error instanceof AttachmentError) {
+            return c.json({ message: error.message }, error.status)
+          }
+          throw error
+        }
+      },
+    )
+    .post(
+      "/:sessionID/attachment/:uploadID/complete",
+      describeRoute({
+        summary: "Complete attachment upload",
+        description: "Finalize a chunked attachment upload and move it into the attachments directory.",
+        operationId: "session.attachment.complete",
+        responses: {
+          200: {
+            description: "Completed upload",
+            content: {
+              "application/json": {
+                schema: resolver(AttachmentUpload),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+          uploadID: z.string().min(1).meta({ description: "Upload ID" }),
+        }),
+      ),
+      async (c) => {
+        const params = c.req.valid("param")
+        const session = await Session.get(params.sessionID)
+        const dir = path.join(session.directory, ".tmp", "attachments")
+
+        try {
+          return c.json(await uploadAttachmentComplete(session.directory, params.uploadID, dir))
+        } catch (error) {
+          if (error instanceof AttachmentOffsetError) {
+            return c.json({ message: error.message, received: error.received }, error.status)
+          }
+          if (error instanceof AttachmentError) {
+            return c.json({ message: error.message }, error.status)
+          }
+          throw error
+        }
+      },
+    )
+    .delete(
+      "/:sessionID/attachment/:uploadID",
+      describeRoute({
+        summary: "Cancel attachment upload",
+        description: "Remove temporary files for an in-progress chunked attachment upload.",
+        operationId: "session.attachment.cancel",
+        responses: {
+          200: {
+            description: "Cancelled upload",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+          uploadID: z.string().min(1).meta({ description: "Upload ID" }),
+        }),
+      ),
+      async (c) => {
+        const params = c.req.valid("param")
+        const session = await Session.get(params.sessionID)
+        await attachmentUploadCleanup(session.directory, params.uploadID)
+        return c.json(true)
+      },
+    )
+    .post(
       "/:sessionID/attachment",
       describeRoute({
         summary: "Upload session attachment",
@@ -456,35 +889,19 @@ export const SessionRoutes = lazy(() =>
           return c.json({ message: "Attachment exceeds the 500MB limit" }, 413)
         }
 
-        const form = await c.req.formData()
-        const file = form.get("file")
-        if (!(file instanceof File)) {
-          return c.json({ message: "Missing file" }, 400)
-        }
-        if (file.size > ATTACHMENT_MAX_BYTES) {
-          return c.json({ message: "Attachment exceeds the 500MB limit" }, 413)
-        }
-
         const session = await Session.get(c.req.valid("param").sessionID)
         const dir = path.join(session.directory, ".tmp", "attachments")
 
         await fs.mkdir(dir, { recursive: true })
-        const filename = await uniqueAttachmentName(dir, file.name)
-        const target = path.join(dir, filename)
         try {
-          await Bun.write(target, file)
+          const result = await uploadAttachment(c.req.raw, dir)
+          return c.json(result)
         } catch (error) {
-          await fs.unlink(target).catch(() => {})
+          if (error instanceof AttachmentError) {
+            return c.json({ message: error.message }, error.status)
+          }
           throw error
         }
-
-        return c.json({
-          filename,
-          mime: file.type || "application/octet-stream",
-          size: file.size,
-          path: target,
-          url: `file://${target}`,
-        })
       },
     )
     .post(

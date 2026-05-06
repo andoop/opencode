@@ -3014,11 +3014,10 @@ export default function Layout(props: ParentProps) {
 
   const collectSessionBranches = async (project: LocalProject) => {
     const workspace = project.id
-      ? await workspaceFetch<WorkspaceInfo>(
-          globalSDK.url,
-          `/workspace/${encodeURIComponent(project.id)}`,
-          { token: auth.token ?? undefined, fetchFn: platform.fetch ?? fetch },
-        ).catch(() => undefined)
+      ? await workspaceFetch<WorkspaceInfo>(globalSDK.url, `/workspace/${encodeURIComponent(project.id)}`, {
+          token: auth.token ?? undefined,
+          fetchFn: platform.fetch ?? fetch,
+        }).catch(() => undefined)
       : undefined
 
     const gitProjects: { projectID: string; directory: string; label: string }[] = []

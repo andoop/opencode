@@ -19,7 +19,8 @@ async function resolveGitWorktree(requested: string) {
     try {
       const root = scoped.session?.roots.find(
         (item) =>
-          Filesystem.contains(item.sessionWorktreeDirectory, absolute) || Filesystem.contains(item.sourceDirectory, absolute),
+          Filesystem.contains(item.sessionWorktreeDirectory, absolute) ||
+          Filesystem.contains(item.sourceDirectory, absolute),
       )
       if (root?.vcs === "git") return root.sessionWorktreeDirectory
 

@@ -741,145 +741,145 @@ export namespace CursorCLI {
     let bridgeUpdateAt = 0
     const bridgeUpdateWaiters = new Set<() => void>()
     const updateHandler = (msg: any) => {
-        if (msg.method !== "session/update") return
-        const update = msg.params?.update
-        if (!update) return
-        bridgeUpdateAt = Date.now()
-        for (const waiter of bridgeUpdateWaiters) waiter()
-        bridgeUpdateWaiters.clear()
-        rememberUsage(update)
-        logSessionUpdate(update)
-        switch (update.sessionUpdate) {
-          case "agent_message_chunk": {
-            const text = textFromContent(update.content)
-            if (!text) return
-            roundText += text
-            if (!textBuffered && roundText.includes(`<${CursorToolCall.TAG}`)) {
-              textBuffered = true
-              if (textOpen) {
-                queue.push({ type: "text-end", id: textId })
-                textOpen = false
-              }
-              return
-            }
-            if (textBuffered) return
-            const tagOpen = `<${CursorToolCall.TAG}`
-            let safe = roundText.length
-            for (let i = Math.max(streamedUpTo, roundText.length - tagOpen.length); i < roundText.length; i++) {
-              if (roundText[i] !== "<") continue
-              if (tagOpen.startsWith(roundText.slice(i))) {
-                safe = i
-                break
-              }
-            }
-            const delta = roundText.slice(streamedUpTo, safe)
-            if (!delta) return
-            streamedUpTo = safe
-            if (!textOpen) {
-              textOpen = true
-              queue.push({ type: "text-start", id: textId })
-            }
-            queue.push({ type: "text-delta", id: textId, text: delta })
-            textChars += delta.length
-            return
-          }
-          case "agent_thought_chunk": {
-            const text = textFromContent(update.content)
-            if (!text) return
-            roundReasoning += text
-            if (!reasoningOpen) {
-              reasoningOpen = true
-              queue.push({ type: "reasoning-start", id: reasoningId })
-            }
-            queue.push({ type: "reasoning-delta", id: reasoningId, text })
-            reasoningChars += text.length
-            return
-          }
-          case "tool_call": {
-            roundNativeToolActivity = true
-            const id = update.toolCallId as string
-            const name = toolName(update)
-            toolNames.set(id, name)
-            const item = trace(id)
-            item.startedAt = item.startedAt ?? Date.now()
-            item.updatedAt = Date.now()
-            item.title = typeof update.title === "string" && update.title ? update.title : item.title
-            item.rawInputKeys = listKeys(toolInput(update))
-            if (!seenToolInput.has(id)) {
-              seenToolInput.add(id)
-              queue.push({ type: "tool-input-start", id, toolName: name })
-            }
-            if (toolInput(update) !== undefined) {
-              toolInputs.set(id, toolInput(update))
-              item.inputPreview = previewValue(toolInput(update))
+      if (msg.method !== "session/update") return
+      const update = msg.params?.update
+      if (!update) return
+      bridgeUpdateAt = Date.now()
+      for (const waiter of bridgeUpdateWaiters) waiter()
+      bridgeUpdateWaiters.clear()
+      rememberUsage(update)
+      logSessionUpdate(update)
+      switch (update.sessionUpdate) {
+        case "agent_message_chunk": {
+          const text = textFromContent(update.content)
+          if (!text) return
+          roundText += text
+          if (!textBuffered && roundText.includes(`<${CursorToolCall.TAG}`)) {
+            textBuffered = true
+            if (textOpen) {
+              queue.push({ type: "text-end", id: textId })
+              textOpen = false
             }
             return
           }
-          case "tool_call_update": {
-            roundNativeToolActivity = true
-            const id = update.toolCallId as string
-            const name = toolNames.get(id) ?? toolName(update)
-            toolNames.set(id, name)
-            if (!seenToolCall.has(id) && !toolInputs.has(id) && toolInput(update) === undefined) {
-              slog.warn("cursor tool update missing initial input", {
-                toolCallId: id,
-                toolName: name,
-                status: update.status ?? "",
-              })
+          if (textBuffered) return
+          const tagOpen = `<${CursorToolCall.TAG}`
+          let safe = roundText.length
+          for (let i = Math.max(streamedUpTo, roundText.length - tagOpen.length); i < roundText.length; i++) {
+            if (roundText[i] !== "<") continue
+            if (tagOpen.startsWith(roundText.slice(i))) {
+              safe = i
+              break
             }
-            if (!seenToolInput.has(id)) {
-              seenToolInput.add(id)
-              queue.push({ type: "tool-input-start", id, toolName: name })
-            }
-            if (toolInput(update) !== undefined) {
-              toolInputs.set(id, toolInput(update))
-            }
-            if (!seenToolCall.has(id) && toolInputs.has(id)) {
-              seenToolCall.add(id)
-              queue.push({
-                type: "tool-call",
-                toolCallId: id,
-                toolName: name,
-                input: toolInputs.get(id),
-              })
-            }
-            if (update.status === "completed") {
-              settledToolCalls.add(id)
-              notifyToolWaiters()
-              queue.push({
-                type: "tool-result",
-                toolCallId: id,
-                input: toolInputs.get(id),
-                output: {
-                  title: update.title ?? name,
-                  output: textFromContent(update.content) || textFromContent(toolOutput(update)),
-                  metadata: {},
-                },
-              })
-            }
-            if (update.status === "failed") {
-              settledToolCalls.add(id)
-              notifyToolWaiters()
-              const toolErrMsg = textFromContent(update.content) || textFromContent(toolOutput(update)) || "Tool failed"
-              slog.warn("cursor tool_call_update failed", {
-                toolCallId: id,
-                toolName: name,
-                detail: truncate(toolErrMsg, 400),
-                failureKind: classifyCursorFailure(toolErrMsg),
-              })
-              queue.push({
-                type: "tool-error",
-                toolCallId: id,
-                input: toolInputs.get(id),
-                error: new Error(toolErrMsg),
-              })
-            }
-            return
           }
-          default:
-            return
+          const delta = roundText.slice(streamedUpTo, safe)
+          if (!delta) return
+          streamedUpTo = safe
+          if (!textOpen) {
+            textOpen = true
+            queue.push({ type: "text-start", id: textId })
+          }
+          queue.push({ type: "text-delta", id: textId, text: delta })
+          textChars += delta.length
+          return
         }
+        case "agent_thought_chunk": {
+          const text = textFromContent(update.content)
+          if (!text) return
+          roundReasoning += text
+          if (!reasoningOpen) {
+            reasoningOpen = true
+            queue.push({ type: "reasoning-start", id: reasoningId })
+          }
+          queue.push({ type: "reasoning-delta", id: reasoningId, text })
+          reasoningChars += text.length
+          return
+        }
+        case "tool_call": {
+          roundNativeToolActivity = true
+          const id = update.toolCallId as string
+          const name = toolName(update)
+          toolNames.set(id, name)
+          const item = trace(id)
+          item.startedAt = item.startedAt ?? Date.now()
+          item.updatedAt = Date.now()
+          item.title = typeof update.title === "string" && update.title ? update.title : item.title
+          item.rawInputKeys = listKeys(toolInput(update))
+          if (!seenToolInput.has(id)) {
+            seenToolInput.add(id)
+            queue.push({ type: "tool-input-start", id, toolName: name })
+          }
+          if (toolInput(update) !== undefined) {
+            toolInputs.set(id, toolInput(update))
+            item.inputPreview = previewValue(toolInput(update))
+          }
+          return
+        }
+        case "tool_call_update": {
+          roundNativeToolActivity = true
+          const id = update.toolCallId as string
+          const name = toolNames.get(id) ?? toolName(update)
+          toolNames.set(id, name)
+          if (!seenToolCall.has(id) && !toolInputs.has(id) && toolInput(update) === undefined) {
+            slog.warn("cursor tool update missing initial input", {
+              toolCallId: id,
+              toolName: name,
+              status: update.status ?? "",
+            })
+          }
+          if (!seenToolInput.has(id)) {
+            seenToolInput.add(id)
+            queue.push({ type: "tool-input-start", id, toolName: name })
+          }
+          if (toolInput(update) !== undefined) {
+            toolInputs.set(id, toolInput(update))
+          }
+          if (!seenToolCall.has(id) && toolInputs.has(id)) {
+            seenToolCall.add(id)
+            queue.push({
+              type: "tool-call",
+              toolCallId: id,
+              toolName: name,
+              input: toolInputs.get(id),
+            })
+          }
+          if (update.status === "completed") {
+            settledToolCalls.add(id)
+            notifyToolWaiters()
+            queue.push({
+              type: "tool-result",
+              toolCallId: id,
+              input: toolInputs.get(id),
+              output: {
+                title: update.title ?? name,
+                output: textFromContent(update.content) || textFromContent(toolOutput(update)),
+                metadata: {},
+              },
+            })
+          }
+          if (update.status === "failed") {
+            settledToolCalls.add(id)
+            notifyToolWaiters()
+            const toolErrMsg = textFromContent(update.content) || textFromContent(toolOutput(update)) || "Tool failed"
+            slog.warn("cursor tool_call_update failed", {
+              toolCallId: id,
+              toolName: name,
+              detail: truncate(toolErrMsg, 400),
+              failureKind: classifyCursorFailure(toolErrMsg),
+            })
+            queue.push({
+              type: "tool-error",
+              toolCallId: id,
+              input: toolInputs.get(id),
+              error: new Error(toolErrMsg),
+            })
+          }
+          return
+        }
+        default:
+          return
       }
+    }
     const rpc = cached?.rpc ?? new Rpc(proc, updateHandler, slog)
     rpc.setUpdateHandler(updateHandler)
 

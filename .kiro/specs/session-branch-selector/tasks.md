@@ -16,13 +16,13 @@
     - 遵循项目风格：使用 `Bun.$` 执行 git 命令，使用 `.nothrow()` + exitCode 检查，避免 try/catch
     - _需求: 2.1, 2.3, 2.4, 3.2, 5.3, 5.5_
 
-  - [ ]* 1.2 编写 `Branch.filter` 的属性测试
+  - [ ]\* 1.2 编写 `Branch.filter` 的属性测试
     - **Property 3: 分支搜索过滤**
     - 使用 fast-check 生成随机分支名列表和搜索词，验证过滤结果是原列表的子集且仅包含匹配项
     - 测试文件：`packages/opencode/test/branch/branch.test.ts`
     - **验证需求: 3.2**
 
-  - [ ]* 1.3 编写 `Branch.validate` 的属性测试
+  - [ ]\* 1.3 编写 `Branch.validate` 的属性测试
     - **Property 6: 分支名校验**
     - 使用 fast-check 生成随机字符串，验证 validate 函数的返回值与 git check-ref-format 结果一致
     - 测试文件：`packages/opencode/test/branch/branch.test.ts`
@@ -104,25 +104,25 @@
   - 确保所有测试通过，如有问题请向用户确认。
 
 - [ ] 11. 属性测试与单元测试
-  - [ ]* 11.1 编写 Git 项目过滤的属性测试
+  - [ ]\* 11.1 编写 Git 项目过滤的属性测试
     - **Property 1: Git 项目过滤**
     - 使用 fast-check 生成随机 workspace projects（混合 vcs 类型），验证过滤逻辑仅选出 vcs="git" 的项目，且数量正确
     - 测试文件：`packages/opencode/test/branch/branch.test.ts`
     - **验证需求: 1.1, 1.3**
 
-  - [ ]* 11.2 编写 Worktree 分支名格式的属性测试
+  - [ ]\* 11.2 编写 Worktree 分支名格式的属性测试
     - **Property 4: Worktree 分支名格式**
     - 使用 fast-check 生成随机 sessionID 字符串，验证创建的 worktree 分支名严格等于 `session/{sessionID}`
     - 测试文件：`packages/opencode/test/branch/branch.test.ts`
     - **验证需求: 4.1**
 
-  - [ ]* 11.3 编写 BaseBranch 记录一致性的单元测试
+  - [ ]\* 11.3 编写 BaseBranch 记录一致性的单元测试
     - **Property 5: BaseBranch 记录一致性**
     - 验证传入 baseBranch 参数后 SessionRoot 的 baseBranch 和 baseCommit 字段正确性
     - 测试文件：`packages/opencode/test/session/session.test.ts`
     - **验证需求: 1.4, 4.3, 4.4**
 
-  - [ ]* 11.4 编写默认分支选中的单元测试
+  - [ ]\* 11.4 编写默认分支选中的单元测试
     - **Property 2: 默认分支选中**
     - 验证 `Branch.list` 返回的 `current` 字段等于 git 仓库的当前分支
     - 测试文件：`packages/opencode/test/branch/branch.test.ts`

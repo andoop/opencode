@@ -1,0 +1,34 @@
+{
+	admin 127.0.0.1:2019
+	auto_https off
+}
+
+:7777 {
+	@api path_regexp api ^/(health|config|global|workspace|user-auth|user|browse|project|pty|experimental|session|task|permission|question|select|provider|file|find|mcp|branch|git|tui|path|vcs|command|log|agent|skill|lsp|formatter|event|auth|dispose)(/|$)
+
+	handle @api {
+		reverse_proxy 127.0.0.1:4096 {
+			header_up Host localhost:4096
+			flush_interval -1
+			transport http {
+				dial_timeout 10s
+				read_timeout 15m
+				write_timeout 15m
+				response_header_timeout 15m
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000 {
+			header_up Host localhost:3000
+			flush_interval -1
+			transport http {
+				dial_timeout 10s
+				read_timeout 15m
+				write_timeout 15m
+				response_header_timeout 15m
+			}
+		}
+	}
+}

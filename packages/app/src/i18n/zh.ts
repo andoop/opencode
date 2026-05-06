@@ -228,6 +228,7 @@ export const dict = {
   "prompt.attachment.cancel": "取消上传",
   "prompt.attachment.retry": "重试",
   "prompt.attachment.uploadFailed": "上传失败",
+  "prompt.attachment.processing": "服务端处理中...",
   "prompt.attachment.pending": "等待附件上传完成",
   "prompt.git.title": "Git 信息",
   "prompt.git.description": "当前会话对应仓库的状态信息",

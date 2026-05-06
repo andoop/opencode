@@ -104,7 +104,7 @@ async function createNext(input: {
   directory: string
   permission?: PermissionNext.Ruleset
   userID?: string
-  branches?: Record<string, string>  // projectID -> baseBranch
+  branches?: Record<string, string> // projectID -> baseBranch
 })
 
 // createSessionRoot 新增参数
@@ -112,7 +112,7 @@ async function createSessionRoot(input: {
   workspaceProject: Workspace.ProjectInfo
   sessionID: string
   sessionDirectory: string
-  baseBranch?: string  // 用户选择的基础分支
+  baseBranch?: string // 用户选择的基础分支
 })
 ```
 
@@ -120,7 +120,7 @@ async function createSessionRoot(input: {
 
 ```typescript
 // 在 createSessionRoot 中
-const base = input.baseBranch ?? await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"])
+const base = input.baseBranch ?? (await gitText(userWorktreeDirectory, ["rev-parse", "--abbrev-ref", "HEAD"]))
 const commit = await gitText(userWorktreeDirectory, ["rev-parse", base])
 // git worktree add --no-checkout -b session/{sessionID} {dir} {commit}
 ```
@@ -132,7 +132,7 @@ const commit = await gitText(userWorktreeDirectory, ["rev-parse", base])
 ```typescript
 Session.create.schema = z.object({
   // ...existing fields
-  branches: z.record(z.string(), z.string()).optional()  // projectID -> baseBranch
+  branches: z.record(z.string(), z.string()).optional(), // projectID -> baseBranch
 })
 ```
 
@@ -185,9 +185,9 @@ export const SessionRoot = z.object({
   sessionWorktreeDirectory: z.string(),
   primary: z.boolean().optional(),
   vcs: z.literal("git").optional(),
-  branch: z.string().optional(),        // session/{sessionID}
-  baseBranch: z.string().optional(),     // 用户选择的基础分支
-  baseCommit: z.string().optional(),     // 基础分支的 HEAD commit
+  branch: z.string().optional(), // session/{sessionID}
+  baseBranch: z.string().optional(), // 用户选择的基础分支
+  baseCommit: z.string().optional(), // 基础分支的 HEAD commit
   headCommit: z.string().optional(),
 })
 ```
@@ -216,45 +216,43 @@ export const SessionRoot = z.object({
 }
 ```
 
-
-
 ## 正确性属性（Correctness Properties）
 
-*属性（Property）是指在系统所有合法执行中都应成立的特征或行为——本质上是对系统应做什么的形式化陈述。属性是人类可读规范与机器可验证正确性保证之间的桥梁。*
+_属性（Property）是指在系统所有合法执行中都应成立的特征或行为——本质上是对系统应做什么的形式化陈述。属性是人类可读规范与机器可验证正确性保证之间的桥梁。_
 
 ### Property 1: Git 项目过滤
 
-*For any* workspace 包含任意数量的 projects（混合 vcs="git" 和非 git 项目），分支选择流程应仅对 vcs="git" 的项目触发，且触发次数等于 git 项目的数量。非 git 项目应被完全跳过。
+_For any_ workspace 包含任意数量的 projects（混合 vcs="git" 和非 git 项目），分支选择流程应仅对 vcs="git" 的项目触发，且触发次数等于 git 项目的数量。非 git 项目应被完全跳过。
 
 **Validates: Requirements 1.1, 1.3**
 
 ### Property 2: 默认分支选中
 
-*For any* git 项目及其当前分支，分支选择器的默认选中值应等于该项目的当前分支名。
+_For any_ git 项目及其当前分支，分支选择器的默认选中值应等于该项目的当前分支名。
 
 **Validates: Requirements 1.2**
 
 ### Property 3: 分支搜索过滤
 
-*For any* 分支名列表和任意搜索关键词，过滤后的结果应仅包含名称中包含该关键词（大小写不敏感）的分支，且结果集是原列表的子集。
+_For any_ 分支名列表和任意搜索关键词，过滤后的结果应仅包含名称中包含该关键词（大小写不敏感）的分支，且结果集是原列表的子集。
 
 **Validates: Requirements 3.2**
 
 ### Property 4: Worktree 分支名格式
 
-*For any* sessionID，创建的 worktree 分支名应严格等于 `session/{sessionID}`。
+_For any_ sessionID，创建的 worktree 分支名应严格等于 `session/{sessionID}`。
 
 **Validates: Requirements 4.1**
 
 ### Property 5: BaseBranch 记录一致性
 
-*For any* 用户选择的 baseBranch 和创建的 SessionRoot，SessionRoot.baseBranch 字段应等于用户选择的分支名，且 SessionRoot.baseCommit 应等于该分支在创建时的 HEAD commit。
+_For any_ 用户选择的 baseBranch 和创建的 SessionRoot，SessionRoot.baseBranch 字段应等于用户选择的分支名，且 SessionRoot.baseCommit 应等于该分支在创建时的 HEAD commit。
 
 **Validates: Requirements 1.4, 4.3, 4.4**
 
 ### Property 6: 分支名校验
 
-*For any* 字符串作为分支名输入，`validate` 函数的返回值应与 `git check-ref-format --branch` 的结果一致。
+_For any_ 字符串作为分支名输入，`validate` 函数的返回值应与 `git check-ref-format --branch` 的结果一致。
 
 **Validates: Requirements 5.5**
 
@@ -296,6 +294,7 @@ export const SessionRoot = z.object({
 - **createSessionRoot 集成**：传入 baseBranch 参数后 SessionRoot 字段的正确性
 
 边界情况：
+
 - 空分支列表
 - 搜索关键词为空字符串
 - 分支名包含特殊字符（`/`, `..`, 空格等）
@@ -306,6 +305,7 @@ export const SessionRoot = z.object({
 使用 [fast-check](https://github.com/dubzzz/fast-check) 库进行属性测试。
 
 配置要求：
+
 - 每个属性测试至少运行 100 次迭代
 - 每个测试通过注释标注对应的设计属性
 

@@ -106,4 +106,3 @@ test("MCP catalog supports search, details, and execution", async () => {
     },
   })
 })
-

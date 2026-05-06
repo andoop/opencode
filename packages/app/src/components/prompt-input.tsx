@@ -255,11 +255,13 @@ type PendingPrompt = {
 type UploadTask = {
   id: string
   file: File
-  status: "uploading" | "error"
+  status: "uploading" | "processing" | "error"
   progress: number
   uploaded: number
   error?: string
   xhr?: XMLHttpRequest
+  abort?: AbortController
+  uploadID?: string
 }
 
 type UploadedAttachmentResponse = {
@@ -268,6 +270,17 @@ type UploadedAttachmentResponse = {
   size: number
   path: string
   url: string
+}
+
+type UploadedAttachmentInitResponse = {
+  uploadID: string
+  chunkSize: number
+  received: number
+}
+
+type UploadedAttachmentChunkResponse = {
+  received: number
+  complete: boolean
 }
 
 const pending = new Map<string, PendingPrompt>()
@@ -485,7 +498,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const uploadedAttachments = createMemo(
     () => prompt.current().filter((part) => part.type === "attachment") as UploadedAttachmentPart[],
   )
-  const pendingUploads = createMemo(() => upload.tasks.some((task) => task.status === "uploading"))
+  const pendingUploads = createMemo(() => upload.tasks.some((task) => task.status !== "error"))
   const failedUploads = createMemo(() => upload.tasks.some((task) => task.status === "error"))
 
   // Git branch and worktree info
@@ -684,7 +697,19 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const cancelUpload = (id: string) => {
     const task = upload.tasks.find((item) => item.id === id)
+    task?.abort?.abort()
     task?.xhr?.abort()
+    const session = info()
+    if (session && task?.uploadID) {
+      const url = new URL(`/session/${session.id}/attachment/${task.uploadID}`, sdk.url)
+      const headers = new Headers()
+      const directory = /[^\x00-\x7F]/.test(session.directory)
+        ? encodeURIComponent(session.directory)
+        : session.directory
+      headers.set("x-opencode-directory", directory)
+      if (auth.token) headers.set("Authorization", `Bearer ${auth.token}`)
+      void fetch(url.toString(), { method: "DELETE", headers }).catch(() => undefined)
+    }
     setUpload("tasks", (tasks) => tasks.filter((item) => item.id !== id))
   }
 
@@ -707,9 +732,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     const id = existingID ?? Identifier.ascending("part")
-    const form = new FormData()
-    const xhr = new XMLHttpRequest()
-    form.append("file", file)
+    const abort = new AbortController()
 
     const fail = (message: string) => {
       setUpload(
@@ -719,6 +742,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           task.status = "error"
           task.error = message
           task.xhr = undefined
+          task.abort = undefined
         }),
       )
       showToast({
@@ -736,62 +760,169 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         status: "uploading" as const,
         progress: 0,
         uploaded: 0,
-        xhr,
+        abort,
       },
     ])
-
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return
-      setUpload(
-        "tasks",
-        (task) => task.id === id,
-        produce((task) => {
-          task.uploaded = event.loaded
-          task.progress = Math.round((event.loaded / event.total) * 100)
-        }),
-      )
-    }
-    xhr.onload = () => {
-      if (xhr.status < 200 || xhr.status >= 300) {
-        fail(xhr.responseText || xhr.statusText || language.t("prompt.toast.attachmentUploadFailed.description"))
-        return
-      }
-
-      const result = (() => {
-        try {
-          return JSON.parse(xhr.responseText) as UploadedAttachmentResponse
-        } catch {
-          return undefined
-        }
-      })()
-      if (!result) {
-        fail(language.t("prompt.toast.attachmentUploadFailed.description"))
-        return
-      }
-      const attachment: UploadedAttachmentPart = {
-        type: "attachment",
-        id,
-        filename: result.filename,
-        mime: result.mime,
-        size: result.size,
-        path: result.path,
-        url: result.url,
-      }
-      setUpload("tasks", (tasks) => tasks.filter((task) => task.id !== id))
-      prompt.set([...prompt.current(), attachment], prompt.cursor() ?? getCursorPosition(editorRef))
-      void Promise.all([files.tree.refresh(""), files.tree.refresh(".tmp"), files.tree.refresh(".tmp/attachments")])
-    }
-    xhr.onerror = () => {
-      fail(language.t("prompt.toast.attachmentUploadFailed.network"))
-    }
-
-    const url = new URL(`/session/${session.id}/attachment`, sdk.url)
-    xhr.open("POST", url.toString())
     const directory = /[^\x00-\x7F]/.test(session.directory) ? encodeURIComponent(session.directory) : session.directory
-    xhr.setRequestHeader("x-opencode-directory", directory)
-    xhr.setRequestHeader("x-opencode-attachment-size", String(file.size))
-    if (auth.token) xhr.setRequestHeader("Authorization", `Bearer ${auth.token}`)
-    xhr.send(form)
+
+    const request = async <T,>(pathname: string, init?: RequestInit) => {
+      const url = new URL(pathname, sdk.url)
+      const headers = new Headers(init?.headers)
+      headers.set("x-opencode-directory", directory)
+      if (auth.token) headers.set("Authorization", `Bearer ${auth.token}`)
+      const response = await fetch(url.toString(), {
+        ...init,
+        headers,
+        signal: abort.signal,
+      })
+      if (!response.ok) {
+        throw new Error((await response.text()) || language.t("prompt.toast.attachmentUploadFailed.description"))
+      }
+      return (await response.json()) as T
+    }
+
+    const sendChunk = (uploadID: string, offset: number, chunk: Blob) =>
+      new Promise<UploadedAttachmentChunkResponse>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        setUpload(
+          "tasks",
+          (task) => task.id === id,
+          produce((task) => {
+            task.xhr = xhr
+            task.uploadID = uploadID
+          }),
+        )
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return
+          setUpload(
+            "tasks",
+            (task) => task.id === id,
+            produce((task) => {
+              task.uploaded = offset + event.loaded
+              task.progress = Math.min(99, Math.round(((offset + event.loaded) / file.size) * 100))
+            }),
+          )
+        }
+        xhr.onload = () => {
+          setUpload("tasks", (task) => task.id === id, "xhr", undefined)
+          const text =
+            xhr.responseText || xhr.statusText || language.t("prompt.toast.attachmentUploadFailed.description")
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(text) as UploadedAttachmentChunkResponse)
+              return
+            } catch {
+              reject(new Error(language.t("prompt.toast.attachmentUploadFailed.description")))
+              return
+            }
+          }
+
+          if (xhr.status === 409) {
+            try {
+              const parsed = JSON.parse(text) as { message?: string; received?: number }
+              reject(Object.assign(new Error(parsed.message || text), { received: parsed.received }))
+              return
+            } catch {}
+          }
+          reject(new Error(text))
+        }
+        xhr.onerror = () => {
+          setUpload("tasks", (task) => task.id === id, "xhr", undefined)
+          reject(new Error(language.t("prompt.toast.attachmentUploadFailed.network")))
+        }
+        xhr.onabort = () => {
+          setUpload("tasks", (task) => task.id === id, "xhr", undefined)
+          reject(new DOMException("Aborted", "AbortError"))
+        }
+
+        const url = new URL(`/session/${session.id}/attachment/${uploadID}/chunk`, sdk.url)
+        url.searchParams.set("offset", String(offset))
+        xhr.open("PUT", url.toString())
+        xhr.setRequestHeader("Content-Type", "application/octet-stream")
+        xhr.setRequestHeader("x-opencode-directory", directory)
+        if (auth.token) xhr.setRequestHeader("Authorization", `Bearer ${auth.token}`)
+        xhr.send(chunk)
+      })
+
+    void (async () => {
+      try {
+        const init = await request<UploadedAttachmentInitResponse>(`/session/${session.id}/attachment/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            mime: file.type || "application/octet-stream",
+            size: file.size,
+          }),
+        })
+
+        setUpload(
+          "tasks",
+          (task) => task.id === id,
+          produce((task) => {
+            task.uploadID = init.uploadID
+          }),
+        )
+
+        let offset = init.received
+        while (offset < file.size) {
+          const chunk = file.slice(offset, offset + init.chunkSize)
+          let retries = 0
+          while (true) {
+            try {
+              const result = await sendChunk(init.uploadID, offset, chunk)
+              offset = result.received
+              break
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "AbortError") return
+              const received =
+                error && typeof error === "object" && "received" in error
+                  ? Number(error.received) || undefined
+                  : undefined
+              if (received !== undefined && received > offset) {
+                offset = received
+                break
+              }
+              retries += 1
+              if (retries >= 3) throw error
+            }
+          }
+        }
+
+        setUpload(
+          "tasks",
+          (task) => task.id === id,
+          produce((task) => {
+            task.status = "processing"
+            task.uploaded = file.size
+            task.progress = 100
+            task.xhr = undefined
+          }),
+        )
+
+        const result = await request<UploadedAttachmentResponse>(
+          `/session/${session.id}/attachment/${init.uploadID}/complete`,
+          {
+            method: "POST",
+          },
+        )
+        const attachment: UploadedAttachmentPart = {
+          type: "attachment",
+          id,
+          filename: result.filename,
+          mime: result.mime,
+          size: result.size,
+          path: result.path,
+          url: result.url,
+        }
+        setUpload("tasks", (tasks) => tasks.filter((task) => task.id !== id))
+        prompt.set([...prompt.current(), attachment], prompt.cursor() ?? getCursorPosition(editorRef))
+        void Promise.all([files.tree.refresh(""), files.tree.refresh(".tmp"), files.tree.refresh(".tmp/attachments")])
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return
+        fail(error instanceof Error ? error.message : language.t("prompt.toast.attachmentUploadFailed.description"))
+      }
+    })()
   }
 
   const retryUpload = (id: string) => {
@@ -1847,9 +1978,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             messageText ? "\n\n" : "",
             "有附件，信息如下：",
             ...images.map((attachment) =>
-              [`- 文件名：${attachment.filename}`, `  类型：${attachment.mime}`, "  路径：未保存，请重新上传该图片"].join(
-                "\n",
-              ),
+              [
+                `- 文件名：${attachment.filename}`,
+                `  类型：${attachment.mime}`,
+                "  路径：未保存，请重新上传该图片",
+              ].join("\n"),
             ),
             ...uploads.map((attachment) =>
               [
@@ -2338,7 +2471,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     <div class="flex items-center gap-2 text-10-regular text-text-weak">
                       <Show
                         when={task.status === "uploading"}
-                        fallback={<span>{task.error ?? language.t("prompt.attachment.uploadFailed")}</span>}
+                        fallback={
+                          <span>
+                            {task.status === "processing"
+                              ? language.t("prompt.attachment.processing")
+                              : (task.error ?? language.t("prompt.attachment.uploadFailed"))}
+                          </span>
+                        }
                       >
                         <span>
                           {task.progress}% · {formatBytes(task.uploaded)} / {formatBytes(task.file.size)}
@@ -2355,23 +2494,37 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   <Show
                     when={task.status === "uploading"}
                     fallback={
-                      <div class="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => retryUpload(task.id)}
-                          class="text-10-medium text-text-primary hover:text-text-strong"
-                        >
-                          {language.t("prompt.attachment.retry")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => cancelUpload(task.id)}
-                          class="size-5 rounded-full flex items-center justify-center hover:bg-surface-raised-base-hover"
-                          aria-label={language.t("prompt.attachment.remove")}
-                        >
-                          <Icon name="close" class="size-3 text-text-weak" />
-                        </button>
-                      </div>
+                      <Show
+                        when={task.status === "error"}
+                        fallback={
+                          <button
+                            type="button"
+                            onClick={() => cancelUpload(task.id)}
+                            class="size-5 rounded-full flex items-center justify-center hover:bg-surface-raised-base-hover"
+                            aria-label={language.t("prompt.attachment.cancel")}
+                          >
+                            <Icon name="close" class="size-3 text-text-weak" />
+                          </button>
+                        }
+                      >
+                        <div class="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => retryUpload(task.id)}
+                            class="text-10-medium text-text-primary hover:text-text-strong"
+                          >
+                            {language.t("prompt.attachment.retry")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cancelUpload(task.id)}
+                            class="size-5 rounded-full flex items-center justify-center hover:bg-surface-raised-base-hover"
+                            aria-label={language.t("prompt.attachment.remove")}
+                          >
+                            <Icon name="close" class="size-3 text-text-weak" />
+                          </button>
+                        </div>
+                      </Show>
                     }
                   >
                     <button

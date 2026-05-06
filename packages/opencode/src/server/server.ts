@@ -107,12 +107,7 @@ export namespace Server {
         // CORS must come BEFORE authentication to handle preflight OPTIONS requests
         .use(
           cors({
-            allowHeaders: [
-              "authorization",
-              "content-type",
-              "x-opencode-directory",
-              "x-opencode-attachment-size",
-            ],
+            allowHeaders: ["authorization", "content-type", "x-opencode-directory", "x-opencode-attachment-size"],
             origin(input) {
               if (!input) return
 

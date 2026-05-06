@@ -84,7 +84,9 @@ export function SessionGitCommitDetail(props: {
                         <span>
                           {props.parentsLabel}:{" "}
                           <span class="font-mono text-text-strong">
-                            {commit().parents.map((item) => item.slice(0, 7)).join(", ")}
+                            {commit()
+                              .parents.map((item) => item.slice(0, 7))
+                              .join(", ")}
                           </span>
                         </span>
                       </Show>
@@ -107,7 +109,10 @@ export function SessionGitCommitDetail(props: {
                 </Show>
 
                 <Show when={commit().body}>
-                  <div class="mt-2 max-h-20 overflow-y-auto rounded-md border border-border-base bg-background-frame px-2.5 py-2 text-12-regular text-text-weak" data-scrollable>
+                  <div
+                    class="mt-2 max-h-20 overflow-y-auto rounded-md border border-border-base bg-background-frame px-2.5 py-2 text-12-regular text-text-weak"
+                    data-scrollable
+                  >
                     {commit().body}
                   </div>
                 </Show>

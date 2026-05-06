@@ -114,7 +114,11 @@ export const McpCallToolTool = Tool.define("mcp_call_tool", {
   async execute(args, ctx) {
     const callID = ctx.callID ?? Identifier.ascending("tool")
     await ask({ ...ctx, callID }, args.tool)
-    await Plugin.trigger("tool.execute.before", { tool: args.tool, sessionID: ctx.sessionID, callID }, { args: args.args ?? {} })
+    await Plugin.trigger(
+      "tool.execute.before",
+      { tool: args.tool, sessionID: ctx.sessionID, callID },
+      { args: args.args ?? {} },
+    )
     const result = await MCP.executeTool(args.tool, args.args ?? {}, ctx.abort)
     await Plugin.trigger("tool.execute.after", { tool: args.tool, sessionID: ctx.sessionID, callID }, result)
     return {
@@ -124,4 +128,3 @@ export const McpCallToolTool = Tool.define("mcp_call_tool", {
     }
   },
 })
-

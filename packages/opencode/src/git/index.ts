@@ -22,7 +22,8 @@ async function resolveGitWorktree(requested: string) {
     try {
       const root = scoped.session?.roots.find(
         (item) =>
-          Filesystem.contains(item.sessionWorktreeDirectory, absolute) || Filesystem.contains(item.sourceDirectory, absolute),
+          Filesystem.contains(item.sessionWorktreeDirectory, absolute) ||
+          Filesystem.contains(item.sourceDirectory, absolute),
       )
       if (root?.vcs === "git") return root.sessionWorktreeDirectory
 
@@ -93,7 +94,10 @@ function parseRefs(input: string, remotes: string[]) {
 
   const result: { name: string; kind: "head" | "local" | "remote" | "tag" }[] = []
 
-  for (const item of input.split(",").map((item) => item.trim()).filter(Boolean)) {
+  for (const item of input
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)) {
     if (item === "HEAD") {
       result.push({ name: "HEAD", kind: "head" })
       continue
@@ -268,7 +272,15 @@ export namespace Git {
 
     const [oid, short, parents, author_name, author_email, authored_at, refs, subject, body] = meta.out.split(unit)
     const base = parents?.split(" ").filter(Boolean)[0] ?? emptyTree
-    const statusResult = await spawnGit(root, ["diff", "--no-ext-diff", "--name-status", "--no-renames", base, oid, "--"])
+    const statusResult = await spawnGit(root, [
+      "diff",
+      "--no-ext-diff",
+      "--name-status",
+      "--no-renames",
+      base,
+      oid,
+      "--",
+    ])
     const numstatResult = await spawnGit(root, ["diff", "--no-ext-diff", "--no-renames", "--numstat", base, oid, "--"])
     const status = new Map<string, "added" | "deleted" | "modified">()
 
