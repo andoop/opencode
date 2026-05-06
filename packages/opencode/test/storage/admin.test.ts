@@ -137,7 +137,7 @@ describe("StorageAdmin", () => {
     }
   })
 
-  test("uses active workspace ids instead of unarchived session state", async () => {
+  test("uses backend visible sessions instead of frontend active state", async () => {
     const fx = await fixture()
     try {
       await writeJson(path.join(fx.roots.data, "storage", "session", "wsp_alive", "ses_unarchived.json"), {
@@ -154,8 +154,8 @@ describe("StorageAdmin", () => {
         time: { created: 1, updated: 2 },
       })
       const stale = await StorageAdmin.summary({ activeWorkspaceIDs: [] }, { roots: fx.roots })
-      expect(stale.categories.find((item) => item.category === "closedWorkspaces")?.count).toBe(1)
-      expect(stale.categories.find((item) => item.category === "workspaces")?.count).toBe(0)
+      expect(stale.categories.find((item) => item.category === "closedWorkspaces")?.count).toBe(0)
+      expect(stale.categories.find((item) => item.category === "workspaces")?.count).toBe(1)
       const active = await StorageAdmin.summary({ activeWorkspaceIDs: ["wsp_alive"] }, { roots: fx.roots })
       expect(active.categories.find((item) => item.category === "closedWorkspaces")?.count).toBe(0)
       expect(active.categories.find((item) => item.category === "workspaces")?.count).toBe(1)
@@ -167,17 +167,65 @@ describe("StorageAdmin", () => {
   test("keeps snapshots for active visible workspaces and sessions", async () => {
     const fx = await fixture()
     try {
+      await writeJson(path.join(fx.roots.data, "storage", "session", "wsp_alive", "ses_open.json"), {
+        id: "ses_open",
+        slug: "open",
+        workspaceID: "wsp_alive",
+        projectID: "git_alive",
+        userID: "usr_alive",
+        directory: path.join(fx.roots.data, "workspace", "usr_alive", "wsp_alive", "sessions", "ses_open"),
+        cwd: path.join(fx.roots.data, "workspace", "usr_alive", "wsp_alive", "sessions", "ses_open"),
+        roots: [],
+        title: "Open",
+        version: "test",
+        time: { created: 1, updated: 2 },
+      })
+      await fs.mkdir(path.join(fx.roots.data, "snapshot", "ses_open"), { recursive: true })
+      await Bun.write(path.join(fx.roots.data, "snapshot", "ses_open", "session.snapshot"), "session snapshot")
       const summary = await StorageAdmin.summary(
-        { activeWorkspaceIDs: ["wsp_alive"], activeSessionIDs: ["ses_archived"] },
+        { activeWorkspaceIDs: [], activeSessionIDs: [] },
         { roots: fx.roots },
       )
       const snapshots = summary.items.filter((item) => item.category === "snapshots")
-      expect(snapshots.map((item) => item.metadata.scope)).toEqual(["stale_scope"])
+      expect(snapshots.map((item) => item.metadata.scope)).toEqual(["ses_archived", "stale_scope"])
       const plan = await StorageAdmin.plan(
-        { categories: ["snapshots"], activeWorkspaceIDs: ["wsp_alive"], activeSessionIDs: ["ses_archived"] },
+        { categories: ["snapshots"], activeWorkspaceIDs: [], activeSessionIDs: [] },
         { roots: fx.roots },
       )
-      expect(plan.items.map((item) => item.metadata.scope)).toEqual(["stale_scope"])
+      expect(plan.items.map((item) => item.metadata.scope)).toEqual(["ses_archived", "stale_scope"])
+    } finally {
+      await fs.rm(fx.root, { recursive: true, force: true })
+    }
+  })
+
+  test("does not treat another user's open workspace as closed", async () => {
+    const fx = await fixture()
+    try {
+      await writeJson(path.join(fx.roots.data, "storage", "session", "wsp_alive", "ses_open.json"), {
+        id: "ses_open",
+        slug: "open",
+        workspaceID: "wsp_alive",
+        projectID: "git_alive",
+        userID: "usr_alive",
+        directory: path.join(fx.roots.data, "workspace", "usr_alive", "wsp_alive", "sessions", "ses_open"),
+        cwd: path.join(fx.roots.data, "workspace", "usr_alive", "wsp_alive", "sessions", "ses_open"),
+        roots: [],
+        title: "Open",
+        version: "test",
+        time: { created: 1, updated: 2 },
+      })
+      await fs.mkdir(path.join(fx.roots.data, "snapshot", "ses_open"), { recursive: true })
+      await Bun.write(path.join(fx.roots.data, "snapshot", "ses_open", "session.snapshot"), "session snapshot")
+      const summary = await StorageAdmin.summary(
+        { activeWorkspaceIDs: [], activeSessionIDs: [] },
+        { roots: fx.roots, viewerUserID: "usr_admin" },
+      )
+      expect(summary.categories.find((item) => item.category === "closedWorkspaces")?.count).toBe(0)
+      expect(summary.categories.find((item) => item.category === "workspaces")?.count).toBe(1)
+      expect(summary.items.filter((item) => item.category === "snapshots").map((item) => item.metadata.scope)).toEqual([
+        "ses_archived",
+        "stale_scope",
+      ])
     } finally {
       await fs.rm(fx.root, { recursive: true, force: true })
     }

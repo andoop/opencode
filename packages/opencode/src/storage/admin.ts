@@ -112,6 +112,7 @@ export namespace StorageAdmin {
     roots?: Roots
     activeWorkspaceIDs?: string[]
     activeSessionIDs?: string[]
+    viewerUserID?: string
   }
 
   const defaultRoots = () => ({
@@ -213,7 +214,7 @@ export namespace StorageAdmin {
           .catch(() => undefined),
       ),
     )
-    return new Set(result.filter((item): item is ProjectRegistry.Info => !!item).map((item) => item.project_id))
+    return new Map(result.filter((item): item is ProjectRegistry.Info => !!item).map((item) => [item.project_id, item]))
   }
 
   async function workspaces(input: Roots) {
@@ -383,11 +384,33 @@ export namespace StorageAdmin {
     return result
   }
 
+  function workspaceOwner(item: Awaited<ReturnType<typeof workspaces>>[number]) {
+    return item.workspace?.userID ?? item.owner
+  }
+
+  function visibleWorkspace(
+    item: Awaited<ReturnType<typeof workspaces>>[number],
+    sessions: Map<string, Session.Info[]>,
+    projects: Map<string, ProjectRegistry.Info>,
+    users: Map<string, User.PublicInfo>,
+  ) {
+    if (!item.workspace) return false
+    const owner = workspaceOwner(item)
+    const user = users.get(owner)
+    const visible = [item.workspace.primaryProjectID, ...item.workspace.projects.map((project) => project.projectID)]
+      .map((projectID) => projects.get(projectID))
+      .filter(present)
+      .some((project) => ProjectRegistry.visibleTo(project, { userID: user?.id ?? owner, role: user?.role }))
+    if (!visible) return false
+    return (sessions.get(item.workspace.id) ?? []).some((session) => !session.time.archived)
+  }
+
   async function workspaceUsage(
     all: Awaited<ReturnType<typeof workspaces>>,
     orphans: Item[],
     sessions: Map<string, Session.Info[]>,
-    activeWorkspaceIDs?: Set<string>,
+    projects: Map<string, ProjectRegistry.Info>,
+    users: Map<string, User.PublicInfo>,
   ): Promise<Item[]> {
     const orphanPaths = new Set(orphans.flatMap((item) => item.paths))
     const items = await Promise.all(
@@ -395,8 +418,7 @@ export namespace StorageAdmin {
         .filter((item) => {
           if (!item.workspace) return false
           if (orphanPaths.has(item.dir)) return false
-          if (activeWorkspaceIDs) return activeWorkspaceIDs.has(item.workspace.id)
-          return (sessions.get(item.workspace.id) ?? []).some((session) => !session.time.archived)
+          return visibleWorkspace(item, sessions, projects, users)
         })
         .map(
           async (item): Promise<Item> => ({
@@ -424,7 +446,8 @@ export namespace StorageAdmin {
     all: Awaited<ReturnType<typeof workspaces>>,
     orphans: Item[],
     sessions: Map<string, Session.Info[]>,
-    activeWorkspaceIDs?: Set<string>,
+    projects: Map<string, ProjectRegistry.Info>,
+    users: Map<string, User.PublicInfo>,
   ): Promise<Item[]> {
     const orphanPaths = new Set(orphans.flatMap((item) => item.paths))
     const items = await Promise.all(
@@ -432,8 +455,7 @@ export namespace StorageAdmin {
         .filter((item) => {
           if (!item.workspace) return false
           if (orphanPaths.has(item.dir)) return false
-          if (activeWorkspaceIDs) return !activeWorkspaceIDs.has(item.workspace.id)
-          return !(sessions.get(item.workspace.id) ?? []).some((session) => !session.time.archived)
+          return !visibleWorkspace(item, sessions, projects, users)
         })
         .map(
           async (item): Promise<Item> => ({
@@ -463,7 +485,7 @@ export namespace StorageAdmin {
   async function orphanUserWorktrees(
     input: Roots,
     knownUsers: Set<string>,
-    knownProjects: Set<string>,
+    knownProjects: Map<string, ProjectRegistry.Info>,
   ): Promise<Item[]> {
     const projectDirs = await directories(userWorktreeRoot(input))
     const userDirs = (
@@ -556,8 +578,8 @@ export namespace StorageAdmin {
     input: Roots,
     allSessions: Awaited<ReturnType<typeof sessions>>,
     allWorkspaces: Awaited<ReturnType<typeof workspaces>>,
-    activeWorkspaceIDs?: Set<string>,
-    activeSessionIDs?: Set<string>,
+    projects: Map<string, ProjectRegistry.Info>,
+    users: Map<string, User.PublicInfo>,
   ): Promise<Item[]> {
     const dirs = await directories(snapshotRoot(input))
     const sessions = new Map(allSessions.map((item) => [item.session.id, item.session]))
@@ -576,7 +598,17 @@ export namespace StorageAdmin {
           : [],
       ),
     )
-    const keep = new Set([...(activeWorkspaceIDs ?? []), ...(activeSessionIDs ?? [])])
+    const byWorkspace = sessionsByWorkspace(allSessions)
+    const keep = new Set(
+      [
+        ...allSessions
+          .filter((item) => !item.session.time.archived)
+          .map((item) => item.session.id),
+        ...allWorkspaces
+          .filter((item) => visibleWorkspace(item, byWorkspace, projects, users))
+          .flatMap((item) => (item.workspace ? [item.workspace.id] : [])),
+      ],
+    )
     const items = await Promise.all(
       dirs
         .filter((dir) => !keep.has(path.basename(dir)))
@@ -620,12 +652,10 @@ export namespace StorageAdmin {
     const knownSessions = new Set(allSessions.map((item) => item.session.id))
     const orphanWorkspaceItems = await orphanWorkspaces(root, knownUsers, allWorkspaces)
     const byWorkspace = sessionsByWorkspace(allSessions)
-    const activeWorkspaceIDs = input?.activeWorkspaceIDs ? new Set(input.activeWorkspaceIDs) : undefined
-    const activeSessionIDs = input?.activeSessionIDs ? new Set(input.activeSessionIDs) : undefined
     const groups: Item[][] = await Promise.all([
-      workspaceUsage(allWorkspaces, orphanWorkspaceItems, byWorkspace, activeWorkspaceIDs),
-      closedWorkspaces(root, allWorkspaces, orphanWorkspaceItems, byWorkspace, activeWorkspaceIDs),
-      snapshots(root, allSessions, allWorkspaces, activeWorkspaceIDs, activeSessionIDs),
+      workspaceUsage(allWorkspaces, orphanWorkspaceItems, byWorkspace, knownProjects, knownUserMap),
+      closedWorkspaces(root, allWorkspaces, orphanWorkspaceItems, byWorkspace, knownProjects, knownUserMap),
+      snapshots(root, allSessions, allWorkspaces, knownProjects, knownUserMap),
       Promise.resolve(cacheItems),
       tmpUploads(allSessions),
       archivedSessions(root, allSessions),
@@ -650,7 +680,12 @@ export namespace StorageAdmin {
     const scanned = Date.now()
     const root = roots(options)
     const [allItems, registered] = await Promise.all([
-      items({ roots: root, activeWorkspaceIDs: parsed.activeWorkspaceIDs, activeSessionIDs: parsed.activeSessionIDs }),
+      items({
+        ...options,
+        roots: root,
+        activeWorkspaceIDs: parsed.activeWorkspaceIDs,
+        activeSessionIDs: parsed.activeSessionIDs,
+      }),
       userMap(root),
     ])
     const all = filterUser(allItems, parsed.userID)
