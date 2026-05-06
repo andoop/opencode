@@ -143,6 +143,7 @@ export default function Layout(props: ParentProps) {
     { href: "/admin/users", label: "用户", icon: "user" as const },
     { href: "/admin/projects", label: "项目与分组", icon: "folder" as const },
     { href: "/admin/audit", label: "会话审计", icon: "eye" as const },
+    { href: "/admin/storage", label: "存储空间", icon: "folder" as const },
   ]
 
   const [state, setState] = createStore({

@@ -151,8 +151,17 @@ import type {
   SessionAdminMessagesResponses,
   SessionAdminSummaryErrors,
   SessionAdminSummaryResponses,
+  SessionAttachmentCancelErrors,
+  SessionAttachmentCancelResponses,
+  SessionAttachmentChunkErrors,
+  SessionAttachmentChunkResponses,
+  SessionAttachmentCompleteErrors,
+  SessionAttachmentCompleteResponses,
   SessionAttachmentErrors,
+  SessionAttachmentInitErrors,
+  SessionAttachmentInitResponses,
   SessionAttachmentResponses,
+  SessionAttachmentUploadInit,
   SessionChildrenErrors,
   SessionChildrenResponses,
   SessionCommandErrors,
@@ -193,6 +202,14 @@ import type {
   SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  StorageAdminCleanupErrors,
+  StorageAdminCleanupResponses,
+  StorageAdminPlanErrors,
+  StorageAdminPlanResponses,
+  StorageAdminSummaryErrors,
+  StorageAdminSummaryResponses,
+  StorageAdminSummaryWithStateErrors,
+  StorageAdminSummaryWithStateResponses,
   SubtaskPartInput,
   TaskCancelErrors,
   TaskCancelResponses,
@@ -477,6 +494,179 @@ export class Global extends HeyApiClient {
   private _config?: Config2
   get config(): Config2 {
     return (this._config ??= new Config2({ client: this.client }))
+  }
+}
+
+export class Summary extends HeyApiClient {
+  /**
+   * Get storage admin summary
+   *
+   * Inspect reclaimable runtime storage with client-provided active workspace state.
+   */
+  public withState<ThrowOnError extends boolean = false>(
+    parameters?: {
+      activeWorkspaceIDs?: Array<string>
+      activeSessionIDs?: Array<string>
+      userID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "activeWorkspaceIDs" },
+            { in: "body", key: "activeSessionIDs" },
+            { in: "body", key: "userID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      StorageAdminSummaryWithStateResponses,
+      StorageAdminSummaryWithStateErrors,
+      ThrowOnError
+    >({
+      url: "/storage/admin/summary",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Admin extends HeyApiClient {
+  /**
+   * Get storage admin summary
+   *
+   * Inspect reclaimable runtime storage grouped by cleanup category.
+   */
+  public summary<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<StorageAdminSummaryResponses, StorageAdminSummaryErrors, ThrowOnError>({
+      url: "/storage/admin/summary",
+      ...options,
+    })
+  }
+
+  /**
+   * Plan storage cleanup
+   *
+   * Preview storage objects that would be removed for selected categories.
+   */
+  public plan<ThrowOnError extends boolean = false>(
+    parameters?: {
+      activeWorkspaceIDs?: Array<string>
+      activeSessionIDs?: Array<string>
+      userID?: string
+      categories?: Array<
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      >
+      force?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "activeWorkspaceIDs" },
+            { in: "body", key: "activeSessionIDs" },
+            { in: "body", key: "userID" },
+            { in: "body", key: "categories" },
+            { in: "body", key: "force" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<StorageAdminPlanResponses, StorageAdminPlanErrors, ThrowOnError>({
+      url: "/storage/admin/plan",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Run storage cleanup
+   *
+   * Remove selected storage objects, optionally forcing high-risk cleanup.
+   */
+  public cleanup<ThrowOnError extends boolean = false>(
+    parameters?: {
+      activeWorkspaceIDs?: Array<string>
+      activeSessionIDs?: Array<string>
+      userID?: string
+      categories?: Array<
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      >
+      force?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "activeWorkspaceIDs" },
+            { in: "body", key: "activeSessionIDs" },
+            { in: "body", key: "userID" },
+            { in: "body", key: "categories" },
+            { in: "body", key: "force" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<StorageAdminCleanupResponses, StorageAdminCleanupErrors, ThrowOnError>(
+      {
+        url: "/storage/admin/cleanup",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  private _summary?: Summary
+  get summary2(): Summary {
+    return (this._summary ??= new Summary({ client: this.client }))
+  }
+}
+
+export class Storage extends HeyApiClient {
+  private _admin?: Admin
+  get admin(): Admin {
+    return (this._admin ??= new Admin({ client: this.client }))
   }
 }
 
@@ -1873,7 +2063,7 @@ export class Experimental extends HeyApiClient {
   }
 }
 
-export class Admin extends HeyApiClient {
+export class Admin2 extends HeyApiClient {
   /**
    * Get admin session summary
    *
@@ -1958,6 +2148,159 @@ export class Admin extends HeyApiClient {
       ThrowOnError
     >({
       url: "/session/admin/{sessionID}/messages",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Attachment extends HeyApiClient {
+  /**
+   * Initialize attachment upload
+   *
+   * Create an upload session for chunked attachment upload.
+   */
+  public init<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      sessionAttachmentUploadInit?: SessionAttachmentUploadInit
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { key: "sessionAttachmentUploadInit", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionAttachmentInitResponses,
+      SessionAttachmentInitErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/attachment/init",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Upload attachment chunk
+   *
+   * Append a chunk to a chunked attachment upload.
+   */
+  public chunk<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      uploadID: string
+      directory?: string
+      offset: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "uploadID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "offset" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      SessionAttachmentChunkResponses,
+      SessionAttachmentChunkErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/attachment/{uploadID}/chunk",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Complete attachment upload
+   *
+   * Finalize a chunked attachment upload and move it into the attachments directory.
+   */
+  public complete<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      uploadID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "uploadID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionAttachmentCompleteResponses,
+      SessionAttachmentCompleteErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/attachment/{uploadID}/complete",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Cancel attachment upload
+   *
+   * Remove temporary files for an in-progress chunked attachment upload.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      uploadID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "uploadID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      SessionAttachmentCancelResponses,
+      SessionAttachmentCancelErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/attachment/{uploadID}",
       ...options,
       ...params,
     })
@@ -2818,9 +3161,14 @@ export class Session extends HeyApiClient {
     })
   }
 
-  private _admin?: Admin
-  get admin(): Admin {
-    return (this._admin ??= new Admin({ client: this.client }))
+  private _admin?: Admin2
+  get admin(): Admin2 {
+    return (this._admin ??= new Admin2({ client: this.client }))
+  }
+
+  private _attachment?: Attachment
+  get attachment2(): Attachment {
+    return (this._attachment ??= new Attachment({ client: this.client }))
   }
 }
 
@@ -4987,6 +5335,11 @@ export class OpencodeClient extends HeyApiClient {
   private _global?: Global
   get global(): Global {
     return (this._global ??= new Global({ client: this.client }))
+  }
+
+  private _storage?: Storage
+  get storage(): Storage {
+    return (this._storage ??= new Storage({ client: this.client }))
   }
 
   private _workspace?: Workspace

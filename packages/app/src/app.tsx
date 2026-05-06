@@ -42,6 +42,7 @@ const AdminConfig = lazy(() => import("@/pages/admin/config"))
 const AdminUsers = lazy(() => import("@/pages/admin/users"))
 const AdminProjects = lazy(() => import("@/pages/admin/projects"))
 const AdminAudit = lazy(() => import("@/pages/admin/audit"))
+const AdminStorage = lazy(() => import("@/pages/admin/storage"))
 const Loading = () => <div class="size-full" />
 
 function AuthGuard(props: ParentProps) {
@@ -255,6 +256,14 @@ export function AppInterface(props: { defaultUrl?: string }) {
                     component={() => (
                       <Suspense fallback={<Loading />}>
                         <AdminAudit />
+                      </Suspense>
+                    )}
+                  />
+                  <Route
+                    path="storage"
+                    component={() => (
+                      <Suspense fallback={<Loading />}>
+                        <AdminStorage />
                       </Suspense>
                     )}
                   />

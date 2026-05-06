@@ -130,6 +130,75 @@ export interface AuditPrompt {
   }>
 }
 
+export type StorageCategory =
+  | "workspaces"
+  | "closedWorkspaces"
+  | "snapshots"
+  | "cache"
+  | "tmpUploads"
+  | "archivedSessions"
+  | "orphanWorkspaces"
+  | "orphanUserWorktrees"
+  | "danglingStorage"
+
+export interface StorageItem {
+  id: string
+  category: StorageCategory
+  label: string
+  bytes: number
+  risk: "low" | "medium" | "high"
+  active: boolean
+  reason: string
+  paths: string[]
+  metadata: Record<string, string>
+}
+
+export interface StorageCategorySummary {
+  category: StorageCategory
+  count: number
+  bytes: number
+  reclaimable: number
+  high_risk: number
+}
+
+export interface StorageUserSummary {
+  userID: string
+  username?: string
+  count: number
+  bytes: number
+  high_risk: number
+}
+
+export interface StorageSummary {
+  scanned_at: number
+  total_bytes: number
+  reclaimable_bytes: number
+  high_risk: number
+  categories: StorageCategorySummary[]
+  users: StorageUserSummary[]
+  items: StorageItem[]
+}
+
+export interface StoragePlan {
+  scanned_at: number
+  force: boolean
+  total_bytes: number
+  items: StorageItem[]
+  skipped: StorageItem[]
+}
+
+export interface StorageCleanupResult {
+  scanned_at: number
+  force: boolean
+  total_bytes: number
+  removed: StorageItem[]
+  skipped: StorageItem[]
+  failed: Array<{
+    item: StorageItem
+    error: string
+  }>
+}
+
 export interface GlobalConfig {
   workspace_boundary_prompt?: string
 }

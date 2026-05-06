@@ -274,6 +274,897 @@
         ]
       }
     },
+    "/storage/admin/summary": {
+      "get": {
+        "operationId": "storage.admin.summary",
+        "summary": "Get storage admin summary",
+        "description": "Inspect reclaimable runtime storage grouped by cleanup category.",
+        "responses": {
+          "200": {
+            "description": "Storage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scanned_at": {
+                      "type": "number"
+                    },
+                    "total_bytes": {
+                      "type": "number"
+                    },
+                    "reclaimable_bytes": {
+                      "type": "number"
+                    },
+                    "high_risk": {
+                      "type": "number"
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "reclaimable": {
+                            "type": "number"
+                          },
+                          "high_risk": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["category", "count", "bytes", "reclaimable", "high_risk"]
+                      }
+                    },
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userID": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "high_risk": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["userID", "count", "bytes", "high_risk"]
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "paths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metadata": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                      }
+                    }
+                  },
+                  "required": [
+                    "scanned_at",
+                    "total_bytes",
+                    "reclaimable_bytes",
+                    "high_risk",
+                    "categories",
+                    "users",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.storage.admin.summary({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "storage.admin.summary.withState",
+        "summary": "Get storage admin summary",
+        "description": "Inspect reclaimable runtime storage with client-provided active workspace state.",
+        "responses": {
+          "200": {
+            "description": "Storage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scanned_at": {
+                      "type": "number"
+                    },
+                    "total_bytes": {
+                      "type": "number"
+                    },
+                    "reclaimable_bytes": {
+                      "type": "number"
+                    },
+                    "high_risk": {
+                      "type": "number"
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "reclaimable": {
+                            "type": "number"
+                          },
+                          "high_risk": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["category", "count", "bytes", "reclaimable", "high_risk"]
+                      }
+                    },
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userID": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "high_risk": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["userID", "count", "bytes", "high_risk"]
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "paths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metadata": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                      }
+                    }
+                  },
+                  "required": [
+                    "scanned_at",
+                    "total_bytes",
+                    "reclaimable_bytes",
+                    "high_risk",
+                    "categories",
+                    "users",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activeWorkspaceIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "activeSessionIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "userID": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.storage.admin.summary.withState({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/storage/admin/plan": {
+      "post": {
+        "operationId": "storage.admin.plan",
+        "summary": "Plan storage cleanup",
+        "description": "Preview storage objects that would be removed for selected categories.",
+        "responses": {
+          "200": {
+            "description": "Cleanup plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scanned_at": {
+                      "type": "number"
+                    },
+                    "force": {
+                      "type": "boolean"
+                    },
+                    "total_bytes": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "paths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metadata": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                      }
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "paths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metadata": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                      }
+                    }
+                  },
+                  "required": ["scanned_at", "force", "total_bytes", "items", "skipped"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activeWorkspaceIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "activeSessionIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "userID": {
+                    "type": "string"
+                  },
+                  "categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "workspaces",
+                        "closedWorkspaces",
+                        "snapshots",
+                        "cache",
+                        "tmpUploads",
+                        "archivedSessions",
+                        "orphanWorkspaces",
+                        "orphanUserWorktrees",
+                        "danglingStorage"
+                      ]
+                    }
+                  },
+                  "force": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.storage.admin.plan({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/storage/admin/cleanup": {
+      "post": {
+        "operationId": "storage.admin.cleanup",
+        "summary": "Run storage cleanup",
+        "description": "Remove selected storage objects, optionally forcing high-risk cleanup.",
+        "responses": {
+          "200": {
+            "description": "Cleanup result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scanned_at": {
+                      "type": "number"
+                    },
+                    "force": {
+                      "type": "boolean"
+                    },
+                    "total_bytes": {
+                      "type": "number"
+                    },
+                    "removed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "paths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metadata": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                      }
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "workspaces",
+                              "closedWorkspaces",
+                              "snapshots",
+                              "cache",
+                              "tmpUploads",
+                              "archivedSessions",
+                              "orphanWorkspaces",
+                              "orphanUserWorktrees",
+                              "danglingStorage"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "risk": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "paths": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metadata": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                      }
+                    },
+                    "failed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "item": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "workspaces",
+                                  "closedWorkspaces",
+                                  "snapshots",
+                                  "cache",
+                                  "tmpUploads",
+                                  "archivedSessions",
+                                  "orphanWorkspaces",
+                                  "orphanUserWorktrees",
+                                  "danglingStorage"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "bytes": {
+                                "type": "number"
+                              },
+                              "risk": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"]
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "default": {},
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": ["id", "category", "label", "bytes", "risk", "active", "reason", "paths"]
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["item", "error"]
+                      }
+                    }
+                  },
+                  "required": ["scanned_at", "force", "total_bytes", "removed", "skipped", "failed"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activeWorkspaceIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "activeSessionIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "userID": {
+                    "type": "string"
+                  },
+                  "categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "workspaces",
+                        "closedWorkspaces",
+                        "snapshots",
+                        "cache",
+                        "tmpUploads",
+                        "archivedSessions",
+                        "orphanWorkspaces",
+                        "orphanUserWorktrees",
+                        "danglingStorage"
+                      ]
+                    }
+                  },
+                  "force": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.storage.admin.cleanup({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/workspace": {
       "get": {
         "operationId": "workspace.list",
@@ -850,6 +1741,9 @@
                             },
                             "mcp": {
                               "type": "boolean"
+                            },
+                            "commands": {
+                              "type": "boolean"
                             }
                           }
                         },
@@ -1083,6 +1977,9 @@
                               },
                               "mcp": {
                                 "type": "boolean"
+                              },
+                              "commands": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -1242,6 +2139,9 @@
                             },
                             "mcp": {
                               "type": "boolean"
+                            },
+                            "commands": {
+                              "type": "boolean"
                             }
                           }
                         },
@@ -1393,6 +2293,9 @@
                           },
                           "mcp": {
                             "type": "boolean"
+                          },
+                          "commands": {
+                            "type": "boolean"
                           }
                         }
                       },
@@ -1526,6 +2429,9 @@
                               "type": "boolean"
                             },
                             "mcp": {
+                              "type": "boolean"
+                            },
+                            "commands": {
                               "type": "boolean"
                             }
                           }
@@ -1706,6 +2612,9 @@
                             },
                             "mcp": {
                               "type": "boolean"
+                            },
+                            "commands": {
+                              "type": "boolean"
                             }
                           }
                         },
@@ -1877,6 +2786,9 @@
                             "type": "boolean"
                           },
                           "mcp": {
+                            "type": "boolean"
+                          },
+                          "commands": {
                             "type": "boolean"
                           }
                         }
@@ -3833,6 +4745,32 @@
                   },
                   "workspaceID": {
                     "type": "string"
+                  },
+                  "branches": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "group": {
+                              "type": "string",
+                              "enum": ["local", "remote"]
+                            }
+                          },
+                          "required": ["name", "group"]
+                        }
+                      ]
+                    }
                   }
                 }
               }
@@ -4407,6 +5345,360 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.todo({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/attachment/init": {
+      "post": {
+        "operationId": "session.attachment.init",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Initialize attachment upload",
+        "description": "Create an upload session for chunked attachment upload.",
+        "responses": {
+          "200": {
+            "description": "Initialized attachment upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAttachmentUploadInitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionAttachmentUploadInit"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.attachment.init({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/attachment/{uploadID}/chunk": {
+      "put": {
+        "operationId": "session.attachment.chunk",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          },
+          {
+            "in": "path",
+            "name": "uploadID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "description": "Upload ID"
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "required": true
+          }
+        ],
+        "summary": "Upload attachment chunk",
+        "description": "Append a chunk to a chunked attachment upload.",
+        "responses": {
+          "200": {
+            "description": "Uploaded chunk",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAttachmentUploadChunkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.attachment.chunk({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/attachment/{uploadID}/complete": {
+      "post": {
+        "operationId": "session.attachment.complete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          },
+          {
+            "in": "path",
+            "name": "uploadID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "description": "Upload ID"
+          }
+        ],
+        "summary": "Complete attachment upload",
+        "description": "Finalize a chunked attachment upload and move it into the attachments directory.",
+        "responses": {
+          "200": {
+            "description": "Completed upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAttachmentUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.attachment.complete({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/attachment/{uploadID}": {
+      "delete": {
+        "operationId": "session.attachment.cancel",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          },
+          {
+            "in": "path",
+            "name": "uploadID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "description": "Upload ID"
+          }
+        ],
+        "summary": "Cancel attachment upload",
+        "description": "Remove temporary files for an in-progress chunked attachment upload.",
+        "responses": {
+          "200": {
+            "description": "Cancelled upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.attachment.cancel({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/attachment": {
+      "post": {
+        "operationId": "session.attachment",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Upload session attachment",
+        "description": "Upload a file to the session temporary attachments directory.",
+        "responses": {
+          "200": {
+            "description": "Uploaded attachment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAttachmentUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.attachment({\n  ...\n})"
           }
         ]
       }
@@ -5544,6 +6836,13 @@
                             },
                             "source": {
                               "$ref": "#/components/schemas/FilePartSource"
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
                             }
                           },
                           "required": ["type", "mime", "url"]
@@ -8461,6 +9760,225 @@
         ]
       }
     },
+    "/branch/list": {
+      "get": {
+        "operationId": "branch.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Git directory path"
+          }
+        ],
+        "summary": "List branches",
+        "description": "Get local and remote branches for a git directory.",
+        "responses": {
+          "200": {
+            "description": "Branch list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "local": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "remote": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "current": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["local", "remote"]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.branch.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/branch/refresh": {
+      "post": {
+        "operationId": "branch.refresh",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Refresh branches",
+        "description": "Run git fetch and return updated branch list.",
+        "responses": {
+          "200": {
+            "description": "Updated branch list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "local": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "remote": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "current": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["local", "remote"]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "directory": {
+                    "description": "Git directory path",
+                    "type": "string"
+                  }
+                },
+                "required": ["directory"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.branch.refresh({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/git/history": {
+      "get": {
+        "operationId": "git.history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Git directory path"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get git history",
+        "description": "Get a paginated git history view for all visible refs in a directory.",
+        "responses": {
+          "200": {
+            "description": "Git history page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHistoryPage"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.git.history({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/git/commit": {
+      "get": {
+        "operationId": "git.commit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Git directory path"
+          },
+          {
+            "in": "query",
+            "name": "oid",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Commit object id"
+          }
+        ],
+        "summary": "Get git commit detail",
+        "description": "Get commit metadata and full file diffs for a commit in a directory.",
+        "responses": {
+          "200": {
+            "description": "Git commit detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitCommitDetail"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.git.commit({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/tui/append-prompt": {
       "post": {
         "operationId": "tui.appendPrompt",
@@ -9254,6 +10772,17 @@
                         },
                         "required": ["template"]
                       }
+                    },
+                    "commands": {
+                      "default": {},
+                      "description": "Enable or disable commands by name. Use slash names for system commands and command names for custom commands.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "boolean"
+                      }
                     }
                   },
                   "required": ["path", "command"]
@@ -9319,6 +10848,17 @@
                           }
                         },
                         "required": ["template"]
+                      }
+                    },
+                    "commands": {
+                      "default": {},
+                      "description": "Enable or disable commands by name. Use slash names for system commands and command names for custom commands.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "boolean"
                       }
                     }
                   },
@@ -9444,6 +10984,17 @@
                         },
                         "required": ["template"]
                       }
+                    },
+                    "commands": {
+                      "default": {},
+                      "description": "Enable or disable commands by name. Use slash names for system commands and command names for custom commands.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "boolean"
+                      }
                     }
                   },
                   "required": ["path", "command"]
@@ -9560,6 +11111,17 @@
                           }
                         },
                         "required": ["template"]
+                      }
+                    },
+                    "commands": {
+                      "default": {},
+                      "description": "Enable or disable commands by name. Use slash names for system commands and command names for custom commands.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "boolean"
                       }
                     }
                   },
@@ -10146,6 +11708,9 @@
                           },
                           "mcp": {
                             "type": "boolean"
+                          },
+                          "commands": {
+                            "type": "boolean"
                           }
                         }
                       },
@@ -10290,6 +11855,9 @@
                           },
                           "mcp": {
                             "type": "boolean"
+                          },
+                          "commands": {
+                            "type": "boolean"
                           }
                         }
                       },
@@ -10433,6 +12001,9 @@
                             "type": "boolean"
                           },
                           "mcp": {
+                            "type": "boolean"
+                          },
+                          "commands": {
                             "type": "boolean"
                           }
                         }
@@ -11242,6 +12813,13 @@
           },
           "source": {
             "$ref": "#/components/schemas/FilePartSource"
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
           }
         },
         "required": ["id", "sessionID", "messageID", "type", "mime", "url"]
@@ -11754,90 +13332,6 @@
         },
         "required": ["type", "properties"]
       },
-      "SessionStatus": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "idle"
-              }
-            },
-            "required": ["type"]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "retry"
-              },
-              "attempt": {
-                "type": "number"
-              },
-              "message": {
-                "type": "string"
-              },
-              "next": {
-                "type": "number"
-              }
-            },
-            "required": ["type", "attempt", "message", "next"]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "busy"
-              }
-            },
-            "required": ["type"]
-          }
-        ]
-      },
-      "Event.session.status": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.status"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "$ref": "#/components/schemas/SessionStatus"
-              }
-            },
-            "required": ["sessionID", "status"]
-          }
-        },
-        "required": ["type", "properties"]
-      },
-      "Event.session.idle": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.idle"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": ["sessionID"]
-          }
-        },
-        "required": ["type", "properties"]
-      },
       "QuestionOption": {
         "type": "object",
         "properties": {
@@ -11979,25 +13473,6 @@
               }
             },
             "required": ["sessionID", "requestID"]
-          }
-        },
-        "required": ["type", "properties"]
-      },
-      "Event.session.compacted": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.compacted"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": ["sessionID"]
           }
         },
         "required": ["type", "properties"]
@@ -12827,6 +14302,109 @@
         },
         "required": ["type", "properties"]
       },
+      "SessionStatus": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "idle"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "retry"
+              },
+              "attempt": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              },
+              "next": {
+                "type": "number"
+              }
+            },
+            "required": ["type", "attempt", "message", "next"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "busy"
+              }
+            },
+            "required": ["type"]
+          }
+        ]
+      },
+      "Event.session.status": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.status"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SessionStatus"
+              }
+            },
+            "required": ["sessionID", "status"]
+          }
+        },
+        "required": ["type", "properties"]
+      },
+      "Event.session.idle": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.idle"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionID"]
+          }
+        },
+        "required": ["type", "properties"]
+      },
+      "Event.session.compacted": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.compacted"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionID"]
+          }
+        },
+        "required": ["type", "properties"]
+      },
       "Event.command.executed": {
         "type": "object",
         "properties": {
@@ -13355,12 +14933,6 @@
             "$ref": "#/components/schemas/Event.message.part.removed"
           },
           {
-            "$ref": "#/components/schemas/Event.session.status"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.idle"
-          },
-          {
             "$ref": "#/components/schemas/Event.question.asked"
           },
           {
@@ -13368,9 +14940,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.question.rejected"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.compacted"
           },
           {
             "$ref": "#/components/schemas/Event.select.asked"
@@ -13422,6 +14991,15 @@
           },
           {
             "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.status"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.idle"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.compacted"
           },
           {
             "$ref": "#/components/schemas/Event.command.executed"
@@ -14983,6 +16561,15 @@
         },
         "required": ["data", "errors", "success"]
       },
+      "ForbiddenError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["error"]
+      },
       "Workspace": {
         "type": "object",
         "properties": {
@@ -15193,6 +16780,9 @@
                       },
                       "mcp": {
                         "type": "boolean"
+                      },
+                      "commands": {
+                        "type": "boolean"
                       }
                     }
                   },
@@ -15234,15 +16824,6 @@
         "required": ["token", "user"]
       },
       "UnauthorizedError": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string"
-          }
-        },
-        "required": ["error"]
-      },
-      "ForbiddenError": {
         "type": "object",
         "properties": {
           "error": {
@@ -15925,6 +17506,71 @@
         },
         "required": ["messageID", "created", "role", "parts"]
       },
+      "SessionAttachmentUploadInitResponse": {
+        "type": "object",
+        "properties": {
+          "uploadID": {
+            "type": "string"
+          },
+          "chunkSize": {
+            "type": "number"
+          },
+          "received": {
+            "type": "number"
+          }
+        },
+        "required": ["uploadID", "chunkSize", "received"]
+      },
+      "SessionAttachmentUploadInit": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["filename", "size"]
+      },
+      "SessionAttachmentUploadChunkResponse": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "number"
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        },
+        "required": ["received", "complete"]
+      },
+      "SessionAttachmentUpload": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "path": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["filename", "mime", "size", "path", "url"]
+      },
       "TextPartInput": {
         "type": "object",
         "properties": {
@@ -15987,6 +17633,13 @@
           },
           "source": {
             "$ref": "#/components/schemas/FilePartSource"
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
           }
         },
         "required": ["type", "mime", "url"]
@@ -16345,6 +17998,151 @@
         "type": "string",
         "enum": ["project", "global"]
       },
+      "GitRef": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["head", "local", "remote", "tag"]
+          }
+        },
+        "required": ["name", "kind"]
+      },
+      "GitHistoryEntry": {
+        "type": "object",
+        "properties": {
+          "oid": {
+            "type": "string"
+          },
+          "short": {
+            "type": "string"
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "author_name": {
+            "type": "string"
+          },
+          "author_email": {
+            "type": "string"
+          },
+          "authored_at": {
+            "type": "number"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRef"
+            }
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": ["oid", "short", "parents", "author_name", "author_email", "authored_at", "refs", "subject"]
+      },
+      "GitHistoryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitHistoryEntry"
+            }
+          },
+          "next": {
+            "type": "string"
+          }
+        },
+        "required": ["items"]
+      },
+      "GitCommitFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "additions": {
+            "type": "number"
+          },
+          "deletions": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["added", "deleted", "modified"]
+          }
+        },
+        "required": ["path", "additions", "deletions", "status"]
+      },
+      "GitCommitDetail": {
+        "type": "object",
+        "properties": {
+          "oid": {
+            "type": "string"
+          },
+          "short": {
+            "type": "string"
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "author_name": {
+            "type": "string"
+          },
+          "author_email": {
+            "type": "string"
+          },
+          "authored_at": {
+            "type": "number"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRef"
+            }
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitCommitFile"
+            }
+          },
+          "diffs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileDiff"
+            }
+          }
+        },
+        "required": [
+          "oid",
+          "short",
+          "parents",
+          "author_name",
+          "author_email",
+          "authored_at",
+          "refs",
+          "subject",
+          "files",
+          "diffs"
+        ]
+      },
       "Path": {
         "type": "object",
         "properties": {
@@ -16409,6 +18207,9 @@
         "type": "object",
         "properties": {
           "branch": {
+            "type": "string"
+          },
+          "tracking": {
             "type": "string"
           },
           "worktree": {

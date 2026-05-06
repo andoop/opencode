@@ -2177,6 +2177,10 @@ export type BadRequestError = {
   success: false
 }
 
+export type ForbiddenError = {
+  error: string
+}
+
 export type Workspace = {
   id: string
   name: string
@@ -2250,10 +2254,6 @@ export type UserAuthLoginResponse = {
 }
 
 export type UnauthorizedError = {
-  error: string
-}
-
-export type ForbiddenError = {
   error: string
 }
 
@@ -2487,6 +2487,23 @@ export type SessionAdminConversationMessage = {
   role: "user" | "assistant"
   text?: string
   parts: Array<SessionAdminConversationPart>
+}
+
+export type SessionAttachmentUploadInitResponse = {
+  uploadID: string
+  chunkSize: number
+  received: number
+}
+
+export type SessionAttachmentUploadInit = {
+  filename: string
+  mime?: string
+  size: number
+}
+
+export type SessionAttachmentUploadChunkResponse = {
+  received: number
+  complete: boolean
 }
 
 export type SessionAttachmentUpload = {
@@ -2916,6 +2933,377 @@ export type GlobalDisposeResponses = {
 }
 
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
+
+export type StorageAdminSummaryData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/storage/admin/summary"
+}
+
+export type StorageAdminSummaryErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type StorageAdminSummaryError = StorageAdminSummaryErrors[keyof StorageAdminSummaryErrors]
+
+export type StorageAdminSummaryResponses = {
+  /**
+   * Storage summary
+   */
+  200: {
+    scanned_at: number
+    total_bytes: number
+    reclaimable_bytes: number
+    high_risk: number
+    categories: Array<{
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      count: number
+      bytes: number
+      reclaimable: number
+      high_risk: number
+    }>
+    users: Array<{
+      userID: string
+      username?: string
+      count: number
+      bytes: number
+      high_risk: number
+    }>
+    items: Array<{
+      id: string
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      label: string
+      bytes: number
+      risk: "low" | "medium" | "high"
+      active: boolean
+      reason: string
+      paths: Array<string>
+      metadata?: {
+        [key: string]: string
+      }
+    }>
+  }
+}
+
+export type StorageAdminSummaryResponse = StorageAdminSummaryResponses[keyof StorageAdminSummaryResponses]
+
+export type StorageAdminSummaryWithStateData = {
+  body?: {
+    activeWorkspaceIDs?: Array<string>
+    activeSessionIDs?: Array<string>
+    userID?: string
+  }
+  path?: never
+  query?: never
+  url: "/storage/admin/summary"
+}
+
+export type StorageAdminSummaryWithStateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type StorageAdminSummaryWithStateError =
+  StorageAdminSummaryWithStateErrors[keyof StorageAdminSummaryWithStateErrors]
+
+export type StorageAdminSummaryWithStateResponses = {
+  /**
+   * Storage summary
+   */
+  200: {
+    scanned_at: number
+    total_bytes: number
+    reclaimable_bytes: number
+    high_risk: number
+    categories: Array<{
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      count: number
+      bytes: number
+      reclaimable: number
+      high_risk: number
+    }>
+    users: Array<{
+      userID: string
+      username?: string
+      count: number
+      bytes: number
+      high_risk: number
+    }>
+    items: Array<{
+      id: string
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      label: string
+      bytes: number
+      risk: "low" | "medium" | "high"
+      active: boolean
+      reason: string
+      paths: Array<string>
+      metadata?: {
+        [key: string]: string
+      }
+    }>
+  }
+}
+
+export type StorageAdminSummaryWithStateResponse =
+  StorageAdminSummaryWithStateResponses[keyof StorageAdminSummaryWithStateResponses]
+
+export type StorageAdminPlanData = {
+  body?: {
+    activeWorkspaceIDs?: Array<string>
+    activeSessionIDs?: Array<string>
+    userID?: string
+    categories?: Array<
+      | "workspaces"
+      | "closedWorkspaces"
+      | "snapshots"
+      | "cache"
+      | "tmpUploads"
+      | "archivedSessions"
+      | "orphanWorkspaces"
+      | "orphanUserWorktrees"
+      | "danglingStorage"
+    >
+    force?: boolean
+  }
+  path?: never
+  query?: never
+  url: "/storage/admin/plan"
+}
+
+export type StorageAdminPlanErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type StorageAdminPlanError = StorageAdminPlanErrors[keyof StorageAdminPlanErrors]
+
+export type StorageAdminPlanResponses = {
+  /**
+   * Cleanup plan
+   */
+  200: {
+    scanned_at: number
+    force: boolean
+    total_bytes: number
+    items: Array<{
+      id: string
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      label: string
+      bytes: number
+      risk: "low" | "medium" | "high"
+      active: boolean
+      reason: string
+      paths: Array<string>
+      metadata?: {
+        [key: string]: string
+      }
+    }>
+    skipped: Array<{
+      id: string
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      label: string
+      bytes: number
+      risk: "low" | "medium" | "high"
+      active: boolean
+      reason: string
+      paths: Array<string>
+      metadata?: {
+        [key: string]: string
+      }
+    }>
+  }
+}
+
+export type StorageAdminPlanResponse = StorageAdminPlanResponses[keyof StorageAdminPlanResponses]
+
+export type StorageAdminCleanupData = {
+  body?: {
+    activeWorkspaceIDs?: Array<string>
+    activeSessionIDs?: Array<string>
+    userID?: string
+    categories?: Array<
+      | "workspaces"
+      | "closedWorkspaces"
+      | "snapshots"
+      | "cache"
+      | "tmpUploads"
+      | "archivedSessions"
+      | "orphanWorkspaces"
+      | "orphanUserWorktrees"
+      | "danglingStorage"
+    >
+    force?: boolean
+  }
+  path?: never
+  query?: never
+  url: "/storage/admin/cleanup"
+}
+
+export type StorageAdminCleanupErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type StorageAdminCleanupError = StorageAdminCleanupErrors[keyof StorageAdminCleanupErrors]
+
+export type StorageAdminCleanupResponses = {
+  /**
+   * Cleanup result
+   */
+  200: {
+    scanned_at: number
+    force: boolean
+    total_bytes: number
+    removed: Array<{
+      id: string
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      label: string
+      bytes: number
+      risk: "low" | "medium" | "high"
+      active: boolean
+      reason: string
+      paths: Array<string>
+      metadata?: {
+        [key: string]: string
+      }
+    }>
+    skipped: Array<{
+      id: string
+      category:
+        | "workspaces"
+        | "closedWorkspaces"
+        | "snapshots"
+        | "cache"
+        | "tmpUploads"
+        | "archivedSessions"
+        | "orphanWorkspaces"
+        | "orphanUserWorktrees"
+        | "danglingStorage"
+      label: string
+      bytes: number
+      risk: "low" | "medium" | "high"
+      active: boolean
+      reason: string
+      paths: Array<string>
+      metadata?: {
+        [key: string]: string
+      }
+    }>
+    failed: Array<{
+      item: {
+        id: string
+        category:
+          | "workspaces"
+          | "closedWorkspaces"
+          | "snapshots"
+          | "cache"
+          | "tmpUploads"
+          | "archivedSessions"
+          | "orphanWorkspaces"
+          | "orphanUserWorktrees"
+          | "danglingStorage"
+        label: string
+        bytes: number
+        risk: "low" | "medium" | "high"
+        active: boolean
+        reason: string
+        paths: Array<string>
+        metadata?: {
+          [key: string]: string
+        }
+      }
+      error: string
+    }>
+  }
+}
+
+export type StorageAdminCleanupResponse = StorageAdminCleanupResponses[keyof StorageAdminCleanupResponses]
 
 export type WorkspaceListData = {
   body?: never
@@ -4827,6 +5215,160 @@ export type SessionTodoResponses = {
 }
 
 export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
+
+export type SessionAttachmentInitData = {
+  body?: SessionAttachmentUploadInit
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/attachment/init"
+}
+
+export type SessionAttachmentInitErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionAttachmentInitError = SessionAttachmentInitErrors[keyof SessionAttachmentInitErrors]
+
+export type SessionAttachmentInitResponses = {
+  /**
+   * Initialized attachment upload
+   */
+  200: SessionAttachmentUploadInitResponse
+}
+
+export type SessionAttachmentInitResponse = SessionAttachmentInitResponses[keyof SessionAttachmentInitResponses]
+
+export type SessionAttachmentChunkData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+    /**
+     * Upload ID
+     */
+    uploadID: string
+  }
+  query: {
+    directory?: string
+    offset: number
+  }
+  url: "/session/{sessionID}/attachment/{uploadID}/chunk"
+}
+
+export type SessionAttachmentChunkErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionAttachmentChunkError = SessionAttachmentChunkErrors[keyof SessionAttachmentChunkErrors]
+
+export type SessionAttachmentChunkResponses = {
+  /**
+   * Uploaded chunk
+   */
+  200: SessionAttachmentUploadChunkResponse
+}
+
+export type SessionAttachmentChunkResponse = SessionAttachmentChunkResponses[keyof SessionAttachmentChunkResponses]
+
+export type SessionAttachmentCompleteData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+    /**
+     * Upload ID
+     */
+    uploadID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/attachment/{uploadID}/complete"
+}
+
+export type SessionAttachmentCompleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionAttachmentCompleteError = SessionAttachmentCompleteErrors[keyof SessionAttachmentCompleteErrors]
+
+export type SessionAttachmentCompleteResponses = {
+  /**
+   * Completed upload
+   */
+  200: SessionAttachmentUpload
+}
+
+export type SessionAttachmentCompleteResponse =
+  SessionAttachmentCompleteResponses[keyof SessionAttachmentCompleteResponses]
+
+export type SessionAttachmentCancelData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+    /**
+     * Upload ID
+     */
+    uploadID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/attachment/{uploadID}"
+}
+
+export type SessionAttachmentCancelErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionAttachmentCancelError = SessionAttachmentCancelErrors[keyof SessionAttachmentCancelErrors]
+
+export type SessionAttachmentCancelResponses = {
+  /**
+   * Cancelled upload
+   */
+  200: boolean
+}
+
+export type SessionAttachmentCancelResponse = SessionAttachmentCancelResponses[keyof SessionAttachmentCancelResponses]
 
 export type SessionAttachmentData = {
   body?: never

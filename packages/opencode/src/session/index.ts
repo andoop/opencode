@@ -139,6 +139,12 @@ export namespace Session {
         })
         .catch(() => undefined)
     }
+    await fs
+      .rm(session.directory, {
+        recursive: true,
+        force: true,
+      })
+      .catch(() => undefined)
     await Workspace.removeSessionState(session.workspaceID, session.id)
   }
 
@@ -896,29 +902,28 @@ export namespace Session {
   })
 
   export const remove = fn(Identifier.schema("session"), async (sessionID) => {
-    try {
-      const session = await get(sessionID)
-      for (const child of await children(sessionID)) {
-        await remove(child.id)
-      }
-      await unshare(sessionID).catch(() => {})
-      for (const msg of await Storage.list(["message", sessionID])) {
-        for (const part of await Storage.list(["part", msg.at(-1)!])) {
-          await Storage.remove(part)
-        }
-        await Storage.remove(msg)
-      }
-
-      // Clean up worktree if this session has one
-      await cleanupWorktree(session)
-
-      await Storage.remove(sessionKey(session.workspaceID, sessionID))
-      Bus.publish(Event.Deleted, {
-        info: session,
-      })
-    } catch (e) {
-      log.error(e)
+    const session = await get(sessionID)
+    for (const child of await children(sessionID)) {
+      await remove(child.id)
     }
+    await unshare(sessionID).catch(() => {})
+    for (const msg of await Storage.list(["message", sessionID])) {
+      for (const part of await Storage.list(["part", msg.at(-1)!])) {
+        await Storage.remove(part)
+      }
+      await Storage.remove(msg)
+    }
+
+    // Clean up worktree if this session has one
+    await cleanupWorktree(session)
+
+    await Storage.remove(sessionKey(session.workspaceID, sessionID))
+    await fs
+      .rm(path.join(Global.Path.data, "snapshot", sessionID), { recursive: true, force: true })
+      .catch(() => undefined)
+    Bus.publish(Event.Deleted, {
+      info: session,
+    })
   })
 
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
