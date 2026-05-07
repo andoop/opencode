@@ -1,0 +1,23 @@
+2026-05-07T06:32:07Z INF Starting tunnel tunnelID=45e6e5e2-9a89-4f4c-b93d-c9b3bd9849f3
+2026-05-07T06:32:07Z INF Version 2026.3.0 (Checksum 99f099a3834e0b20ec2a18ac77d3d77261b77652310d97eca18fc1797d4349d0)
+2026-05-07T06:32:07Z INF GOOS: darwin, GOVersion: go1.26.1, GoArch: arm64
+2026-05-07T06:32:07Z INF Settings: map[cred-file:/Users/ke/.cloudflared/45e6e5e2-9a89-4f4c-b93d-c9b3bd9849f3.json credentials-file:/Users/ke/.cloudflared/45e6e5e2-9a89-4f4c-b93d-c9b3bd9849f3.json]
+2026-05-07T06:32:07Z INF cloudflared will not automatically update if installed by a package manager.
+2026-05-07T06:32:08Z INF Generated Connector ID: 9b1f8ef3-d4e3-4011-a962-90eb903e0806
+2026-05-07T06:32:08Z INF Initial protocol quic
+2026-05-07T06:32:08Z INF ICMP proxy will use 10.33.200.185 as source for IPv4
+2026-05-07T06:32:08Z INF ICMP proxy will use fe80::1403:78ef:97c2:f154 in zone en0 as source for IPv6
+2026-05-07T06:32:08Z INF Created ICMP proxy listening on 10.33.200.185:0
+2026-05-07T06:32:08Z INF ICMP proxy will use 10.33.200.185 as source for IPv4
+2026-05-07T06:32:08Z INF ICMP proxy will use fe80::1403:78ef:97c2:f154 in zone en0 as source for IPv6
+2026-05-07T06:32:08Z INF Starting metrics server on 127.0.0.1:20241/metrics
+2026-05-07T06:32:08Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=0 event=0 ip=198.41.192.167
+2026-05-07T06:32:08Z INF Registered tunnel connection connIndex=0 connection=a453a6aa-babb-473e-a10b-bf3523457f97 event=0 ip=198.41.192.167 location=sjc01 protocol=quic
+2026-05-07T06:32:08Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=1 event=0 ip=198.41.192.107
+2026-05-07T06:32:09Z INF Registered tunnel connection connIndex=1 connection=87ac11f6-468f-47ba-8ba5-43f2ab849a48 event=0 ip=198.41.192.107 location=lax11 protocol=quic
+2026-05-07T06:32:09Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=2 event=0 ip=198.41.192.47
+2026-05-07T06:32:10Z INF Registered tunnel connection connIndex=2 connection=96f8f9c8-e818-4877-9f4d-2bcda95f49e1 event=0 ip=198.41.192.47 location=lax10 protocol=quic
+2026-05-07T06:32:10Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=3 event=0 ip=198.41.192.57
+2026-05-07T06:32:11Z INF Registered tunnel connection connIndex=3 connection=d5e1e5f3-6e39-422c-8714-8a37dfd74bc1 event=0 ip=198.41.192.57 location=sjc06 protocol=quic
+2026-05-07T06:34:44Z ERR  error="stream 1749 canceled by remote with error code 0" connIndex=2 event=1 ingressRule=0 originService=http://localhost:7777
+2026-05-07T06:34:44Z ERR Request failed error="stream 1749 canceled by remote with error code 0" connIndex=2 dest=https://opencode.andoop.online/global/event event=0 ip=198.41.192.47 type=http

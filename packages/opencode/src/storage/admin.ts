@@ -402,7 +402,7 @@ export namespace StorageAdmin {
       .filter(present)
       .some((project) => ProjectRegistry.visibleTo(project, { userID: user?.id ?? owner, role: user?.role }))
     if (!visible) return false
-    return (sessions.get(item.workspace.id) ?? []).some((session) => !session.time.archived)
+    return (sessions.get(item.workspace.id) ?? []).some((session) => !session.parentID && !session.time.archived)
   }
 
   async function workspaceUsage(
@@ -602,7 +602,7 @@ export namespace StorageAdmin {
     const keep = new Set(
       [
         ...allSessions
-          .filter((item) => !item.session.time.archived)
+          .filter((item) => !item.session.parentID && !item.session.time.archived)
           .map((item) => item.session.id),
         ...allWorkspaces
           .filter((item) => visibleWorkspace(item, byWorkspace, projects, users))

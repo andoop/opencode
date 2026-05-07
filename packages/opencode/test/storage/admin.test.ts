@@ -231,6 +231,31 @@ describe("StorageAdmin", () => {
     }
   })
 
+  test("does not keep workspace visible for child sessions only", async () => {
+    const fx = await fixture()
+    try {
+      await writeJson(path.join(fx.roots.data, "storage", "session", "wsp_alive", "ses_child.json"), {
+        id: "ses_child",
+        slug: "child",
+        workspaceID: "wsp_alive",
+        projectID: "git_alive",
+        userID: "usr_alive",
+        parentID: "ses_archived",
+        directory: path.join(fx.roots.data, "workspace", "usr_alive", "wsp_alive", "sessions", "ses_child"),
+        cwd: path.join(fx.roots.data, "workspace", "usr_alive", "wsp_alive", "sessions", "ses_child"),
+        roots: [],
+        title: "Child",
+        version: "test",
+        time: { created: 1, updated: 2 },
+      })
+      const summary = await StorageAdmin.summary({}, { roots: fx.roots })
+      expect(summary.categories.find((item) => item.category === "closedWorkspaces")?.count).toBe(1)
+      expect(summary.categories.find((item) => item.category === "workspaces")?.count).toBe(0)
+    } finally {
+      await fs.rm(fx.root, { recursive: true, force: true })
+    }
+  })
+
   test("cleans selected storage objects", async () => {
     const fx = await fixture()
     try {

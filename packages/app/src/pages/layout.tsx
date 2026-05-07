@@ -1485,9 +1485,31 @@ export default function Layout(props: ParentProps) {
     setWorkspaceName(directory, next, projectId, branch)
   }
 
+  async function archiveProjectSessions(directory: string) {
+    const sessions = await globalSDK.client.session
+      .list({ directory })
+      .then((x) => x.data ?? [])
+      .catch(() => [])
+    const archivedAt = Date.now()
+    await Promise.all(
+      sessions
+        .filter((session) => session.time.archived === undefined)
+        .map((session) =>
+          globalSDK.client.session
+            .update({
+              sessionID: session.id,
+              directory: session.directory,
+              time: { archived: archivedAt },
+            })
+            .catch(() => undefined),
+        ),
+    )
+  }
+
   function closeProject(directory: string) {
     const index = layout.projects.list().findIndex((x) => x.worktree === directory)
     const next = layout.projects.list()[index + 1]
+    void archiveProjectSessions(directory)
     layout.projects.close(directory)
     if (next) navigateToProject(next.worktree)
     else navigate("/")
