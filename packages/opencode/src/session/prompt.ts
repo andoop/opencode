@@ -716,7 +716,7 @@ export namespace SessionPrompt {
     >
   ) {
     for (const choice of choices) {
-      const model = await choice()
+      const model = Provider.normalizeModel(await choice())
       if (!model) continue
       if (User.modelEnabled(model)) return model
     }
@@ -971,14 +971,15 @@ export namespace SessionPrompt {
     const agentName = input.agent ?? session.room?.agent ?? (await Agent.defaultAgent())
     const agent = await Agent.get(agentName)
 
+    const requested = input.model ? Provider.normalizeModel(input.model) : undefined
     await assertPromptFeatureAccess({
       agent: agent.name,
-      model: input.model,
+      model: requested,
       sessionID: input.sessionID,
       files: input.parts.filter((part) => part.type === "file").length,
     })
-    const model = input.model
-      ? input.model
+    const model = requested
+      ? requested
       : await resolveModel(
           input.sessionID,
           () => agent.model,

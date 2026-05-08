@@ -272,8 +272,15 @@ function cursorPath() {
 }
 
 function cursorArgs(modelID: string) {
-  if (!modelID || modelID === "auto") return ["acp"]
-  return ["--model", modelID, "acp"]
+  const model = cursorModelID(modelID)
+  if (!model || model === "auto") return ["acp"]
+  return ["--model", model, "acp"]
+}
+
+function cursorModelID(modelID: string) {
+  if (modelID === "composer-1" || modelID === "composer-1.5") return "composer-2"
+  if (modelID === "composer-1-fast" || modelID === "composer-1.5-fast") return "composer-2-fast"
+  return modelID
 }
 
 type RpcPending = {
@@ -471,16 +478,31 @@ function cacheKey(input: { sessionID: string; cwd: string; agent: string; modelI
   })
 }
 
-async function waitForStreamLock(key: string) {
-  const previous = streamLocks.get(key)
-  if (!previous) return
-  await Promise.race([
-    previous.promise.catch(() => undefined),
-    new Promise((resolve) => setTimeout(resolve, STREAM_LOCK_MAX_WAIT_MS)),
-  ])
-  if (streamLocks.get(key) !== previous) return
-  closeSession(key)
-  streamLocks.delete(key)
+async function acquireStreamLock(key: string) {
+  while (true) {
+    const previous = streamLocks.get(key)
+    if (!previous) break
+    await Promise.race([
+      previous.promise.catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, STREAM_LOCK_MAX_WAIT_MS)),
+    ])
+    if (streamLocks.get(key) === previous) {
+      closeSession(key)
+      streamLocks.delete(key)
+    }
+  }
+  let release!: () => void
+  const active = {
+    promise: new Promise<void>((resolve) => {
+      release = resolve
+    }),
+    started: Date.now(),
+  }
+  streamLocks.set(key, active)
+  return () => {
+    release()
+    if (streamLocks.get(key) === active) streamLocks.delete(key)
+  }
 }
 
 function closeSession(key: string) {
@@ -530,22 +552,14 @@ export namespace CursorCLI {
       modelID: input.modelID,
       allowedTools: input.allowedTools,
     })
-    await waitForStreamLock(key)
+    const releaseLock = await acquireStreamLock(key)
     const cached = sessions.get(key)
     if (cached) {
       if (cached.idle) clearTimeout(cached.idle)
       scheduleClose(cached)
+      releaseLock()
       return { cached: true, warmed: true }
     }
-
-    let releaseLock!: () => void
-    const activeLock = {
-      promise: new Promise<void>((resolve) => {
-        releaseLock = resolve
-      }),
-      started: Date.now(),
-    }
-    streamLocks.set(key, activeLock)
     const bridge = bridgeCommand({
       cwd: input.cwd,
       sessionID: input.sessionID,
@@ -670,7 +684,6 @@ export namespace CursorCLI {
       throw error
     } finally {
       releaseLock()
-      if (streamLocks.get(key) === activeLock) streamLocks.delete(key)
     }
   }
 
@@ -734,15 +747,7 @@ export namespace CursorCLI {
       modelID: input.modelID,
       allowedTools: input.allowedTools,
     })
-    await waitForStreamLock(key)
-    let releaseLock!: () => void
-    const activeLock = {
-      promise: new Promise<void>((resolve) => {
-        releaseLock = resolve
-      }),
-      started: Date.now(),
-    }
-    streamLocks.set(key, activeLock)
+    const releaseLock = await acquireStreamLock(key)
     const cached = sessions.get(key)
     if (cached?.idle) clearTimeout(cached.idle)
     const proc =
@@ -1545,7 +1550,6 @@ export namespace CursorCLI {
           enforceLimit()
         }
         releaseLock()
-        if (streamLocks.get(key) === activeLock) streamLocks.delete(key)
       }
     })()
 

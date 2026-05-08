@@ -12,9 +12,6 @@ export namespace User {
   const log = Log.create({ service: "user" })
   type ModelRef = string | { providerID: string; modelID: string }
   const DEFAULT_REGISTERED_MODELS = [
-    "cursor-cli/auto",
-    "cursor-cli/composer-1",
-    "cursor-cli/composer-1.5",
     "cursor-cli/composer-2",
     "cursor-cli/composer-2-fast",
     "kiro-cli/auto",

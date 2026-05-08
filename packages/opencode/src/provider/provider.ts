@@ -717,8 +717,6 @@ export namespace Provider {
       ["auto", "Auto"],
       ["composer-2-fast", "Composer 2 Fast"],
       ["composer-2", "Composer 2"],
-      ["composer-1.5", "Composer 1.5"],
-      ["composer-1", "Composer 1"],
       ["opus-4.6-thinking", "Claude 4.6 Opus (Thinking)", true],
       ["opus-4.6", "Claude 4.6 Opus"],
       ["opus-4.5-thinking", "Claude 4.5 Opus (Thinking)", true],
@@ -1226,23 +1224,24 @@ export namespace Provider {
   }
 
   export async function getModel(providerID: string, modelID: string) {
+    const normalized = normalizeModel({ providerID, modelID })
     const s = await state()
-    const provider = s.providers[providerID]
+    const provider = s.providers[normalized.providerID]
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
-      const matches = fuzzysort.go(providerID, availableProviders, { limit: 3, threshold: -10000 })
+      const matches = fuzzysort.go(normalized.providerID, availableProviders, { limit: 3, threshold: -10000 })
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
 
-    const info = provider.models[modelID]
+    const info = provider.models[normalized.modelID]
     if (!info) {
       const availableModels = Object.keys(provider.models)
-      const matches = fuzzysort.go(modelID, availableModels, { limit: 3, threshold: -10000 })
+      const matches = fuzzysort.go(normalized.modelID, availableModels, { limit: 3, threshold: -10000 })
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
-    User.requireModel({ providerID, modelID })
+    User.requireModel(normalized)
     return info
   }
 
@@ -1365,6 +1364,18 @@ export namespace Provider {
       providerID: providerID,
       modelID: rest.join("/"),
     }
+  }
+
+  export function normalizeModel<T extends { providerID: string; modelID: string } | undefined>(model: T) {
+    if (!model) return model
+    if (model.providerID !== "cursor-cli") return model
+    if (model.modelID === "composer-1" || model.modelID === "composer-1.5") {
+      return { providerID: model.providerID, modelID: "composer-2" }
+    }
+    if (model.modelID === "composer-1-fast" || model.modelID === "composer-1.5-fast") {
+      return { providerID: model.providerID, modelID: "composer-2-fast" }
+    }
+    return model
   }
 
   export const ModelNotFoundError = NamedError.create(
