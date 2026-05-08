@@ -189,6 +189,13 @@ export function SessionTurn(
   })
 
   const isLastUserMessage = createMemo(() => props.messageID === lastUserMessageID())
+  const author = createMemo(() => {
+    const msg = message()
+    if (!msg || msg.role !== "user") return
+    const name = msg.authorUsername ?? msg.authorUserID
+    if (!name && !msg.authorProjectRole) return
+    return [name, msg.authorProjectRole].filter(Boolean).join(" · ")
+  })
 
   const parts = createMemo(() => {
     const msg = message()
@@ -477,6 +484,8 @@ export function SessionTurn(
   const status = createMemo(() => data.store.session_status[props.sessionID] ?? idle)
   const working = createMemo(() => status().type !== "idle" && isLastUserMessage())
   const fallbackStatus = createMemo(() => {
+    const s = status()
+    if (s.type === "busy" && "message" in s && typeof s.message === "string" && s.message) return s.message
     if (activeTask()) return i18n.t("ui.sessionTurn.status.delegating")
     if (!hasSteps()) return i18n.t("ui.sessionTurn.status.thinking")
     return i18n.t("ui.sessionTurn.status.consideringNextSteps")
@@ -668,6 +677,9 @@ export function SessionTurn(
                     </Show>
                     <div data-slot="session-turn-sticky" ref={setStickyRef}>
                       {/* User Message */}
+                      <Show when={author()}>
+                        <div class="mb-1 text-12-medium text-text-weak">{author()}</div>
+                      </Show>
                       <div data-slot="session-turn-message-content" aria-live="off">
                         <Message message={msg()} parts={stickyParts()} />
                       </div>

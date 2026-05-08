@@ -182,10 +182,7 @@ describe("StorageAdmin", () => {
       })
       await fs.mkdir(path.join(fx.roots.data, "snapshot", "ses_open"), { recursive: true })
       await Bun.write(path.join(fx.roots.data, "snapshot", "ses_open", "session.snapshot"), "session snapshot")
-      const summary = await StorageAdmin.summary(
-        { activeWorkspaceIDs: [], activeSessionIDs: [] },
-        { roots: fx.roots },
-      )
+      const summary = await StorageAdmin.summary({ activeWorkspaceIDs: [], activeSessionIDs: [] }, { roots: fx.roots })
       const snapshots = summary.items.filter((item) => item.category === "snapshots")
       expect(snapshots.map((item) => item.metadata.scope)).toEqual(["ses_archived", "stale_scope"])
       const plan = await StorageAdmin.plan(

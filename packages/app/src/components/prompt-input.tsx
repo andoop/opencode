@@ -528,6 +528,34 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!sessionID) return []
     return sessionSyncData().message[sessionID] ?? []
   })
+  const warmed = new Set<string>()
+  createEffect(() => {
+    const session = info()
+    const model = local.model.current()
+    const agent = local.agent.current()
+    if (!session || !model || !agent) return
+    if (model.provider.id !== "cursor-cli") return
+    const key = `${session.id}:${session.directory}:${model.provider.id}:${model.id}:${agent.name}`
+    if (warmed.has(key)) return
+    warmed.add(key)
+    const client = createOpencodeClient({
+      baseUrl: sdk.url,
+      fetch: platform.fetch,
+      directory: session.directory,
+      throwOnError: true,
+      onClient: (c) => addAuthInterceptor(c, () => auth.token),
+    })
+    void client.session
+      .warm({
+        sessionID: session.id,
+        agent: agent.name,
+        model: {
+          providerID: model.provider.id,
+          modelID: model.id,
+        },
+      })
+      .catch(() => undefined)
+  })
   const currentBranch = createMemo(() => {
     return sessionSyncData().vcs?.branch
   })

@@ -136,6 +136,16 @@ export namespace SessionPrompt {
           .meta({
             ref: "AgentPartInput",
           }),
+        MessageV2.MentionPart.omit({
+          messageID: true,
+          sessionID: true,
+        })
+          .partial({
+            id: true,
+          })
+          .meta({
+            ref: "MentionPartInput",
+          }),
         MessageV2.SubtaskPart.omit({
           messageID: true,
           sessionID: true,
@@ -153,6 +163,7 @@ export namespace SessionPrompt {
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
+    Session.requireParticipant(session)
     await SessionRevert.cleanup(session)
 
     const message = await createUserMessage(input)
@@ -175,7 +186,7 @@ export namespace SessionPrompt {
       })
     }
 
-    if (input.noReply === true) {
+    if (input.noReply === true || shouldSkipRoomReply(session, input)) {
       return message
     }
 
@@ -621,6 +632,7 @@ export namespace SessionPrompt {
       const system = [
         ...(await SystemPrompt.environment(model)),
         ...(await SystemPrompt.projectContext()),
+        ...roomSystem(session),
         ...(await InstructionPrompt.system()),
       ]
       const modelMessages = [
@@ -917,8 +929,46 @@ export namespace SessionPrompt {
     return tools
   }
 
+  function mentionsAgent(input: PromptInput) {
+    return input.parts.some((part) => {
+      if (part.type === "agent") return true
+      if (part.type === "mention" && part.targetType === "agent") return true
+      if (part.type !== "text") return false
+      return /(^|\s)@agent(\s|$)/i.test(part.text)
+    })
+  }
+
+  function shouldSkipRoomReply(session: Session.Info, input: PromptInput) {
+    if (session.kind !== "room_thread" || !session.room) return false
+    if (session.room.agent_auto_join) return false
+    return !mentionsAgent(input)
+  }
+
+  function roomSystem(session: Session.Info) {
+    if (session.kind !== "room_thread" || !session.room) return []
+    const members = session.room.participants
+      .map((item) => `- ${item.title ?? item.userID}: ${item.projectRole}, ${item.membershipRole}`)
+      .join("\n")
+    return [
+      [
+        "You are participating in a Project Room, not a private chat.",
+        `Room: ${session.room.title}`,
+        `Stage: ${session.room.stage}`,
+        "Members:",
+        members || "- No named members",
+        "",
+        "Act as a facilitator, coordinator, and operator.",
+        "In clarification, ask targeted questions before proposing.",
+        "In proposal, summarize options, risks, and decisions needed.",
+        "In execution, create concrete todos or execute when the user asks.",
+        "When information is missing, mention the relevant role or member, such as @pm, @qa, @dev, or a named participant.",
+      ].join("\n"),
+    ]
+  }
+
   async function createUserMessage(input: PromptInput) {
-    const agentName = input.agent ?? (await Agent.defaultAgent())
+    const session = await Session.get(input.sessionID)
+    const agentName = input.agent ?? session.room?.agent ?? (await Agent.defaultAgent())
     const agent = await Agent.get(agentName)
 
     await assertPromptFeatureAccess({
@@ -953,6 +1003,10 @@ export namespace SessionPrompt {
       tools: input.tools,
       agent: agent.name,
       model,
+      authorUserID: User.current()?.id,
+      authorUsername: User.current()?.username,
+      authorProjectRole: session.room?.participants.find((item) => item.userID === User.current()?.id)?.projectRole,
+      trigger: mentionsAgent(input) ? "mention" : session.room?.agent_auto_join ? "auto" : "manual",
       system: input.system,
       variant,
     }

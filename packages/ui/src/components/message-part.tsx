@@ -767,6 +767,15 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
   )
 }
 
+PART_MAPPING["mention"] = function MentionPartDisplay(props) {
+  const part = props.part as PartType & { label?: string; targetType?: string }
+  return (
+    <span class="inline-flex rounded bg-surface-raised-base px-1.5 py-0.5 text-12-medium text-text-base">
+      @{part.label ?? part.targetType ?? "mention"}
+    </span>
+  )
+}
+
 PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   const part = props.part as ReasoningPart
   const text = () => part.text.trim()

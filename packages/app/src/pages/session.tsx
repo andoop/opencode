@@ -33,6 +33,7 @@ import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { SessionReview } from "@opencode-ai/ui/session-review"
 import { Mark } from "@opencode-ai/ui/logo"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { Dialog } from "@opencode-ai/ui/dialog"
 
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"
@@ -109,6 +110,21 @@ type GitHistoryVcs = {
 }
 const HISTORY_WORKING_TREE_ID = "__working_tree__"
 type BranchDialogOutcome = BranchDialogConfirm | { kind: "cancel" }
+
+const projectRoleLabels = {
+  pm: "产品",
+  dev: "开发",
+  qa: "测试",
+  design: "设计",
+  other: "其他",
+} as const
+
+const membershipRoleLabels = {
+  owner: "创建者/管理员",
+  member: "成员",
+} as const
+
+type ProjectRole = keyof typeof projectRoleLabels
 
 const createSessionState = () => ({
   open: false,
@@ -873,6 +889,219 @@ export default function Page() {
     const msgs = data.message[id] ?? []
     return msgs
   })
+  const roomTodos = createMemo(() => {
+    const id = params.id
+    if (!id) return []
+    return sessionSyncData().todo[id] ?? []
+  })
+  const roomManagers = createMemo(() => {
+    const room = info()?.room
+    if (!room) return false
+    if (auth.isAdmin) return true
+    const userID = auth.user?.id
+    return room.participants?.some((item) => item.userID === userID && item.membershipRole === "owner") ?? false
+  })
+  const errorMessage = (err: unknown) => {
+    if (err && typeof err === "object" && "data" in err) {
+      const data = (err as { data?: { message?: string } }).data
+      if (data?.message) return data.message
+    }
+    if (err instanceof Error) return err.message
+    return language.t("common.requestFailed")
+  }
+  const openRoomMembers = () => {
+    dialog.show(() => <DialogRoomMembers />)
+  }
+  const DialogRoomMembers = () => {
+    type RoomUser = { id: string; username: string; email?: string }
+    const [search, setSearch] = createSignal("")
+    const [users, setUsers] = createSignal<RoomUser[]>([])
+    const [role, setRole] = createSignal<ProjectRole>("dev")
+    const [busy, setBusy] = createSignal("")
+    const [error, setError] = createSignal("")
+    const roles = Object.entries(projectRoleLabels) as Array<[ProjectRole, string]>
+    const room = createMemo(() => info()?.room)
+    const members = createMemo(() => room()?.participants ?? [])
+    const existing = (userID: string) => members().some((item) => item.userID === userID)
+    const reload = async () => {
+      await globalSync.project.loadSessions(actualSessionDir(), { force: true }).catch(() => undefined)
+    }
+    const searchUsers = async () => {
+      setError("")
+      setBusy("search")
+      try {
+        setUsers(
+          ((await permissionClient().user.search({ q: search(), limit: 30 })).data ?? []).map((item) => ({
+            id: item.id,
+            username: item.username,
+            email: item.email,
+          })),
+        )
+      } catch (err) {
+        setError(errorMessage(err))
+      } finally {
+        setBusy("")
+      }
+    }
+    const add = async (user: RoomUser) => {
+      const sessionID = params.id
+      if (!sessionID) return
+      setError("")
+      setBusy(`add:${user.id}`)
+      try {
+        await permissionClient().session.room.participant.add({
+          sessionID,
+          userID: user.id,
+          projectRole: role(),
+          title: user.username,
+        })
+        setUsers((items) => items.filter((item) => item.id !== user.id))
+        await reload()
+      } catch (err) {
+        setError(errorMessage(err))
+      } finally {
+        setBusy("")
+      }
+    }
+    const updateRole = async (userID: string, next: ProjectRole) => {
+      const sessionID = params.id
+      if (!sessionID) return
+      setError("")
+      setBusy(`role:${userID}`)
+      try {
+        await permissionClient().session.room.participant.update({
+          sessionID,
+          userID,
+          projectRole: next,
+        })
+        await reload()
+      } catch (err) {
+        setError(errorMessage(err))
+      } finally {
+        setBusy("")
+      }
+    }
+    const remove = async (userID: string) => {
+      const sessionID = params.id
+      if (!sessionID) return
+      setError("")
+      setBusy(`remove:${userID}`)
+      try {
+        await permissionClient().session.room.participant.remove({ sessionID, userID })
+        await reload()
+      } catch (err) {
+        setError(errorMessage(err))
+      } finally {
+        setBusy("")
+      }
+    }
+    return (
+      <Dialog
+        title="管理房间成员"
+        description="查看当前成员；房间创建者和管理员可以继续添加、删除成员或调整项目角色。"
+        size="large"
+      >
+        <div class="flex max-h-[70vh] flex-col gap-5 overflow-y-auto">
+          <Show when={roomManagers()}>
+            <div class="rounded-lg border border-border-weak-base bg-surface-raised-base p-3">
+              <div class="mb-2 text-13-medium text-text-strong">添加成员</div>
+              <div class="flex flex-col gap-2 md:flex-row">
+                <input
+                  class="min-w-0 flex-1 rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-14-regular text-text-base outline-none focus:border-border-strong-base"
+                  value={search()}
+                  onInput={(event) => setSearch(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void searchUsers()
+                  }}
+                  placeholder="搜索用户名或邮箱"
+                />
+                <select
+                  class="rounded-md border border-border-weak-base bg-background-base px-3 py-2 text-13-regular text-text-base outline-none"
+                  value={role()}
+                  onChange={(event) => setRole(event.currentTarget.value as ProjectRole)}
+                >
+                  <For each={roles}>{(item) => <option value={item[0]}>{item[1]}</option>}</For>
+                </select>
+                <Button variant="secondary" loading={busy() === "search"} onClick={() => void searchUsers()}>
+                  搜索
+                </Button>
+              </div>
+              <Show when={users().length > 0}>
+                <div class="mt-3 flex flex-col gap-1">
+                  <For each={users()}>
+                    {(user) => (
+                      <div class="flex items-center gap-2 rounded-md bg-background-base px-3 py-2">
+                        <div class="min-w-0 flex-1">
+                          <div class="truncate text-13-medium text-text-strong">{user.username}</div>
+                          <Show when={user.email}>
+                            <div class="truncate text-12-regular text-text-base">{user.email}</div>
+                          </Show>
+                        </div>
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          disabled={existing(user.id)}
+                          loading={busy() === `add:${user.id}`}
+                          onClick={() => void add(user)}
+                        >
+                          {existing(user.id) ? "已在房间" : "添加"}
+                        </Button>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+          </Show>
+
+          <Show when={error()}>
+            <div class="rounded-md border border-border-danger-base bg-surface-danger-base px-3 py-2 text-13-regular text-text-danger">
+              {error()}
+            </div>
+          </Show>
+
+          <div class="flex flex-col gap-2">
+            <div class="text-13-medium text-text-strong">当前成员</div>
+            <For each={members()}>
+              {(member) => (
+                <div class="flex flex-col gap-2 rounded-lg border border-border-weak-base bg-surface-raised-base p-3 md:flex-row md:items-center">
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-13-medium text-text-strong">{member.title ?? member.userID}</div>
+                    <div class="mt-1 flex flex-wrap gap-1 text-12-regular text-text-base">
+                      <span>{membershipRoleLabels[member.membershipRole]}</span>
+                      <span>·</span>
+                      <span>{projectRoleLabels[member.projectRole]}</span>
+                    </div>
+                  </div>
+                  <Show when={roomManagers()}>
+                    <div class="flex items-center gap-2">
+                      <select
+                        class="rounded-md border border-border-weak-base bg-background-base px-2 py-1.5 text-12-regular text-text-base outline-none"
+                        value={member.projectRole}
+                        disabled={busy() === `role:${member.userID}`}
+                        onChange={(event) => void updateRole(member.userID, event.currentTarget.value as ProjectRole)}
+                      >
+                        <For each={roles}>{(item) => <option value={item[0]}>{item[1]}</option>}</For>
+                      </select>
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        disabled={member.userID === room()?.created_by}
+                        loading={busy() === `remove:${member.userID}`}
+                        onClick={() => void remove(member.userID)}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  </Show>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
   const parts = (messageID: string) => sessionSyncData().part[messageID] ?? []
   const messagesReady = createMemo(() => {
     const id = params.id
@@ -3167,6 +3396,64 @@ export default function Page() {
                                   "mt-0": !centered(),
                                 }}
                               >
+                                <Show when={info()?.room}>
+                                  {(room) => (
+                                    <div class="w-full px-4 md:px-6">
+                                      <div class="rounded-xl border border-border-weak-base bg-surface-raised-base p-4 flex flex-col gap-3">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                          <span class="text-14-bold text-text-strong">{room().title}</span>
+                                          <span class="rounded bg-background-base px-2 py-1 text-12-medium text-text-weak">
+                                            {room().stage}
+                                          </span>
+                                          <span class="rounded bg-background-base px-2 py-1 text-12-medium text-text-weak">
+                                            AI auto {room().agent_auto_join ? "on" : "off"}
+                                          </span>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                          <Button
+                                            variant="secondary"
+                                            size="small"
+                                            icon="user"
+                                            onClick={openRoomMembers}
+                                          >
+                                            管理成员 {room().participants?.length ?? 0}
+                                          </Button>
+                                          <span class="text-12-regular text-text-base">
+                                            可随时查看成员，管理员可继续加人、删人和改角色
+                                          </span>
+                                        </div>
+                                        <Show when={(info()?.decisions?.length ?? 0) > 0 || roomTodos().length > 0}>
+                                          <div class="grid gap-3 md:grid-cols-2">
+                                            <Show when={(info()?.decisions?.length ?? 0) > 0}>
+                                              <div>
+                                                <div class="mb-1 text-12-bold text-text-strong">Decisions</div>
+                                                <ul class="list-disc pl-4 text-13-regular text-text-base">
+                                                  <For each={info()?.decisions ?? []}>
+                                                    {(item) => <li>{item.text}</li>}
+                                                  </For>
+                                                </ul>
+                                              </div>
+                                            </Show>
+                                            <Show when={roomTodos().length > 0}>
+                                              <div>
+                                                <div class="mb-1 text-12-bold text-text-strong">Todos</div>
+                                                <ul class="list-disc pl-4 text-13-regular text-text-base">
+                                                  <For each={roomTodos()}>
+                                                    {(item) => (
+                                                      <li>
+                                                        {item.content} · {item.status}
+                                                      </li>
+                                                    )}
+                                                  </For>
+                                                </ul>
+                                              </div>
+                                            </Show>
+                                          </div>
+                                        </Show>
+                                      </div>
+                                    </div>
+                                  )}
+                                </Show>
                                 <Show when={store.turnStart > 0}>
                                   <div class="w-full flex justify-center">
                                     <Button

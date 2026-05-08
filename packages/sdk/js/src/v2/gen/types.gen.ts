@@ -258,6 +258,10 @@ export type UserMessage = {
     providerID: string
     modelID: string
   }
+  authorUserID?: string
+  authorUsername?: string
+  authorProjectRole?: "pm" | "dev" | "qa" | "design" | "other"
+  trigger?: "manual" | "mention" | "auto"
   system?: string
   tools?: {
     [key: string]: boolean
@@ -588,6 +592,21 @@ export type AgentPart = {
   }
 }
 
+export type MentionPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "mention"
+  targetType: "agent" | "user" | "role"
+  targetID?: string
+  label: string
+  source?: {
+    value: string
+    start: number
+    end: number
+  }
+}
+
 export type RetryPart = {
   id: string
   sessionID: string
@@ -619,6 +638,7 @@ export type Part =
   | SnapshotPart
   | PatchPart
   | AgentPart
+  | MentionPart
   | RetryPart
   | CompactionPart
 
@@ -1031,6 +1051,7 @@ export type SessionStatus =
     }
   | {
       type: "busy"
+      message?: string
     }
 
 export type EventSessionStatus = {
@@ -1131,6 +1152,31 @@ export type Session = {
     archived?: number
   }
   permission?: PermissionRuleset
+  kind?: "direct" | "room_thread" | "execution"
+  room?: {
+    id: string
+    title: string
+    workspaceID: string
+    projectID: string
+    agent: string
+    agent_auto_join: boolean
+    created_by?: string
+    stage: "clarification" | "discussion" | "proposal" | "execution"
+    participants?: Array<{
+      userID: string
+      membershipRole: "owner" | "member"
+      projectRole: "pm" | "dev" | "qa" | "design" | "other"
+      title?: string
+      addedBy?: string
+      createdAt: number
+    }>
+  }
+  decisions?: Array<{
+    id: string
+    text: string
+    createdBy?: string
+    createdAt: number
+  }>
   revert?: {
     messageID: string
     partID?: string
@@ -2489,6 +2535,25 @@ export type SessionAdminConversationMessage = {
   parts: Array<SessionAdminConversationPart>
 }
 
+export type SessionRoomInboxEntry = {
+  session: Session
+  participant?: {
+    userID: string
+    membershipRole: "owner" | "member"
+    projectRole: "pm" | "dev" | "qa" | "design" | "other"
+    title?: string
+    addedBy?: string
+    createdAt: number
+  }
+}
+
+export type SessionRoomOpenInfo = {
+  session: Session
+  directory: string
+  workspaceID: string
+  projectID: string
+}
+
 export type SessionAttachmentUploadInitResponse = {
   uploadID: string
   chunkSize: number
@@ -2512,6 +2577,15 @@ export type SessionAttachmentUpload = {
   size: number
   path: string
   url: string
+}
+
+export type SessionMention = {
+  sessionID: string
+  messageID: string
+  targetType: "agent" | "user" | "role"
+  targetID?: string
+  label: string
+  created?: number
 }
 
 export type TextPartInput = {
@@ -2545,6 +2619,19 @@ export type AgentPartInput = {
   id?: string
   type: "agent"
   name: string
+  source?: {
+    value: string
+    start: number
+    end: number
+  }
+}
+
+export type MentionPartInput = {
+  id?: string
+  type: "mention"
+  targetType: "agent" | "user" | "role"
+  targetID?: string
+  label: string
   source?: {
     value: string
     start: number
@@ -3650,6 +3737,69 @@ export type UserAuthChangePasswordResponses = {
 }
 
 export type UserAuthChangePasswordResponse = UserAuthChangePasswordResponses[keyof UserAuthChangePasswordResponses]
+
+export type UserSearchData = {
+  body?: never
+  path?: never
+  query?: {
+    q?: string
+    limit?: number
+  }
+  url: "/user/search"
+}
+
+export type UserSearchErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type UserSearchError = UserSearchErrors[keyof UserSearchErrors]
+
+export type UserSearchResponses = {
+  /**
+   * Matching users
+   */
+  200: Array<{
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+        commands?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }>
+}
+
+export type UserSearchResponse = UserSearchResponses[keyof UserSearchResponses]
 
 export type UserListData = {
   body?: never
@@ -5043,6 +5193,73 @@ export type SessionStatusResponses = {
 
 export type SessionStatusResponse = SessionStatusResponses[keyof SessionStatusResponses]
 
+export type SessionRoomInboxData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/session/room/inbox"
+}
+
+export type SessionRoomInboxErrors = {
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type SessionRoomInboxError = SessionRoomInboxErrors[keyof SessionRoomInboxErrors]
+
+export type SessionRoomInboxResponses = {
+  /**
+   * Accessible room threads
+   */
+  200: Array<SessionRoomInboxEntry>
+}
+
+export type SessionRoomInboxResponse = SessionRoomInboxResponses[keyof SessionRoomInboxResponses]
+
+export type SessionRoomOpenData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/open"
+}
+
+export type SessionRoomOpenErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomOpenError = SessionRoomOpenErrors[keyof SessionRoomOpenErrors]
+
+export type SessionRoomOpenResponses = {
+  /**
+   * Room open target
+   */
+  200: SessionRoomOpenInfo
+}
+
+export type SessionRoomOpenResponse = SessionRoomOpenResponses[keyof SessionRoomOpenResponses]
+
 export type SessionDeleteData = {
   body?: never
   path: {
@@ -5215,6 +5432,373 @@ export type SessionTodoResponses = {
 }
 
 export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
+
+export type SessionRoomParticipantsData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/participants"
+}
+
+export type SessionRoomParticipantsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomParticipantsError = SessionRoomParticipantsErrors[keyof SessionRoomParticipantsErrors]
+
+export type SessionRoomParticipantsResponses = {
+  /**
+   * Room participants
+   */
+  200: Array<{
+    userID: string
+    membershipRole: "owner" | "member"
+    projectRole: "pm" | "dev" | "qa" | "design" | "other"
+    title?: string
+    addedBy?: string
+    createdAt: number
+  }>
+}
+
+export type SessionRoomParticipantsResponse = SessionRoomParticipantsResponses[keyof SessionRoomParticipantsResponses]
+
+export type SessionRoomParticipantAddData = {
+  body?: {
+    userID: string
+    projectRole?: "pm" | "dev" | "qa" | "design" | "other"
+    title?: string
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/participants"
+}
+
+export type SessionRoomParticipantAddErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomParticipantAddError = SessionRoomParticipantAddErrors[keyof SessionRoomParticipantAddErrors]
+
+export type SessionRoomParticipantAddResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRoomParticipantAddResponse =
+  SessionRoomParticipantAddResponses[keyof SessionRoomParticipantAddResponses]
+
+export type SessionRoomParticipantRemoveData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+    /**
+     * User ID
+     */
+    userID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/participants/{userID}"
+}
+
+export type SessionRoomParticipantRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomParticipantRemoveError =
+  SessionRoomParticipantRemoveErrors[keyof SessionRoomParticipantRemoveErrors]
+
+export type SessionRoomParticipantRemoveResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRoomParticipantRemoveResponse =
+  SessionRoomParticipantRemoveResponses[keyof SessionRoomParticipantRemoveResponses]
+
+export type SessionRoomParticipantUpdateData = {
+  body?: {
+    projectRole?: "pm" | "dev" | "qa" | "design" | "other"
+    title?: string
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+    /**
+     * User ID
+     */
+    userID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/participants/{userID}"
+}
+
+export type SessionRoomParticipantUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomParticipantUpdateError =
+  SessionRoomParticipantUpdateErrors[keyof SessionRoomParticipantUpdateErrors]
+
+export type SessionRoomParticipantUpdateResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRoomParticipantUpdateResponse =
+  SessionRoomParticipantUpdateResponses[keyof SessionRoomParticipantUpdateResponses]
+
+export type SessionRoomUpdateData = {
+  body?: {
+    title?: string
+    agent?: string
+    agent_auto_join?: boolean
+    stage?: "clarification" | "discussion" | "proposal" | "execution"
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/group"
+}
+
+export type SessionRoomUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomUpdateError = SessionRoomUpdateErrors[keyof SessionRoomUpdateErrors]
+
+export type SessionRoomUpdateResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRoomUpdateResponse = SessionRoomUpdateResponses[keyof SessionRoomUpdateResponses]
+
+export type SessionRoomStageData = {
+  body?: {
+    stage: "clarification" | "discussion" | "proposal" | "execution"
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/group/stage"
+}
+
+export type SessionRoomStageErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomStageError = SessionRoomStageErrors[keyof SessionRoomStageErrors]
+
+export type SessionRoomStageResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRoomStageResponse = SessionRoomStageResponses[keyof SessionRoomStageResponses]
+
+export type SessionRoomCreateData = {
+  body?: {
+    title?: string
+    workspaceID?: string
+    branches?: {
+      [key: string]:
+        | string
+        | {
+            name: string
+            group: "local" | "remote"
+          }
+    }
+    agent?: string
+    agent_auto_join?: boolean
+    participants?: Array<{
+      userID: string
+      projectRole?: "pm" | "dev" | "qa" | "design" | "other"
+      title?: string
+    }>
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/session/room"
+}
+
+export type SessionRoomCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+}
+
+export type SessionRoomCreateError = SessionRoomCreateErrors[keyof SessionRoomCreateErrors]
+
+export type SessionRoomCreateResponses = {
+  /**
+   * Created room thread
+   */
+  200: Session
+}
+
+export type SessionRoomCreateResponse = SessionRoomCreateResponses[keyof SessionRoomCreateResponses]
+
+export type SessionWarmData = {
+  body?: {
+    agent: string
+    model: {
+      providerID: string
+      modelID: string
+    }
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/warm"
+}
+
+export type SessionWarmErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionWarmError = SessionWarmErrors[keyof SessionWarmErrors]
+
+export type SessionWarmResponses = {
+  /**
+   * Warm request accepted
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type SessionWarmResponse = SessionWarmResponses[keyof SessionWarmResponses]
 
 export type SessionAttachmentInitData = {
   body?: SessionAttachmentUploadInit
@@ -5664,7 +6248,7 @@ export type SessionPromptData = {
     }
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | MentionPartInput | SubtaskPartInput>
   }
   path: {
     /**
@@ -5702,6 +6286,175 @@ export type SessionPromptResponses = {
 }
 
 export type SessionPromptResponse = SessionPromptResponses[keyof SessionPromptResponses]
+
+export type SessionRoomMentionsData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/mentions"
+}
+
+export type SessionRoomMentionsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomMentionsError = SessionRoomMentionsErrors[keyof SessionRoomMentionsErrors]
+
+export type SessionRoomMentionsResponses = {
+  /**
+   * Mentions
+   */
+  200: Array<SessionMention>
+}
+
+export type SessionRoomMentionsResponse = SessionRoomMentionsResponses[keyof SessionRoomMentionsResponses]
+
+export type SessionRoomDecisionListData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/decision"
+}
+
+export type SessionRoomDecisionListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomDecisionListError = SessionRoomDecisionListErrors[keyof SessionRoomDecisionListErrors]
+
+export type SessionRoomDecisionListResponses = {
+  /**
+   * Decisions
+   */
+  200: Array<{
+    id: string
+    text: string
+    createdBy?: string
+    createdAt: number
+  }>
+}
+
+export type SessionRoomDecisionListResponse = SessionRoomDecisionListResponses[keyof SessionRoomDecisionListResponses]
+
+export type SessionRoomDecisionAddData = {
+  body?: {
+    text: string
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/decision"
+}
+
+export type SessionRoomDecisionAddErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomDecisionAddError = SessionRoomDecisionAddErrors[keyof SessionRoomDecisionAddErrors]
+
+export type SessionRoomDecisionAddResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRoomDecisionAddResponse = SessionRoomDecisionAddResponses[keyof SessionRoomDecisionAddResponses]
+
+export type SessionRoomExecutionData = {
+  body?: {
+    title?: string
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/execution"
+}
+
+export type SessionRoomExecutionErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRoomExecutionError = SessionRoomExecutionErrors[keyof SessionRoomExecutionErrors]
+
+export type SessionRoomExecutionResponses = {
+  /**
+   * Execution session
+   */
+  200: Session
+}
+
+export type SessionRoomExecutionResponse = SessionRoomExecutionResponses[keyof SessionRoomExecutionResponses]
 
 export type SessionMessageData = {
   body?: never
@@ -5851,7 +6604,7 @@ export type SessionPromptAsyncData = {
     }
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | MentionPartInput | SubtaskPartInput>
   }
   path: {
     /**

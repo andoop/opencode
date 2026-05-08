@@ -37,7 +37,13 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { getFilename } from "@opencode-ai/util/path"
-import { Session, type Message, type TextPart, createOpencodeClient } from "@opencode-ai/sdk/v2/client"
+import {
+  Session,
+  type Message,
+  type SessionRoomInboxEntry,
+  type TextPart,
+  createOpencodeClient,
+} from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -82,6 +88,23 @@ import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/
 type SessionCreateStep = "create" | "worktree" | "open"
 
 type BranchDialogOutcome = BranchDialogConfirm | { kind: "cancel" }
+
+type ProjectRole = "pm" | "dev" | "qa" | "design" | "other"
+
+const projectRoleLabels: Record<ProjectRole, string> = {
+  pm: "产品",
+  dev: "开发",
+  qa: "测试",
+  design: "设计",
+  other: "其他",
+}
+
+const roomStageLabels = {
+  clarification: "澄清",
+  discussion: "讨论",
+  proposal: "方案",
+  execution: "执行",
+}
 
 const createSessionOverlayState = () => ({
   open: false,
@@ -1561,6 +1584,38 @@ export default function Layout(props: ParentProps) {
       onClient: (client) => addAuthInterceptor(client, () => auth.token),
     })
 
+  const [rooms, setRooms] = createSignal<SessionRoomInboxEntry[]>([])
+  const [roomsLoading, setRoomsLoading] = createSignal(false)
+  const [roomsError, setRoomsError] = createSignal("")
+
+  const loadRooms = async () => {
+    if (!auth.isAuthenticated) return
+    setRoomsLoading(true)
+    setRoomsError("")
+    try {
+      setRooms((await globalSDK.client.session.room.inbox()).data ?? [])
+    } catch (err) {
+      setRoomsError(errorMessage(err))
+    } finally {
+      setRoomsLoading(false)
+    }
+  }
+
+  const enterRoom = async (sessionID: string) => {
+    try {
+      const result = (await globalSDK.client.session.room.open({ sessionID })).data
+      if (!result) return
+      globalSync.child(result.directory, { bootstrap: false })
+      await globalSync.project.loadSessions(result.directory, { force: true }).catch(() => undefined)
+      navigate(`/${base64Encode(result.directory)}/session/${result.session.id}`)
+    } catch (err) {
+      showToast({
+        title: "无法进入房间",
+        description: errorMessage(err),
+      })
+    }
+  }
+
   const workspaceDirectoryForSession = (directory: string) => directory.replace(/[\\/]+sessions[\\/]+[^\\/]+$/, "")
 
   const deleteWorkspace = async (root: string, directory: string) => {
@@ -2277,6 +2332,50 @@ export default function Layout(props: ParentProps) {
     )
   }
 
+  const NewRoomItem = (props: {
+    project: LocalProject
+    directory?: string
+    mobile?: boolean
+    dense?: boolean
+  }): JSX.Element => {
+    const label = "创建项目房间"
+    const tooltip = () => props.mobile || !sidebarExpanded()
+    const item = (
+      <button
+        type="button"
+        class={`flex items-center justify-between gap-3 min-w-0 text-left w-full focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
+        onClick={() => {
+          setState("hoverSession", undefined)
+          void openCreateRoom(props.project, props.directory ?? props.project.worktree)
+        }}
+      >
+        <div class="flex items-center gap-1 w-full">
+          <div class="shrink-0 size-6 flex items-center justify-center">
+            <Icon name="user" size="small" class="text-icon-weak" />
+          </div>
+          <span class="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate">
+            {label}
+          </span>
+        </div>
+      </button>
+    )
+
+    return (
+      <div class="group/session relative w-full rounded-md cursor-default transition-colors pl-2 pr-3 hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[.active]:bg-surface-base-active">
+        <Show
+          when={!tooltip()}
+          fallback={
+            <Tooltip placement={props.mobile ? "bottom" : "right"} value={label} gutter={10}>
+              {item}
+            </Tooltip>
+          }
+        >
+          {item}
+        </Show>
+      </div>
+    )
+  }
+
   const SessionSkeleton = (props: { count?: number }): JSX.Element => {
     const items = Array.from({ length: props.count ?? 4 }, (_, index) => index)
     return (
@@ -2549,6 +2648,7 @@ export default function Layout(props: ParentProps) {
           <Collapsible.Content>
             <nav class="flex flex-col gap-1 px-2">
               <NewSessionItem project={props.project} mobile={props.mobile} />
+              <NewRoomItem project={props.project} directory={props.directory} mobile={props.mobile} />
               <Show when={loading()}>
                 <SessionSkeleton />
               </Show>
@@ -3158,6 +3258,251 @@ export default function Layout(props: ParentProps) {
     layout.mobileSidebar.hide()
   }
 
+  const openCreateRoom = async (project: LocalProject, directory = project.worktree) => {
+    const branchPick = await collectSessionBranches(project)
+    if (branchPick.cancelled) return
+    dialog.show(() => (
+      <DialogCreateRoom
+        project={project}
+        directory={directory}
+        branches={branchPick.branches}
+        workspaceID={branchPick.workspaceID}
+      />
+    ))
+  }
+
+  const DialogCreateRoom = (props: {
+    project: LocalProject
+    directory: string
+    branches?: Record<string, Extract<BranchDialogConfirm, { kind: "pick" }>["branch"]>
+    workspaceID?: string
+  }) => {
+    const [room, setRoom] = createStore({
+      title: `${props.project.name || getFilename(props.project.worktree)} 讨论房间`,
+      search: "",
+      defaultRole: "dev" as ProjectRole,
+      users: [] as Array<{ id: string; username: string; email?: string }>,
+      selected: [] as Array<{ userID: string; username: string; email?: string; projectRole: ProjectRole }>,
+      searching: false,
+      creating: false,
+      error: "",
+    })
+
+    const existing = (userID: string) => room.selected.some((item) => item.userID === userID)
+
+    const searchUsers = async () => {
+      if (room.searching) return
+      setRoom("error", "")
+      setRoom("searching", true)
+      const result = await clientForDirectory(props.directory)
+        .user.search({
+          q: room.search,
+          limit: 30,
+        })
+        .then((x) => x.data ?? [])
+        .catch((err) => {
+          setRoom("error", errorMessage(err))
+          return []
+        })
+        .finally(() => setRoom("searching", false))
+      setRoom("users", result)
+    }
+
+    const addUser = (user: { id: string; username: string; email?: string }) => {
+      if (existing(user.id)) return
+      setRoom("selected", (items) => [
+        ...items,
+        {
+          userID: user.id,
+          username: user.username,
+          email: user.email,
+          projectRole: room.defaultRole,
+        },
+      ])
+    }
+
+    const removeUser = (userID: string) => {
+      setRoom("selected", (items) => items.filter((item) => item.userID !== userID))
+    }
+
+    const updateRole = (userID: string, role: ProjectRole) => {
+      setRoom("selected", (item) => item.userID === userID, "projectRole", role)
+    }
+
+    const createRoom = async () => {
+      if (room.creating) return
+      setRoom("error", "")
+      setRoom("creating", true)
+      const created = await clientForDirectory(props.directory)
+        .session.room.create({
+          title: room.title.trim() || `${props.project.name || getFilename(props.project.worktree)} 讨论房间`,
+          workspaceID: props.workspaceID,
+          branches: props.branches,
+          participants: room.selected.map((item) => ({
+            userID: item.userID,
+            projectRole: item.projectRole,
+            title: item.username,
+          })),
+        })
+        .then((x) => x.data)
+        .catch((err) => {
+          setRoom("error", errorMessage(err))
+          return undefined
+        })
+        .finally(() => setRoom("creating", false))
+      if (!created) return
+      if (created.directory !== props.directory) {
+        setBusy(created.directory, true)
+        WorktreeState.pending(created.directory)
+        const result = await WorktreeState.wait(created.directory)
+        setBusy(created.directory, false)
+        if (result.status === "failed") {
+          setRoom("error", result.message)
+          return
+        }
+      }
+      globalSync.child(created.directory)
+      dialog.close()
+      navigate(`/${base64Encode(created.directory)}/session/${created.id}`)
+      layout.mobileSidebar.hide()
+    }
+
+    return (
+      <Dialog
+        title="创建项目讨论房间"
+        description="围绕当前项目创建一个协作房间，可邀请产品、开发、测试等成员一起讨论，并让 AI 参与推进。"
+        size="large"
+      >
+        <div class="flex flex-col gap-5">
+          <label class="flex flex-col gap-1">
+            <span class="text-13-medium text-text-strong">房间名称</span>
+            <input
+              class="w-full rounded-md border border-border-weak-base bg-surface-raised-base px-3 py-2 text-14-regular text-text-base outline-none focus:border-border-strong-base"
+              value={room.title}
+              onInput={(e) => setRoom("title", e.currentTarget.value)}
+              placeholder="例如：支付重构需求讨论"
+              autofocus
+            />
+          </label>
+
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-13-medium text-text-strong">搜索并添加成员</span>
+              <div class="flex items-center gap-2">
+                <span class="text-12-regular text-text-weak">默认角色</span>
+                <select
+                  class="rounded-md border border-border-weak-base bg-surface-raised-base px-2 py-1 text-13-regular text-text-base"
+                  value={room.defaultRole}
+                  onChange={(e) => setRoom("defaultRole", e.currentTarget.value as ProjectRole)}
+                >
+                  <For each={Object.entries(projectRoleLabels) as Array<[ProjectRole, string]>}>
+                    {([value, label]) => <option value={value}>{label}</option>}
+                  </For>
+                </select>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <input
+                class="min-w-0 flex-1 rounded-md border border-border-weak-base bg-surface-raised-base px-3 py-2 text-14-regular text-text-base outline-none focus:border-border-strong-base"
+                value={room.search}
+                onInput={(e) => setRoom("search", e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return
+                  e.preventDefault()
+                  void searchUsers()
+                }}
+                placeholder="输入用户名或邮箱搜索已注册用户"
+              />
+              <Button variant="secondary" loading={room.searching} onClick={() => void searchUsers()}>
+                搜索
+              </Button>
+            </div>
+            <Show when={room.users.length > 0}>
+              <div class="max-h-48 overflow-auto rounded-md border border-border-weak-base">
+                <For each={room.users}>
+                  {(user) => (
+                    <div class="flex items-center justify-between gap-3 border-b border-border-weak-base last:border-b-0 px-3 py-2">
+                      <div class="min-w-0">
+                        <div class="truncate text-14-medium text-text-strong">{user.username}</div>
+                        <Show when={user.email}>
+                          <div class="truncate text-12-regular text-text-weak">{user.email}</div>
+                        </Show>
+                      </div>
+                      <Button
+                        variant={existing(user.id) ? "secondary" : "primary"}
+                        disabled={existing(user.id)}
+                        onClick={() => addUser(user)}
+                      >
+                        {existing(user.id) ? "已选择" : "选择"}
+                      </Button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <div class="text-13-medium text-text-strong">已选成员</div>
+            <Show
+              when={room.selected.length > 0}
+              fallback={
+                <div class="rounded-md border border-dashed border-border-weak-base px-3 py-6 text-center text-13-regular text-text-weak">
+                  还没有选择成员。你也可以先创建房间，之后再添加。
+                </div>
+              }
+            >
+              <div class="flex flex-col gap-2">
+                <For each={room.selected}>
+                  {(item) => (
+                    <div class="flex items-center gap-3 rounded-md border border-border-weak-base px-3 py-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-14-medium text-text-strong">{item.username}</div>
+                        <Show when={item.email}>
+                          <div class="truncate text-12-regular text-text-weak">{item.email}</div>
+                        </Show>
+                      </div>
+                      <select
+                        class="rounded-md border border-border-weak-base bg-surface-raised-base px-2 py-1 text-13-regular text-text-base"
+                        value={item.projectRole}
+                        onChange={(e) => updateRole(item.userID, e.currentTarget.value as ProjectRole)}
+                      >
+                        <For each={Object.entries(projectRoleLabels) as Array<[ProjectRole, string]>}>
+                          {([value, label]) => <option value={value}>{label}</option>}
+                        </For>
+                      </select>
+                      <IconButton
+                        icon="close"
+                        variant="ghost"
+                        aria-label={`移除 ${item.username}`}
+                        onClick={() => removeUser(item.userID)}
+                      />
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+
+          <Show when={room.error}>
+            <div class="rounded-md border border-border-danger-base bg-surface-danger-base px-3 py-2 text-13-regular text-text-danger">
+              {room.error}
+            </div>
+          </Show>
+
+          <div class="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => dialog.close()} disabled={room.creating}>
+              取消
+            </Button>
+            <Button variant="primary" loading={room.creating} onClick={() => void createRoom()}>
+              创建房间
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
   const refreshSessions = async (project: LocalProject) => {
     if (isRefreshingProject(project.worktree)) return
     const dirs = workspaceIds(project)
@@ -3302,6 +3647,15 @@ export default function Layout(props: ParentProps) {
                         <Button
                           variant="secondary"
                           size="large"
+                          icon="user"
+                          class="w-full"
+                          onClick={() => void openCreateRoom(p())}
+                        >
+                          创建项目房间
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="large"
                           class="w-full"
                           loading={refreshing()}
                           onClick={() => refreshSessions(p())}
@@ -3399,6 +3753,96 @@ export default function Layout(props: ParentProps) {
     )
   }
 
+  const MyRoomsPopover = (props: { mobile?: boolean }) => {
+    return (
+      <Popover
+        placement={props.mobile ? "bottom" : "right"}
+        trigger={
+          <IconButton
+            icon="speech-bubble"
+            variant="ghost"
+            size="large"
+            onClick={() => void loadRooms()}
+            aria-label="我的项目房间"
+          />
+        }
+        onOpenChange={(open) => {
+          if (open) void loadRooms()
+        }}
+        class="w-80"
+      >
+        <div class="flex max-h-96 flex-col gap-2">
+          <div class="flex items-center justify-between gap-2 px-2 py-1">
+            <div>
+              <div class="text-13-medium text-text-strong">我的项目房间</div>
+              <div class="text-12-regular text-text-base">别人添加你后，会出现在这里</div>
+            </div>
+            <IconButton
+              icon="arrow-up"
+              variant="ghost"
+              size="normal"
+              onClick={() => void loadRooms()}
+              aria-label="刷新房间"
+            />
+          </div>
+
+          <Show when={roomsError()}>
+            <div class="rounded-md border border-border-danger-base bg-surface-danger-base px-2 py-1.5 text-12-regular text-text-danger">
+              {roomsError()}
+            </div>
+          </Show>
+
+          <Show
+            when={!roomsLoading()}
+            fallback={
+              <div class="flex items-center gap-2 px-2 py-3 text-12-regular text-text-base">
+                <Spinner />
+                加载房间中...
+              </div>
+            }
+          >
+            <div class="flex min-h-0 flex-col gap-1 overflow-y-auto">
+              <For
+                each={rooms()}
+                fallback={<div class="px-2 py-4 text-12-regular text-text-base">暂无可进入的项目房间</div>}
+              >
+                {(item) => {
+                  const room = () => item.session.room
+                  const role = () => item.participant?.projectRole
+                  return (
+                    <button
+                      type="button"
+                      class="flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-surface-raised-base-hover"
+                      onClick={() => void enterRoom(item.session.id)}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="min-w-0 flex-1 truncate text-13-medium text-text-strong">
+                          {room()?.title ?? item.session.title}
+                        </span>
+                        <span class="shrink-0 rounded bg-surface-raised-base px-1.5 py-0.5 text-11-regular text-text-base">
+                          {roomStageLabels[room()?.stage ?? "clarification"]}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2 text-12-regular text-text-base">
+                        <span class="truncate">{item.session.directory.replace(globalSync.data.path.home, "~")}</span>
+                        <Show when={role()}>
+                          {(value) => <span class="shrink-0">@{projectRoleLabels[value()]}</span>}
+                        </Show>
+                      </div>
+                      <div class="text-11-regular text-text-weak">
+                        {room()?.participants?.length ?? 0} 人参与，点击进入对话
+                      </div>
+                    </button>
+                  )
+                }}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </Popover>
+    )
+  }
+
   const SidebarContent = (sidebarProps: { mobile?: boolean }) => {
     const expanded = () => sidebarProps.mobile || layout.sidebar.opened()
 
@@ -3478,6 +3922,11 @@ export default function Layout(props: ParentProps) {
                 </For>
                 <div class="h-px w-8 bg-border-weak-base" />
               </div>
+            </Show>
+            <Show when={auth.isMultiUserEnabled && auth.isAuthenticated}>
+              <Tooltip placement={sidebarProps.mobile ? "bottom" : "right"} value="我的项目房间">
+                <MyRoomsPopover mobile={sidebarProps.mobile} />
+              </Tooltip>
             </Show>
             <Show when={auth.isMultiUserEnabled && auth.isAuthenticated}>
               <Popover

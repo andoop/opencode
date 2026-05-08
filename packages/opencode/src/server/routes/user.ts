@@ -18,6 +18,44 @@ function requireAdmin() {
 
 export function UserRoutes() {
   return new Hono()
+    .get(
+      "/search",
+      describeRoute({
+        summary: "Search users",
+        description: "Search registered users by username for room collaboration.",
+        operationId: "user.search",
+        responses: {
+          200: {
+            description: "Matching users",
+            content: {
+              "application/json": {
+                schema: resolver(User.PublicInfo.array()),
+              },
+            },
+          },
+          ...errors(403),
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          q: z.string().optional(),
+          limit: z.coerce.number().optional(),
+        }),
+      ),
+      async (c) => {
+        if (!User.current()) return c.json({ error: "Authentication required" }, 403)
+        const query = c.req.valid("query")
+        const term = query.q?.trim().toLowerCase()
+        const users = (await User.list())
+          .filter((user) => user.status === "active")
+          .filter(
+            (user) => !term || user.username.toLowerCase().includes(term) || user.email?.toLowerCase().includes(term),
+          )
+          .slice(0, query.limit ?? 20)
+        return c.json(users)
+      },
+    )
     .use(requireAdmin())
     .get(
       "/",

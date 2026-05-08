@@ -1874,6 +1874,188 @@
         ]
       }
     },
+    "/user/search": {
+      "get": {
+        "operationId": "user.search",
+        "summary": "Search users",
+        "description": "Search registered users by username for room collaboration.",
+        "responses": {
+          "200": {
+            "description": "Matching users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^usr.*"
+                      },
+                      "username": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 50
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": ["admin", "user"]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["active", "disabled"]
+                      },
+                      "permission": {
+                        "type": "object",
+                        "properties": {
+                          "level": {
+                            "type": "string",
+                            "enum": ["full", "readonly", "custom"]
+                          },
+                          "custom": {
+                            "type": "object",
+                            "properties": {
+                              "edit": {
+                                "type": "string",
+                                "enum": ["allow", "ask", "deny"]
+                              },
+                              "write": {
+                                "type": "string",
+                                "enum": ["allow", "ask", "deny"]
+                              },
+                              "bash": {
+                                "type": "string",
+                                "enum": ["allow", "ask", "deny"]
+                              },
+                              "read": {
+                                "type": "string",
+                                "enum": ["allow", "ask", "deny"]
+                              }
+                            }
+                          },
+                          "allowed_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": ["build", "ask", "plan"]
+                            }
+                          },
+                          "features": {
+                            "type": "object",
+                            "properties": {
+                              "modes": {
+                                "type": "object",
+                                "properties": {
+                                  "ask": {
+                                    "type": "boolean"
+                                  },
+                                  "build": {
+                                    "type": "boolean"
+                                  },
+                                  "plan": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              },
+                              "files": {
+                                "type": "boolean"
+                              },
+                              "models": {
+                                "type": "boolean"
+                              },
+                              "providers": {
+                                "type": "boolean"
+                              },
+                              "servers": {
+                                "type": "boolean"
+                              },
+                              "mcp": {
+                                "type": "boolean"
+                              },
+                              "commands": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "models": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": ["level"]
+                      },
+                      "time": {
+                        "type": "object",
+                        "properties": {
+                          "created": {
+                            "type": "number"
+                          },
+                          "updated": {
+                            "type": "number"
+                          },
+                          "last_login": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["created", "updated"]
+                      }
+                    },
+                    "required": ["id", "username", "role", "status", "permission", "time"]
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.user.search({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/user": {
       "get": {
         "operationId": "user.list",
@@ -5009,6 +5191,126 @@
         ]
       }
     },
+    "/session/room/inbox": {
+      "get": {
+        "operationId": "session.room.inbox",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List my project rooms",
+        "description": "List project room threads that the current user can access.",
+        "responses": {
+          "200": {
+            "description": "Accessible room threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionRoomInboxEntry"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.inbox({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/open": {
+      "get": {
+        "operationId": "session.room.open",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Open project room",
+        "description": "Resolve a project room thread into a directory and session that the current user can open.",
+        "responses": {
+          "200": {
+            "description": "Room open target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRoomOpenInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.open({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}": {
       "get": {
         "operationId": "session.get",
@@ -5345,6 +5647,695 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.todo({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/participants": {
+      "get": {
+        "operationId": "session.room.participants",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Get room participants",
+        "description": "Retrieve participants for a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Room participants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "userID": {
+                        "type": "string",
+                        "pattern": "^usr.*"
+                      },
+                      "membershipRole": {
+                        "type": "string",
+                        "enum": ["owner", "member"]
+                      },
+                      "projectRole": {
+                        "type": "string",
+                        "enum": ["pm", "dev", "qa", "design", "other"]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "addedBy": {
+                        "type": "string",
+                        "pattern": "^usr.*"
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      }
+                    },
+                    "required": ["userID", "membershipRole", "projectRole", "createdAt"]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.participants({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "session.room.participant.add",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Add room participant",
+        "description": "Add a registered user to a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userID": {
+                    "type": "string",
+                    "pattern": "^usr.*"
+                  },
+                  "projectRole": {
+                    "default": "other",
+                    "type": "string",
+                    "enum": ["pm", "dev", "qa", "design", "other"]
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": ["userID"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.participant.add({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/participants/{userID}": {
+      "delete": {
+        "operationId": "session.room.participant.remove",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          },
+          {
+            "in": "path",
+            "name": "userID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "User ID"
+          }
+        ],
+        "summary": "Remove room participant",
+        "description": "Remove a user from a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.participant.remove({\n  ...\n})"
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "session.room.participant.update",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          },
+          {
+            "in": "path",
+            "name": "userID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "User ID"
+          }
+        ],
+        "summary": "Update room participant",
+        "description": "Update a participant's project role or display title in a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectRole": {
+                    "type": "string",
+                    "enum": ["pm", "dev", "qa", "design", "other"]
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.participant.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/group": {
+      "patch": {
+        "operationId": "session.room.update",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Update room settings",
+        "description": "Update project room title, agent, auto-join behavior, or stage.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "agent_auto_join": {
+                    "type": "boolean"
+                  },
+                  "stage": {
+                    "type": "string",
+                    "enum": ["clarification", "discussion", "proposal", "execution"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/group/stage": {
+      "patch": {
+        "operationId": "session.room.stage",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Update room stage",
+        "description": "Move a project room thread through clarification, discussion, proposal, and execution.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "stage": {
+                    "type": "string",
+                    "enum": ["clarification", "discussion", "proposal", "execution"]
+                  }
+                },
+                "required": ["stage"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.stage({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/room": {
+      "post": {
+        "operationId": "session.room.create",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Create project room thread",
+        "description": "Create a collaborative room thread for a workspace/project.",
+        "responses": {
+          "200": {
+            "description": "Created room thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "workspaceID": {
+                    "type": "string"
+                  },
+                  "branches": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "group": {
+                              "type": "string",
+                              "enum": ["local", "remote"]
+                            }
+                          },
+                          "required": ["name", "group"]
+                        }
+                      ]
+                    }
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "agent_auto_join": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "participants": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "userID": {
+                          "type": "string",
+                          "pattern": "^usr.*"
+                        },
+                        "projectRole": {
+                          "default": "other",
+                          "type": "string",
+                          "enum": ["pm", "dev", "qa", "design", "other"]
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["userID"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.create({\n  ...\n})"
           }
         ]
       }
@@ -6324,6 +7315,9 @@
                           "$ref": "#/components/schemas/AgentPartInput"
                         },
                         {
+                          "$ref": "#/components/schemas/MentionPartInput"
+                        },
+                        {
                           "$ref": "#/components/schemas/SubtaskPartInput"
                         }
                       ]
@@ -6339,6 +7333,348 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.prompt({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/mentions": {
+      "get": {
+        "operationId": "session.room.mentions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Get room mentions",
+        "description": "Retrieve structured and text mentions in a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Mentions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionMention"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.mentions({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/decision": {
+      "post": {
+        "operationId": "session.room.decision.add",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Add room decision",
+        "description": "Add a structured decision to a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["text"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.decision.add({\n  ...\n})"
+          }
+        ]
+      },
+      "get": {
+        "operationId": "session.room.decision.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Get room decisions",
+        "description": "Retrieve structured decisions for a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Decisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "createdBy": {
+                        "type": "string",
+                        "pattern": "^usr.*"
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      }
+                    },
+                    "required": ["id", "text", "createdAt"]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.decision.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/execution": {
+      "post": {
+        "operationId": "session.room.execution",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Session ID"
+          }
+        ],
+        "summary": "Create execution session",
+        "description": "Create a child execution session from a project room thread.",
+        "responses": {
+          "200": {
+            "description": "Execution session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.session.room.execution({\n  ...\n})"
           }
         ]
       }
@@ -6698,6 +8034,9 @@
                         },
                         {
                           "$ref": "#/components/schemas/AgentPartInput"
+                        },
+                        {
+                          "$ref": "#/components/schemas/MentionPartInput"
                         },
                         {
                           "$ref": "#/components/schemas/SubtaskPartInput"
@@ -12219,6 +13558,20 @@
             },
             "required": ["providerID", "modelID"]
           },
+          "authorUserID": {
+            "type": "string"
+          },
+          "authorUsername": {
+            "type": "string"
+          },
+          "authorProjectRole": {
+            "type": "string",
+            "enum": ["pm", "dev", "qa", "design", "other"]
+          },
+          "trigger": {
+            "type": "string",
+            "enum": ["manual", "mention", "auto"]
+          },
           "system": {
             "type": "string"
           },
@@ -13189,6 +14542,54 @@
         },
         "required": ["id", "sessionID", "messageID", "type", "name"]
       },
+      "MentionPart": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "messageID": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "const": "mention"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": ["agent", "user", "role"]
+          },
+          "targetID": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "start": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "end": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["value", "start", "end"]
+          }
+        },
+        "required": ["id", "sessionID", "messageID", "type", "targetType", "label"]
+      },
       "RetryPart": {
         "type": "object",
         "properties": {
@@ -13276,6 +14677,9 @@
           },
           {
             "$ref": "#/components/schemas/AgentPart"
+          },
+          {
+            "$ref": "#/components/schemas/MentionPart"
           },
           {
             "$ref": "#/components/schemas/RetryPart"
@@ -14339,6 +15743,9 @@
               "type": {
                 "type": "string",
                 "const": "busy"
+              },
+              "message": {
+                "type": "string"
               }
             },
             "required": ["type"]
@@ -14632,6 +16039,98 @@
           },
           "permission": {
             "$ref": "#/components/schemas/PermissionRuleset"
+          },
+          "kind": {
+            "default": "direct",
+            "type": "string",
+            "enum": ["direct", "room_thread", "execution"]
+          },
+          "room": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "workspaceID": {
+                "type": "string",
+                "pattern": "^wsp_.*"
+              },
+              "projectID": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "agent_auto_join": {
+                "type": "boolean"
+              },
+              "created_by": {
+                "type": "string",
+                "pattern": "^usr.*"
+              },
+              "stage": {
+                "type": "string",
+                "enum": ["clarification", "discussion", "proposal", "execution"]
+              },
+              "participants": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "userID": {
+                      "type": "string",
+                      "pattern": "^usr.*"
+                    },
+                    "membershipRole": {
+                      "type": "string",
+                      "enum": ["owner", "member"]
+                    },
+                    "projectRole": {
+                      "type": "string",
+                      "enum": ["pm", "dev", "qa", "design", "other"]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "addedBy": {
+                      "type": "string",
+                      "pattern": "^usr.*"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["userID", "membershipRole", "projectRole", "createdAt"]
+                }
+              }
+            },
+            "required": ["id", "title", "workspaceID", "projectID", "agent", "agent_auto_join", "stage"]
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "createdBy": {
+                  "type": "string",
+                  "pattern": "^usr.*"
+                },
+                "createdAt": {
+                  "type": "number"
+                }
+              },
+              "required": ["id", "text", "createdAt"]
+            }
           },
           "revert": {
             "type": "object",
@@ -17506,6 +19005,62 @@
         },
         "required": ["messageID", "created", "role", "parts"]
       },
+      "SessionRoomInboxEntry": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "participant": {
+            "type": "object",
+            "properties": {
+              "userID": {
+                "type": "string",
+                "pattern": "^usr.*"
+              },
+              "membershipRole": {
+                "type": "string",
+                "enum": ["owner", "member"]
+              },
+              "projectRole": {
+                "type": "string",
+                "enum": ["pm", "dev", "qa", "design", "other"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "addedBy": {
+                "type": "string",
+                "pattern": "^usr.*"
+              },
+              "createdAt": {
+                "type": "number"
+              }
+            },
+            "required": ["userID", "membershipRole", "projectRole", "createdAt"]
+          }
+        },
+        "required": ["session"]
+      },
+      "SessionRoomOpenInfo": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "directory": {
+            "type": "string"
+          },
+          "workspaceID": {
+            "type": "string",
+            "pattern": "^wsp_.*"
+          },
+          "projectID": {
+            "type": "string"
+          }
+        },
+        "required": ["session", "directory", "workspaceID", "projectID"]
+      },
       "SessionAttachmentUploadInitResponse": {
         "type": "object",
         "properties": {
@@ -17570,6 +19125,31 @@
           }
         },
         "required": ["filename", "mime", "size", "path", "url"]
+      },
+      "SessionMention": {
+        "type": "object",
+        "properties": {
+          "sessionID": {
+            "type": "string"
+          },
+          "messageID": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": ["agent", "user", "role"]
+          },
+          "targetID": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "created": {
+            "type": "number"
+          }
+        },
+        "required": ["sessionID", "messageID", "targetType", "label"]
       },
       "TextPartInput": {
         "type": "object",
@@ -17678,6 +19258,48 @@
           }
         },
         "required": ["type", "name"]
+      },
+      "MentionPartInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "const": "mention"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": ["agent", "user", "role"]
+          },
+          "targetID": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "start": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "end": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["value", "start", "end"]
+          }
+        },
+        "required": ["type", "targetType", "label"]
       },
       "SubtaskPartInput": {
         "type": "object",

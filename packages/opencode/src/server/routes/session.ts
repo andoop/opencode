@@ -19,10 +19,13 @@ import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
 import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
+import { CursorCLI } from "@/cursor/cli"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
+import { Provider } from "@/provider/provider"
+import { ToolRegistry } from "@/tool/registry"
 import { User } from "@/user"
 import { Workspace } from "@/workspace"
 
@@ -326,6 +329,25 @@ function requireAdmin() {
   }
 }
 
+const MentionInfo = z
+  .object({
+    sessionID: z.string(),
+    messageID: z.string(),
+    targetType: z.enum(["agent", "user", "role"]),
+    targetID: z.string().optional(),
+    label: z.string(),
+    created: z.number().optional(),
+  })
+  .meta({
+    ref: "SessionMention",
+  })
+
+async function requireParticipant(sessionID: string) {
+  const session = await Session.get(sessionID)
+  Session.requireParticipant(session)
+  return session
+}
+
 export const SessionRoutes = lazy(() =>
   new Hono()
     .get(
@@ -369,6 +391,7 @@ export const SessionRoutes = lazy(() =>
         const term = query.search?.toLowerCase()
         const sessions: Session.Info[] = []
         for await (const session of Session.list({ directory: query.directory })) {
+          if (!Session.isParticipant(session)) continue
           if (query.roots && session.parentID) continue
           if (query.start !== undefined && session.time.updated < query.start) continue
           if (term !== undefined && !session.title.toLowerCase().includes(term)) continue
@@ -481,6 +504,52 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .get(
+      "/room/inbox",
+      describeRoute({
+        summary: "List my project rooms",
+        description: "List project room threads that the current user can access.",
+        operationId: "session.room.inbox",
+        responses: {
+          200: {
+            description: "Accessible room threads",
+            content: {
+              "application/json": {
+                schema: resolver(Session.RoomInboxEntry.array()),
+              },
+            },
+          },
+          ...errors(403),
+        },
+      }),
+      async (c) => {
+        if (!User.current()) return c.json({ error: "Authentication required" }, 403)
+        return c.json(await Session.roomInbox({}))
+      },
+    )
+    .get(
+      "/:sessionID/open",
+      describeRoute({
+        summary: "Open project room",
+        description: "Resolve a project room thread into a directory and session that the current user can open.",
+        operationId: "session.room.open",
+        responses: {
+          200: {
+            description: "Room open target",
+            content: {
+              "application/json": {
+                schema: resolver(Session.RoomOpenInfo),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      async (c) => {
+        return c.json(await Session.openRoom(c.req.valid("param").sessionID))
+      },
+    )
+    .get(
       "/:sessionID",
       describeRoute({
         summary: "Get session",
@@ -508,7 +577,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         log.info("SEARCH", { url: c.req.url })
-        const session = await Session.get(sessionID)
+        const session = await requireParticipant(sessionID)
         return c.json(session)
       },
     )
@@ -573,6 +642,183 @@ export const SessionRoutes = lazy(() =>
         return c.json(todos)
       },
     )
+    .get(
+      "/:sessionID/participants",
+      describeRoute({
+        summary: "Get room participants",
+        description: "Retrieve participants for a project room thread.",
+        operationId: "session.room.participants",
+        responses: {
+          200: {
+            description: "Room participants",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info.shape.room.unwrap().shape.participants),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      async (c) => {
+        return c.json(await Session.participants(c.req.valid("param").sessionID))
+      },
+    )
+    .post(
+      "/:sessionID/participants",
+      describeRoute({
+        summary: "Add room participant",
+        description: "Add a registered user to a project room thread.",
+        operationId: "session.room.participant.add",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator("json", Session.ParticipantInput),
+      async (c) => {
+        return c.json(
+          await Session.addParticipant({
+            sessionID: c.req.valid("param").sessionID,
+            participant: c.req.valid("json"),
+          }),
+        )
+      },
+    )
+    .delete(
+      "/:sessionID/participants/:userID",
+      describeRoute({
+        summary: "Remove room participant",
+        description: "Remove a user from a project room thread.",
+        operationId: "session.room.participant.remove",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+          userID: z.string().meta({ description: "User ID" }),
+        }),
+      ),
+      async (c) => {
+        const params = c.req.valid("param")
+        return c.json(await Session.removeParticipant(params))
+      },
+    )
+    .patch(
+      "/:sessionID/participants/:userID",
+      describeRoute({
+        summary: "Update room participant",
+        description: "Update a participant's project role or display title in a project room thread.",
+        operationId: "session.room.participant.update",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+          userID: z.string().meta({ description: "User ID" }),
+        }),
+      ),
+      validator("json", Session.ParticipantUpdateInput),
+      async (c) => {
+        const params = c.req.valid("param")
+        return c.json(
+          await Session.updateParticipant({
+            sessionID: params.sessionID,
+            userID: params.userID,
+            updates: c.req.valid("json"),
+          }),
+        )
+      },
+    )
+    .patch(
+      "/:sessionID/group",
+      describeRoute({
+        summary: "Update room settings",
+        description: "Update project room title, agent, auto-join behavior, or stage.",
+        operationId: "session.room.update",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator("json", Session.UpdateRoomInput),
+      async (c) => {
+        return c.json(
+          await Session.updateRoom({
+            sessionID: c.req.valid("param").sessionID,
+            updates: c.req.valid("json"),
+          }),
+        )
+      },
+    )
+    .patch(
+      "/:sessionID/group/stage",
+      describeRoute({
+        summary: "Update room stage",
+        description: "Move a project room thread through clarification, discussion, proposal, and execution.",
+        operationId: "session.room.stage",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator("json", z.object({ stage: Session.UpdateRoomInput.shape.stage.unwrap() })),
+      async (c) => {
+        return c.json(
+          await Session.updateRoom({
+            sessionID: c.req.valid("param").sessionID,
+            updates: { stage: c.req.valid("json").stage },
+          }),
+        )
+      },
+    )
     .post(
       "/",
       describeRoute({
@@ -596,6 +842,30 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json") ?? {}
         const session = await Session.create(body)
         return c.json(session)
+      },
+    )
+    .post(
+      "/room",
+      describeRoute({
+        summary: "Create project room thread",
+        description: "Create a collaborative room thread for a workspace/project.",
+        operationId: "session.room.create",
+        responses: {
+          ...errors(400, 403),
+          200: {
+            description: "Created room thread",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", Session.createRoomThread.schema),
+      async (c) => {
+        if (!User.current()) return c.json({ error: "Authentication required" }, 403)
+        return c.json(await Session.createRoomThread(c.req.valid("json")))
       },
     )
     .delete(
@@ -679,6 +949,66 @@ export const SessionRoutes = lazy(() =>
         )
 
         return c.json(updatedSession)
+      },
+    )
+    .post(
+      "/:sessionID/warm",
+      describeRoute({
+        summary: "Warm session agent",
+        description: "Pre-initialize Cursor CLI for this session so the first visible prompt can reuse a warm ACP session.",
+        operationId: "session.warm",
+        responses: {
+          200: {
+            description: "Warm request accepted",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ ok: z.boolean() })),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator(
+        "json",
+        z.object({
+          agent: z.string(),
+          model: z.object({
+            providerID: z.string(),
+            modelID: z.string(),
+          }),
+        }),
+      ),
+      async (c) => {
+        const session = await requireParticipant(c.req.valid("param").sessionID)
+        const body = c.req.valid("json")
+        if (body.model.providerID !== "cursor-cli") return c.json({ ok: true })
+        const agent = await Agent.get(body.agent)
+        const model = await Provider.getModel(body.model.providerID, body.model.modelID)
+        const tools = Object.fromEntries(
+          (await ToolRegistry.tools({ modelID: model.api.id, providerID: model.providerID }, agent)).map((tool) => [
+            tool.id,
+            true,
+          ]),
+        )
+        for (const tool of PermissionNext.disabled(Object.keys(tools), agent.permission)) {
+          delete tools[tool]
+        }
+        void CursorCLI.warm({
+          sessionID: session.id,
+          modelID: model.id,
+          agent: agent.name,
+          cwd: session.directory,
+          allowedTools: Object.keys(tools),
+        }).catch((error) => {
+          log.warn("cursor cli warm failed", {
+            sessionID: session.id,
+            modelID: model.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+        return c.json({ ok: true })
       },
     )
     .post(
@@ -1163,11 +1493,147 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
+        await requireParticipant(c.req.valid("param").sessionID)
         const messages = await Session.messages({
           sessionID: c.req.valid("param").sessionID,
           limit: query.limit,
         })
         return c.json(messages)
+      },
+    )
+    .get(
+      "/:sessionID/mentions",
+      describeRoute({
+        summary: "Get room mentions",
+        description: "Retrieve structured and text mentions in a project room thread.",
+        operationId: "session.room.mentions",
+        responses: {
+          200: {
+            description: "Mentions",
+            content: {
+              "application/json": {
+                schema: resolver(MentionInfo.array()),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await requireParticipant(sessionID)
+        const roleLabels = new Set(["pm", "dev", "qa", "design"])
+        const mentions = (await Session.messages({ sessionID })).flatMap((msg) =>
+          msg.parts.flatMap((part) => {
+            if (part.type === "mention") {
+              return [
+                {
+                  sessionID,
+                  messageID: msg.info.id,
+                  targetType: part.targetType,
+                  targetID: part.targetID,
+                  label: part.label,
+                  created: msg.info.time.created,
+                },
+              ]
+            }
+            if (part.type !== "text") return []
+            return Array.from(part.text.matchAll(/(^|\s)@([A-Za-z0-9._-]+)/g)).map((match) => {
+              const label = match[2]
+              return {
+                sessionID,
+                messageID: msg.info.id,
+                targetType:
+                  label.toLowerCase() === "agent" ? "agent" : roleLabels.has(label.toLowerCase()) ? "role" : "user",
+                label,
+                created: msg.info.time.created,
+              } satisfies z.infer<typeof MentionInfo>
+            })
+          }),
+        )
+        return c.json(mentions)
+      },
+    )
+    .post(
+      "/:sessionID/decision",
+      describeRoute({
+        summary: "Add room decision",
+        description: "Add a structured decision to a project room thread.",
+        operationId: "session.room.decision.add",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator("json", Session.DecisionInput),
+      async (c) => {
+        return c.json(
+          await Session.addDecision({
+            sessionID: c.req.valid("param").sessionID,
+            decision: c.req.valid("json"),
+          }),
+        )
+      },
+    )
+    .get(
+      "/:sessionID/decision",
+      describeRoute({
+        summary: "Get room decisions",
+        description: "Retrieve structured decisions for a project room thread.",
+        operationId: "session.room.decision.list",
+        responses: {
+          200: {
+            description: "Decisions",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info.shape.decisions.unwrap()),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      async (c) => {
+        return c.json(await Session.decisions(c.req.valid("param").sessionID))
+      },
+    )
+    .post(
+      "/:sessionID/execution",
+      describeRoute({
+        summary: "Create execution session",
+        description: "Create a child execution session from a project room thread.",
+        operationId: "session.room.execution",
+        responses: {
+          200: {
+            description: "Execution session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator("json", z.object({ title: z.string().optional() }).optional()),
+      async (c) => {
+        return c.json(
+          await Session.createExecution({
+            sessionID: c.req.valid("param").sessionID,
+            title: c.req.valid("json")?.title,
+          }),
+        )
       },
     )
     .get(
@@ -1202,6 +1668,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const params = c.req.valid("param")
+        await requireParticipant(params.sessionID)
         const message = await MessageV2.get({
           sessionID: params.sessionID,
           messageID: params.messageID,

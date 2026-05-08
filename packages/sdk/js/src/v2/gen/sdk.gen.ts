@@ -82,6 +82,7 @@ import type {
   McpRemoteConfig,
   McpScope,
   McpStatusResponses,
+  MentionPartInput,
   Part as Part2,
   PartDeleteErrors,
   PartDeleteResponses,
@@ -186,6 +187,32 @@ import type {
   SessionPromptResponses,
   SessionRevertErrors,
   SessionRevertResponses,
+  SessionRoomCreateErrors,
+  SessionRoomCreateResponses,
+  SessionRoomDecisionAddErrors,
+  SessionRoomDecisionAddResponses,
+  SessionRoomDecisionListErrors,
+  SessionRoomDecisionListResponses,
+  SessionRoomExecutionErrors,
+  SessionRoomExecutionResponses,
+  SessionRoomInboxErrors,
+  SessionRoomInboxResponses,
+  SessionRoomMentionsErrors,
+  SessionRoomMentionsResponses,
+  SessionRoomOpenErrors,
+  SessionRoomOpenResponses,
+  SessionRoomParticipantAddErrors,
+  SessionRoomParticipantAddResponses,
+  SessionRoomParticipantRemoveErrors,
+  SessionRoomParticipantRemoveResponses,
+  SessionRoomParticipantsErrors,
+  SessionRoomParticipantsResponses,
+  SessionRoomParticipantUpdateErrors,
+  SessionRoomParticipantUpdateResponses,
+  SessionRoomStageErrors,
+  SessionRoomStageResponses,
+  SessionRoomUpdateErrors,
+  SessionRoomUpdateResponses,
   SessionShareErrors,
   SessionShareResponses,
   SessionShellErrors,
@@ -202,6 +229,8 @@ import type {
   SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  SessionWarmErrors,
+  SessionWarmResponses,
   StorageAdminCleanupErrors,
   StorageAdminCleanupResponses,
   StorageAdminPlanErrors,
@@ -259,6 +288,8 @@ import type {
   UserListResponses,
   UserResetPasswordErrors,
   UserResetPasswordResponses,
+  UserSearchErrors,
+  UserSearchResponses,
   UserUpdateErrors,
   UserUpdateResponses,
   VcsGetResponses,
@@ -950,6 +981,36 @@ export class UserAuth extends HeyApiClient {
 }
 
 export class User extends HeyApiClient {
+  /**
+   * Search users
+   *
+   * Search registered users by username for room collaboration.
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters?: {
+      q?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "q" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<UserSearchResponses, UserSearchErrors, ThrowOnError>({
+      url: "/user/search",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * List users
    *
@@ -2154,6 +2215,513 @@ export class Admin2 extends HeyApiClient {
   }
 }
 
+export class Participant extends HeyApiClient {
+  /**
+   * Add room participant
+   *
+   * Add a registered user to a project room thread.
+   */
+  public add<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      userID?: string
+      projectRole?: "pm" | "dev" | "qa" | "design" | "other"
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "userID" },
+            { in: "body", key: "projectRole" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionRoomParticipantAddResponses,
+      SessionRoomParticipantAddErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/participants",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Remove room participant
+   *
+   * Remove a user from a project room thread.
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      userID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "userID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      SessionRoomParticipantRemoveResponses,
+      SessionRoomParticipantRemoveErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/participants/{userID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update room participant
+   *
+   * Update a participant's project role or display title in a project room thread.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      userID: string
+      directory?: string
+      projectRole?: "pm" | "dev" | "qa" | "design" | "other"
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "userID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "projectRole" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      SessionRoomParticipantUpdateResponses,
+      SessionRoomParticipantUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/participants/{userID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Decision extends HeyApiClient {
+  /**
+   * Get room decisions
+   *
+   * Retrieve structured decisions for a project room thread.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionRoomDecisionListResponses,
+      SessionRoomDecisionListErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/decision",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Add room decision
+   *
+   * Add a structured decision to a project room thread.
+   */
+  public add<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      text?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "text" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionRoomDecisionAddResponses,
+      SessionRoomDecisionAddErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/decision",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Room extends HeyApiClient {
+  /**
+   * List my project rooms
+   *
+   * List project room threads that the current user can access.
+   */
+  public inbox<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SessionRoomInboxResponses, SessionRoomInboxErrors, ThrowOnError>({
+      url: "/session/room/inbox",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Open project room
+   *
+   * Resolve a project room thread into a directory and session that the current user can open.
+   */
+  public open<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionRoomOpenResponses, SessionRoomOpenErrors, ThrowOnError>({
+      url: "/session/{sessionID}/open",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get room participants
+   *
+   * Retrieve participants for a project room thread.
+   */
+  public participants<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionRoomParticipantsResponses,
+      SessionRoomParticipantsErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/participants",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update room settings
+   *
+   * Update project room title, agent, auto-join behavior, or stage.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      title?: string
+      agent?: string
+      agent_auto_join?: boolean
+      stage?: "clarification" | "discussion" | "proposal" | "execution"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "agent_auto_join" },
+            { in: "body", key: "stage" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<SessionRoomUpdateResponses, SessionRoomUpdateErrors, ThrowOnError>({
+      url: "/session/{sessionID}/group",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Update room stage
+   *
+   * Move a project room thread through clarification, discussion, proposal, and execution.
+   */
+  public stage<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      stage?: "clarification" | "discussion" | "proposal" | "execution"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "stage" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<SessionRoomStageResponses, SessionRoomStageErrors, ThrowOnError>({
+      url: "/session/{sessionID}/group/stage",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Create project room thread
+   *
+   * Create a collaborative room thread for a workspace/project.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      title?: string
+      workspaceID?: string
+      branches?: {
+        [key: string]:
+          | string
+          | {
+              name: string
+              group: "local" | "remote"
+            }
+      }
+      agent?: string
+      agent_auto_join?: boolean
+      participants?: Array<{
+        userID: string
+        projectRole?: "pm" | "dev" | "qa" | "design" | "other"
+        title?: string
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "workspaceID" },
+            { in: "body", key: "branches" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "agent_auto_join" },
+            { in: "body", key: "participants" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionRoomCreateResponses, SessionRoomCreateErrors, ThrowOnError>({
+      url: "/session/room",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get room mentions
+   *
+   * Retrieve structured and text mentions in a project room thread.
+   */
+  public mentions<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionRoomMentionsResponses, SessionRoomMentionsErrors, ThrowOnError>({
+      url: "/session/{sessionID}/mentions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create execution session
+   *
+   * Create a child execution session from a project room thread.
+   */
+  public execution<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionRoomExecutionResponses,
+      SessionRoomExecutionErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/execution",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  private _participant?: Participant
+  get participant(): Participant {
+    return (this._participant ??= new Participant({ client: this.client }))
+  }
+
+  private _decision?: Decision
+  get decision(): Decision {
+    return (this._decision ??= new Decision({ client: this.client }))
+  }
+}
+
 export class Attachment extends HeyApiClient {
   /**
    * Initialize attachment upload
@@ -2575,6 +3143,48 @@ export class Session extends HeyApiClient {
   }
 
   /**
+   * Warm session agent
+   *
+   * Pre-initialize Cursor CLI for this session so the first visible prompt can reuse a warm ACP session.
+   */
+  public warm<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      agent?: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionWarmResponses, SessionWarmErrors, ThrowOnError>({
+      url: "/session/{sessionID}/warm",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Upload session attachment
    *
    * Upload a file to the session temporary attachments directory.
@@ -2866,7 +3476,7 @@ export class Session extends HeyApiClient {
       }
       system?: string
       variant?: string
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | MentionPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2954,7 +3564,7 @@ export class Session extends HeyApiClient {
       }
       system?: string
       variant?: string
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | MentionPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3164,6 +3774,11 @@ export class Session extends HeyApiClient {
   private _admin?: Admin2
   get admin(): Admin2 {
     return (this._admin ??= new Admin2({ client: this.client }))
+  }
+
+  private _room?: Room
+  get room(): Room {
+    return (this._room ??= new Room({ client: this.client }))
   }
 
   private _attachment?: Attachment

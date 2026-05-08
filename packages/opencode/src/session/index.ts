@@ -30,6 +30,7 @@ import { Worktree } from "@/worktree"
 import { ProjectRegistry } from "@/project/registry"
 import { Workspace } from "@/workspace"
 import { UserWorktree } from "@/worktree/user-worktree"
+import { Agent } from "@/agent/agent"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -216,6 +217,41 @@ export namespace Session {
         archived: z.number().optional(),
       }),
       permission: PermissionNext.Ruleset.optional(),
+      kind: z.enum(["direct", "room_thread", "execution"]).optional().default("direct"),
+      room: z
+        .object({
+          id: z.string(),
+          title: z.string(),
+          workspaceID: z.string().startsWith("wsp_"),
+          projectID: z.string(),
+          agent: z.string(),
+          agent_auto_join: z.boolean(),
+          created_by: Identifier.schema("user").optional(),
+          stage: z.enum(["clarification", "discussion", "proposal", "execution"]),
+          participants: z
+            .array(
+              z.object({
+                userID: Identifier.schema("user"),
+                membershipRole: z.enum(["owner", "member"]),
+                projectRole: z.enum(["pm", "dev", "qa", "design", "other"]),
+                title: z.string().optional(),
+                addedBy: Identifier.schema("user").optional(),
+                createdAt: z.number(),
+              }),
+            )
+            .default([]),
+        })
+        .optional(),
+      decisions: z
+        .array(
+          z.object({
+            id: z.string(),
+            text: z.string(),
+            createdBy: Identifier.schema("user").optional(),
+            createdAt: z.number(),
+          }),
+        )
+        .optional(),
       revert: z
         .object({
           messageID: z.string(),
@@ -229,6 +265,73 @@ export namespace Session {
       ref: "Session",
     })
   export type Info = z.output<typeof Info>
+
+  export const ParticipantInput = z.object({
+    userID: Identifier.schema("user"),
+    projectRole: z.enum(["pm", "dev", "qa", "design", "other"]).default("other"),
+    title: z.string().optional(),
+  })
+  export type ParticipantInput = z.infer<typeof ParticipantInput>
+
+  export const ParticipantUpdateInput = z.object({
+    projectRole: z.enum(["pm", "dev", "qa", "design", "other"]).optional(),
+    title: z.string().optional(),
+  })
+  export type ParticipantUpdateInput = z.infer<typeof ParticipantUpdateInput>
+
+  export const CreateRoomInput = z.object({
+    title: z.string().optional(),
+    workspaceID: z.string().optional(),
+    branches: z.record(z.string(), BranchSelection).optional(),
+    agent: z.string().optional(),
+    agent_auto_join: z.boolean().optional().default(true),
+    participants: ParticipantInput.array().optional().default([]),
+  })
+  export type CreateRoomInput = z.infer<typeof CreateRoomInput>
+
+  export const UpdateRoomInput = z.object({
+    title: z.string().optional(),
+    agent: z.string().optional(),
+    agent_auto_join: z.boolean().optional(),
+    stage: z.enum(["clarification", "discussion", "proposal", "execution"]).optional(),
+  })
+  export type UpdateRoomInput = z.infer<typeof UpdateRoomInput>
+
+  export const DecisionInput = z.object({
+    text: z.string().min(1),
+  })
+  export type DecisionInput = z.infer<typeof DecisionInput>
+
+  export const RoomInboxEntry = z
+    .object({
+      session: Info,
+      participant: z
+        .object({
+          userID: Identifier.schema("user"),
+          membershipRole: z.enum(["owner", "member"]),
+          projectRole: z.enum(["pm", "dev", "qa", "design", "other"]),
+          title: z.string().optional(),
+          addedBy: Identifier.schema("user").optional(),
+          createdAt: z.number(),
+        })
+        .optional(),
+    })
+    .meta({
+      ref: "SessionRoomInboxEntry",
+    })
+  export type RoomInboxEntry = z.infer<typeof RoomInboxEntry>
+
+  export const RoomOpenInfo = z
+    .object({
+      session: Info,
+      directory: z.string(),
+      workspaceID: z.string().startsWith("wsp_"),
+      projectID: z.string(),
+    })
+    .meta({
+      ref: "SessionRoomOpenInfo",
+    })
+  export type RoomOpenInfo = z.infer<typeof RoomOpenInfo>
 
   export const ShareInfo = z
     .object({
@@ -702,6 +805,266 @@ export namespace Session {
     })
   })
 
+  function currentParticipant(input?: { projectRole?: z.infer<typeof ParticipantInput>["projectRole"] }) {
+    const user = User.current()
+    if (!user) return
+    return {
+      userID: user.id,
+      membershipRole: "owner" as const,
+      projectRole: input?.projectRole ?? "other",
+      title: user.username,
+      addedBy: user.id,
+      createdAt: Date.now(),
+    }
+  }
+
+  function participant(session: Info, userID: string | undefined) {
+    if (!userID) return
+    return session.room?.participants.find((item) => item.userID === userID)
+  }
+
+  function requireRoom(session: Info) {
+    if (!session.room) throw new Error("Session is not a room thread")
+    return session.room
+  }
+
+  export function isParticipant(session: Info, userID = User.current()?.id) {
+    if (!session.room) return true
+    if (User.current()?.role === "admin") return true
+    return !!participant(session, userID)
+  }
+
+  export function canManageParticipants(session: Info, userID = User.current()?.id) {
+    if (User.current()?.role === "admin") return true
+    return participant(session, userID)?.membershipRole === "owner"
+  }
+
+  export function requireParticipant(session: Info) {
+    if (isParticipant(session)) return
+    throw new Error("Room membership required")
+  }
+
+  export function requireRoomManager(session: Info) {
+    if (canManageParticipants(session)) return
+    throw new Error("Room manager access required")
+  }
+
+  export const createRoomThread = fn(CreateRoomInput, async (input) => {
+    const owner = currentParticipant()
+    const agent = input.agent ?? (await Agent.defaultAgent())
+    const session = await createNext({
+      directory: Instance.directory,
+      title: input.title,
+      workspaceID: input.workspaceID,
+      branches: input.branches,
+      kind: "room_thread",
+    })
+    const now = Date.now()
+    const users = await Promise.all(input.participants.map((item) => User.get(item.userID)))
+    const participants = [
+      ...(owner ? [owner] : []),
+      ...input.participants
+        .filter((item) => item.userID !== owner?.userID)
+        .map((item) => {
+          const user = users.find((u) => u.id === item.userID)
+          return {
+            userID: item.userID,
+            membershipRole: "member" as const,
+            projectRole: item.projectRole,
+            title: item.title ?? user?.username,
+            addedBy: owner?.userID,
+            createdAt: now,
+          }
+        }),
+    ]
+    return update(session.id, (draft) => {
+      draft.kind = "room_thread"
+      draft.room = {
+        id: session.id,
+        title: input.title ?? session.title,
+        workspaceID: session.workspaceID,
+        projectID: session.projectID,
+        agent,
+        agent_auto_join: input.agent_auto_join,
+        created_by: owner?.userID,
+        stage: "clarification",
+        participants,
+      }
+      draft.title = input.title ?? session.title
+    })
+  })
+
+  export const participants = fn(Identifier.schema("session"), async (sessionID) => {
+    const session = await get(sessionID)
+    requireParticipant(session)
+    return requireRoom(session).participants
+  })
+
+  export const addParticipant = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      participant: ParticipantInput,
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      requireRoom(session)
+      requireRoomManager(session)
+      const user = await User.get(input.participant.userID)
+      return update(input.sessionID, (draft) => {
+        const room = requireRoom(draft)
+        if (room.participants.some((item) => item.userID === input.participant.userID)) return
+        room.participants.push({
+          userID: input.participant.userID,
+          membershipRole: "member",
+          projectRole: input.participant.projectRole,
+          title: input.participant.title ?? user.username,
+          addedBy: User.current()?.id,
+          createdAt: Date.now(),
+        })
+      })
+    },
+  )
+
+  export const removeParticipant = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      userID: Identifier.schema("user"),
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      const room = requireRoom(session)
+      requireRoomManager(session)
+      if (room.created_by === input.userID) throw new Error("Cannot remove room owner")
+      return update(input.sessionID, (draft) => {
+        const room = requireRoom(draft)
+        room.participants = room.participants.filter((item) => item.userID !== input.userID)
+      })
+    },
+  )
+
+  export const updateParticipant = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      userID: Identifier.schema("user"),
+      updates: ParticipantUpdateInput,
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      requireRoom(session)
+      requireRoomManager(session)
+      return update(input.sessionID, (draft) => {
+        const room = requireRoom(draft)
+        const member = room.participants.find((item) => item.userID === input.userID)
+        if (!member) throw new Error("Room participant not found")
+        if (input.updates.projectRole !== undefined) member.projectRole = input.updates.projectRole
+        if (input.updates.title !== undefined) member.title = input.updates.title
+      })
+    },
+  )
+
+  export const updateRoom = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      updates: UpdateRoomInput,
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      requireRoom(session)
+      requireRoomManager(session)
+      return update(input.sessionID, (draft) => {
+        const room = requireRoom(draft)
+        if (input.updates.title !== undefined) {
+          room.title = input.updates.title
+          draft.title = input.updates.title
+        }
+        if (input.updates.agent !== undefined) room.agent = input.updates.agent
+        if (input.updates.agent_auto_join !== undefined) room.agent_auto_join = input.updates.agent_auto_join
+        if (input.updates.stage !== undefined) room.stage = input.updates.stage
+      })
+    },
+  )
+
+  export const addDecision = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      decision: DecisionInput,
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      requireParticipant(session)
+      return update(input.sessionID, (draft) => {
+        draft.decisions = [
+          ...(draft.decisions ?? []),
+          {
+            id: Identifier.ascending("part"),
+            text: input.decision.text,
+            createdBy: User.current()?.id,
+            createdAt: Date.now(),
+          },
+        ]
+      })
+    },
+  )
+
+  export const decisions = fn(Identifier.schema("session"), async (sessionID) => {
+    const session = await get(sessionID)
+    requireParticipant(session)
+    return session.decisions ?? []
+  })
+
+  export const roomInbox = fn(z.object({}), async () => {
+    const user = User.current()
+    return (await listAllSessions())
+      .filter((session) => session.kind === "room_thread" && !!session.room)
+      .filter((session) => !user || user.role === "admin" || !!participant(session, user.id))
+      .map((session) => ({
+        session,
+        participant: user ? participant(session, user.id) : undefined,
+      }))
+  })
+
+  export const openRoom = fn(Identifier.schema("session"), async (sessionID) => {
+    const session = await get(sessionID)
+    requireRoom(session)
+    requireParticipant(session)
+    return {
+      session,
+      directory: session.directory,
+      workspaceID: session.workspaceID,
+      projectID: session.projectID,
+    } satisfies RoomOpenInfo
+  })
+
+  export const createExecution = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      title: z.string().optional(),
+    }),
+    async (input) => {
+      const parent = await get(input.sessionID)
+      requireParticipant(parent)
+      const child = await createNext({
+        parentID: parent.id,
+        directory: Instance.directory,
+        title: input.title ?? `${parent.title} - execution`,
+        workspaceID: parent.workspaceID,
+        kind: "execution",
+        room: parent.room
+          ? {
+              ...parent.room,
+              stage: "execution",
+            }
+          : undefined,
+      })
+      if (parent.room) {
+        await update(parent.id, (draft) => {
+          if (draft.room) draft.room.stage = "execution"
+        })
+      }
+      return child
+    },
+  )
+
   export async function createNext(input: {
     id?: string
     title?: string
@@ -711,6 +1074,8 @@ export namespace Session {
     userID?: string
     workspaceID?: string
     branches?: Record<string, BranchSelection>
+    kind?: Info["kind"]
+    room?: Info["room"]
   }) {
     const userID = input.userID ?? currentUserID()
     const sessionID = Identifier.descending("session", input.id)
@@ -743,6 +1108,8 @@ export namespace Session {
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
       permission: input.permission,
+      kind: input.kind ?? "direct",
+      room: input.room,
       time: {
         created,
         updated: created,

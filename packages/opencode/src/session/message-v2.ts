@@ -156,6 +156,23 @@ export namespace MessageV2 {
   })
   export type AgentPart = z.infer<typeof AgentPart>
 
+  export const MentionPart = PartBase.extend({
+    type: z.literal("mention"),
+    targetType: z.enum(["agent", "user", "role"]),
+    targetID: z.string().optional(),
+    label: z.string(),
+    source: z
+      .object({
+        value: z.string(),
+        start: z.number().int(),
+        end: z.number().int(),
+      })
+      .optional(),
+  }).meta({
+    ref: "MentionPart",
+  })
+  export type MentionPart = z.infer<typeof MentionPart>
+
   export const CompactionPart = PartBase.extend({
     type: z.literal("compaction"),
     auto: z.boolean(),
@@ -320,6 +337,10 @@ export namespace MessageV2 {
       providerID: z.string(),
       modelID: z.string(),
     }),
+    authorUserID: z.string().optional(),
+    authorUsername: z.string().optional(),
+    authorProjectRole: z.enum(["pm", "dev", "qa", "design", "other"]).optional(),
+    trigger: z.enum(["manual", "mention", "auto"]).optional(),
     system: z.string().optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     variant: z.string().optional(),
@@ -340,6 +361,7 @@ export namespace MessageV2 {
       SnapshotPart,
       PatchPart,
       AgentPart,
+      MentionPart,
       RetryPart,
       CompactionPart,
     ])

@@ -238,7 +238,7 @@ export async function surface(input: { sessionID: string; agent: string; allowed
   return out
 }
 
-export function instructions(tools: CursorTool[], mode: "full" | "reminder" = "full") {
+export function instructions(tools: CursorTool[], mode: "full" | "compact" | "reminder" = "full") {
   if (tools.length === 0) return ""
   const names = tools.map((t) => t.name).join(", ")
   const hasMcpCatalog = tools.some((t) => t.name.startsWith("opencode_mcp_"))
@@ -256,6 +256,15 @@ export function instructions(tools: CursorTool[], mode: "full" | "reminder" = "f
       `They are NOT available as native function calls, MCP calls, or shell commands. You MUST use the XML protocol.`,
       ...mcpCatalogHint,
       `Format: <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
+    ].join("\n")
+  }
+  if (mode === "compact") {
+    return [
+      "## OpenCode Tool Calling Protocol",
+      `OpenCode tools can be called with XML blocks when needed: <${TAG} name="tool_name">{"arg":"value"}</${TAG}>`,
+      `Available OpenCode XML tool names: ${names}`,
+      `Use valid JSON arguments. Prefer the Cursor-provided command/tool UI when available; use XML only as the OpenCode fallback.`,
+      ...mcpCatalogHint,
     ].join("\n")
   }
   return [

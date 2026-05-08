@@ -73,6 +73,8 @@ export namespace Server {
     if (path === "/project") return true
     if (path === "/project/current") return true
     if (path.startsWith("/project/registry")) return true
+    if (path === "/session/room/inbox") return true
+    if (path.startsWith("/session/") && path.endsWith("/open")) return true
     return false
   }
 

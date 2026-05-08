@@ -599,16 +599,14 @@ export namespace StorageAdmin {
       ),
     )
     const byWorkspace = sessionsByWorkspace(allSessions)
-    const keep = new Set(
-      [
-        ...allSessions
-          .filter((item) => !item.session.parentID && !item.session.time.archived)
-          .map((item) => item.session.id),
-        ...allWorkspaces
-          .filter((item) => visibleWorkspace(item, byWorkspace, projects, users))
-          .flatMap((item) => (item.workspace ? [item.workspace.id] : [])),
-      ],
-    )
+    const keep = new Set([
+      ...allSessions
+        .filter((item) => !item.session.parentID && !item.session.time.archived)
+        .map((item) => item.session.id),
+      ...allWorkspaces
+        .filter((item) => visibleWorkspace(item, byWorkspace, projects, users))
+        .flatMap((item) => (item.workspace ? [item.workspace.id] : [])),
+    ])
     const items = await Promise.all(
       dirs
         .filter((dir) => !keep.has(path.basename(dir)))
