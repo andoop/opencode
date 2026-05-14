@@ -157,14 +157,16 @@ export function SessionHeader() {
           <Portal mount={mount()}>
             <div class="flex items-center gap-3">
               <StatusPopover />
-              <Show when={currentSession()?.workspaceID}>
+              <Show when={params.id}>
                 <Tooltip value="添加项目到会话" placement="top" gutter={8}>
-                  <IconButton
-                    icon="plus-small"
-                    variant="ghost"
+                  <Button
+                    variant="secondary"
+                    class="rounded-sm h-[24px] px-3"
                     onClick={() => command.trigger("session.project.add")}
                     aria-label="添加项目到会话"
-                  />
+                  >
+                    添加项目
+                  </Button>
                 </Tooltip>
               </Show>
               <Show when={showShare()}>
