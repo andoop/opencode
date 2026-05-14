@@ -684,6 +684,41 @@ export default function Page() {
     }
   }
 
+  const openCreatedSession = async (
+    created: Session,
+    sourceDirectory: string,
+    fail: (message: string, step: SessionCreateStep) => void,
+  ) => {
+    const sessionDirectory = created.directory
+    const needsWorktree = sessionDirectory !== sourceDirectory
+    setUi("creating", "sessionDirectory", sessionDirectory)
+    setUi("creating", "needsWorktree", needsWorktree)
+
+    if (needsWorktree) {
+      setUi("creating", "step", "worktree")
+      const { Worktree: WorktreeState } = await import("@/utils/worktree")
+      WorktreeState.pending(sessionDirectory)
+
+      const timeoutMs = 5 * 60 * 1000
+      const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
+        setTimeout(() => {
+          resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
+        }, timeoutMs)
+      })
+
+      const result = await Promise.race([WorktreeState.wait(sessionDirectory), timeout])
+      if (result.status === "failed") {
+        fail(result.message, "worktree")
+        return
+      }
+    }
+
+    setUi("creating", "step", "open")
+    globalSync.child(sessionDirectory)
+    resetSessionCreation()
+    navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
+  }
+
   const startSessionCreation = async (project: LocalProject) => {
     if (ui.creating.open && ui.creating.status === "running") return
 
@@ -715,34 +750,58 @@ export default function Page() {
 
     if (!created) return
 
-    const sessionDirectory = created.directory
-    const needsWorktree = sessionDirectory !== project.worktree
-    setUi("creating", "sessionDirectory", sessionDirectory)
-    setUi("creating", "needsWorktree", needsWorktree)
+    await openCreatedSession(created, project.worktree, fail)
+  }
 
-    if (needsWorktree) {
-      setUi("creating", "step", "worktree")
-      const { Worktree: WorktreeState } = await import("@/utils/worktree")
-      WorktreeState.pending(sessionDirectory)
-
-      const timeoutMs = 5 * 60 * 1000
-      const timeout = new Promise<{ status: "failed"; message: string }>((resolve) => {
-        setTimeout(() => {
-          resolve({ status: "failed", message: language.t("workspace.error.stillPreparing") })
-        }, timeoutMs)
-      })
-
-      const result = await Promise.race([WorktreeState.wait(sessionDirectory), timeout])
-      if (result.status === "failed") {
-        fail(result.message, "worktree")
-        return
+  const deriveBlankForkBranches = (session: Session) => {
+    const entries: Array<[string, string | { name: string; label?: string }]> = []
+    for (const root of session.roots ?? []) {
+      if (root.vcs !== "git") continue
+      const commit = root.baseCommit?.trim()
+      const branch = root.baseBranch?.trim()
+      if (commit) {
+        entries.push([root.projectID, branch ? { name: commit, label: branch } : commit])
+        continue
       }
+      if (branch) entries.push([root.projectID, branch])
+    }
+    const branches = Object.fromEntries(entries)
+    return Object.keys(branches).length ? branches : undefined
+  }
+
+  const createBlankSessionFromCurrentSession = async () => {
+    if (ui.creating.open && ui.creating.status === "running") return
+    const session = info()
+    if (!session?.workspaceID) return
+
+    setUi("creating", {
+      ...createSessionState(),
+      open: true,
+      status: "running",
+      projectRoot: session.directory,
+    })
+
+    const fail = (message: string, step: SessionCreateStep) => {
+      setUi("creating", "status", "error")
+      setUi("creating", "step", step)
+      setUi("creating", "error", message)
     }
 
-    setUi("creating", "step", "open")
-    globalSync.child(sessionDirectory)
-    resetSessionCreation()
-    navigate(`/${base64Encode(sessionDirectory)}/session/${created.id}`)
+    const branches = deriveBlankForkBranches(session)
+    const created = await sdk.client.session
+      .create({
+        workspaceID: session.workspaceID,
+        branches,
+        title: `${session.title} - blank`,
+      })
+      .then((x) => x.data)
+      .catch((err) => {
+        fail(err instanceof Error ? err.message : String(err), "create")
+        return undefined
+      })
+
+    if (!created) return
+    await openCreatedSession(created, session.directory, fail)
   }
 
   const currentProject = () => {
@@ -926,17 +985,51 @@ export default function Page() {
       )
     })
   const upsertSession = (session: Session) => {
-    const [store, setStore] = globalSync.child(session.directory, { bootstrap: false })
-    setStore("session", () => {
-      const next = store.session.slice()
-      const match = Binary.search(next, session.id, (item) => item.id)
-      if (match.found) {
-        next[match.index] = session
+    for (const directory of Array.from(new Set([sdk.directory, actualSessionDir(), session.directory]))) {
+      const [, setStore] = globalSync.child(directory, { bootstrap: false })
+      setStore("session", (prev) => {
+        const next = prev.slice()
+        const match = Binary.search(next, session.id, (item) => item.id)
+        if (match.found) {
+          next[match.index] = session
+          return next
+        }
+        next.splice(match.index, 0, session)
         return next
+      })
+    }
+  }
+  const refreshAddedProjectViews = async (session: Session, projects: WorkspaceInfo["projects"]) => {
+    const roots = projects
+      .map((project) => (session.roots ?? []).find((root) => root.projectID === project.projectID))
+      .filter((root): root is NonNullable<Session["roots"]>[number] => !!root)
+    await Promise.all([
+      globalSync.project.loadSessions(sdk.directory, { force: true }).catch(() => undefined),
+      globalSync.project.loadSessions(session.directory, { force: true }).catch(() => undefined),
+      file.tree.refresh("").catch(() => undefined),
+      file.tree.refresh("roots").catch(() => undefined),
+      ...roots.map((root) => file.tree.refresh(`roots/${root.slug}`).catch(() => undefined)),
+    ])
+    setGitHistoryProjects((prev) => {
+      const prefix = (directory: string) => {
+        if (!session.directory || directory === session.directory) return ""
+        return directory.startsWith(`${session.directory}/`) ? directory.slice(session.directory.length + 1) : ""
       }
-      next.splice(match.index, 0, session)
+      const next = [...prev]
+      for (const root of roots) {
+        if (next.some((project) => project.id === root.projectID)) continue
+        next.push({
+          id: root.projectID,
+          directory: root.sessionWorktreeDirectory,
+          label: root.name?.trim() || root.slug || getFilename(root.sourceDirectory),
+          prefix: prefix(root.sessionWorktreeDirectory),
+          branch: root.branch,
+        })
+      }
       return next
     })
+    setGitRefresh((value) => value + 1)
+    await refreshGitHistory()
   }
   const addProjectsToSession = async () => {
     const session = info()
@@ -996,7 +1089,7 @@ export default function Page() {
         .then((x) => x.data)
       if (!result) return
       upsertSession(result)
-      await globalSync.project.loadSessions(result.directory, { force: true }).catch(() => undefined)
+      await refreshAddedProjectViews(result, projects)
       showToast({ title: "项目已添加到会话" })
     } catch (err) {
       showToast({ variant: "error", title: language.t("common.requestFailed"), description: errorMessage(err) })
@@ -1506,6 +1599,13 @@ export default function Page() {
       category: language.t("command.category.session"),
       disabled: !params.id || !info()?.workspaceID,
       onSelect: addProjectsToSession,
+    },
+    {
+      id: "session.blankFork",
+      title: "复刻为空白会话",
+      category: language.t("command.category.session"),
+      disabled: !params.id || !info()?.workspaceID || ui.creating.open,
+      onSelect: createBlankSessionFromCurrentSession,
     },
     {
       id: "file.open",

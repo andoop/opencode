@@ -5048,7 +5048,8 @@ export type SessionCreateData = {
         | string
         | {
             name: string
-            group: "local" | "remote"
+            group?: "local" | "remote"
+            label?: string
           }
     }
   }
@@ -5716,7 +5717,8 @@ export type SessionRoomCreateData = {
         | string
         | {
             name: string
-            group: "local" | "remote"
+            group?: "local" | "remote"
+            label?: string
           }
     }
     agent?: string
@@ -5763,7 +5765,8 @@ export type SessionRootsAddData = {
         | string
         | {
             name: string
-            group: "local" | "remote"
+            group?: "local" | "remote"
+            label?: string
           }
     }
   }

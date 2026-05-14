@@ -158,6 +158,16 @@ export function SessionHeader() {
             <div class="flex items-center gap-3">
               <StatusPopover />
               <Show when={params.id}>
+                <Tooltip value="复刻为空白会话" placement="top" gutter={8}>
+                  <Button
+                    variant="secondary"
+                    class="rounded-sm h-[24px] px-3"
+                    onClick={() => command.trigger("session.blankFork")}
+                    aria-label="复刻为空白会话"
+                  >
+                    空白复刻
+                  </Button>
+                </Tooltip>
                 <Tooltip value="添加项目到会话" placement="top" gutter={8}>
                   <Button
                     variant="secondary"

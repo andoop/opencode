@@ -148,6 +148,78 @@ describe("workspace session flow", () => {
     expect(again.roots).toHaveLength(2)
   }, 30000)
 
+  test("creates a blank session from an existing session workspace and base commits", async () => {
+    await using first = await tmpdir({ git: true })
+    await using second = await tmpdir({ git: true })
+
+    const app = Server.App()
+    const workspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        directories: [first.path, second.path],
+      }),
+    })
+    expect(workspaceResponse.status).toBe(200)
+    const workspace = (await workspaceResponse.json()) as { id: string; directory: string }
+
+    const sessionResponse = await app.request(`/session?directory=${encodeURIComponent(workspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    if (sessionResponse.status !== 200) {
+      throw new Error(await sessionResponse.text())
+    }
+    const source = (await sessionResponse.json()) as Session.Info
+    const entries: Array<[string, string | { name: string; label?: string }]> = []
+    for (const root of source.roots) {
+      if (root.vcs !== "git") continue
+      const commit = root.baseCommit?.trim()
+      const branch = root.baseBranch?.trim()
+      if (commit) {
+        entries.push([root.projectID, branch ? { name: commit, label: branch } : commit])
+        continue
+      }
+      if (branch) entries.push([root.projectID, branch])
+    }
+    const branches = Object.fromEntries(entries)
+
+    const blankResponse = await app.request(`/session?directory=${encodeURIComponent(source.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceID: source.workspaceID,
+        branches,
+      }),
+    })
+    if (blankResponse.status !== 200) {
+      throw new Error(await blankResponse.text())
+    }
+    const blank = (await blankResponse.json()) as Session.Info
+
+    expect(blank.id).not.toBe(source.id)
+    expect(blank.workspaceID).toBe(source.workspaceID)
+    expect(blank.roots).toHaveLength(source.roots.length)
+    for (const root of blank.roots) {
+      const sourceRoot = source.roots.find((item) => item.projectID === root.projectID)
+      expect(sourceRoot).toBeDefined()
+      expect(root.branch).not.toBe(sourceRoot?.branch)
+      expect(root.baseCommit).toBe(sourceRoot?.baseCommit)
+      expect(root.baseBranch).toBe(sourceRoot?.baseBranch)
+      expect(root.branch).not.toContain(root.baseCommit!)
+      expect(root.sessionWorktreeDirectory.startsWith(path.join(blank.directory, "roots"))).toBe(true)
+    }
+
+    const messagesResponse = await app.request(
+      `/session/${blank.id}/message?directory=${encodeURIComponent(blank.directory)}`,
+    )
+    if (messagesResponse.status !== 200) {
+      throw new Error(await messagesResponse.text())
+    }
+    expect(await messagesResponse.json()).toHaveLength(0)
+  }, 30000)
+
   test("uploads attachments into the session temp directory", async () => {
     await using first = await tmpdir({ git: true })
 

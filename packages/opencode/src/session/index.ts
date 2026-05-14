@@ -89,9 +89,14 @@ export namespace Session {
     return `rc/${branchUser()}/${branchTime(input.created)}/${branchTail(input.baseBranch)}`
   }
 
+  function branchFallbackName(input: { baseBranch: string; created: number; sessionID: string }) {
+    return `${branchName(input)}-${branchPart(input.sessionID.slice(-6), "session")}`
+  }
+
   const BranchTarget = z.object({
     name: z.string(),
-    group: z.enum(["local", "remote"]),
+    group: z.enum(["local", "remote"]).optional(),
+    label: z.string().optional(),
   })
 
   const BranchSelection = z.union([z.string(), BranchTarget])
@@ -100,6 +105,7 @@ export namespace Session {
   type PickedBranch = {
     name: string
     group?: "local" | "remote"
+    label?: string
   }
 
   function normalizeBranchSelection(branch: BranchSelection | undefined) {
@@ -114,6 +120,7 @@ export namespace Session {
     return {
       name,
       group: branch.group,
+      label: branch.label?.trim() || undefined,
     } satisfies PickedBranch
   }
 
@@ -667,7 +674,7 @@ export namespace Session {
     let baseBranch: string
     let baseCommit: string | undefined
     if (picked) {
-      baseBranch = picked.name
+      baseBranch = picked.label ?? picked.name
       const resolved = await resolvePickedBranch(userWorktreeDirectory, picked)
       baseCommit = resolved?.commit
     } else {
@@ -680,7 +687,7 @@ export namespace Session {
         `Could not resolve base commit for ${input.workspaceProject.slug} (${input.workspaceProject.projectID}); branch=${picked?.name ?? baseBranch}`,
       )
     }
-    const branch = branchName({
+    let branch = branchName({
       baseBranch,
       created: input.created,
     })
@@ -693,6 +700,17 @@ export namespace Session {
     if (created.exitCode !== 0) {
       // delete stale branch and retry
       await $`git branch -D ${branch}`.quiet().nothrow().cwd(userWorktreeDirectory)
+      created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit}`
+        .quiet()
+        .nothrow()
+        .cwd(userWorktreeDirectory)
+    }
+    if (created.exitCode !== 0 && outputText(created.stderr).includes("already exists")) {
+      branch = branchFallbackName({
+        baseBranch,
+        created: input.created,
+        sessionID: input.sessionID,
+      })
       created = await $`git worktree add --no-checkout -b ${branch} ${sessionWorktreeDirectory} ${baseCommit}`
         .quiet()
         .nothrow()

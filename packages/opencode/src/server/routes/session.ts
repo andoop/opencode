@@ -984,7 +984,8 @@ export const SessionRoutes = lazy(() =>
       "/:sessionID/warm",
       describeRoute({
         summary: "Warm session agent",
-        description: "Pre-initialize Cursor CLI for this session so the first visible prompt can reuse a warm ACP session.",
+        description:
+          "Pre-initialize Cursor CLI for this session so the first visible prompt can reuse a warm ACP session.",
         operationId: "session.warm",
         responses: {
           200: {

@@ -4947,9 +4947,12 @@
                             "group": {
                               "type": "string",
                               "enum": ["local", "remote"]
+                            },
+                            "label": {
+                              "type": "string"
                             }
                           },
-                          "required": ["name", "group"]
+                          "required": ["name"]
                         }
                       ]
                     }
@@ -6291,9 +6294,12 @@
                             "group": {
                               "type": "string",
                               "enum": ["local", "remote"]
+                            },
+                            "label": {
+                              "type": "string"
                             }
                           },
-                          "required": ["name", "group"]
+                          "required": ["name"]
                         }
                       ]
                     }
@@ -6430,9 +6436,12 @@
                             "group": {
                               "type": "string",
                               "enum": ["local", "remote"]
+                            },
+                            "label": {
+                              "type": "string"
                             }
                           },
-                          "required": ["name", "group"]
+                          "required": ["name"]
                         }
                       ]
                     }

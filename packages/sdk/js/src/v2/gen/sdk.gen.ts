@@ -2601,7 +2601,8 @@ export class Room extends HeyApiClient {
           | string
           | {
               name: string
-              group: "local" | "remote"
+              group?: "local" | "remote"
+              label?: string
             }
       }
       agent?: string
@@ -2739,7 +2740,8 @@ export class Roots extends HeyApiClient {
           | string
           | {
               name: string
-              group: "local" | "remote"
+              group?: "local" | "remote"
+              label?: string
             }
       }
     },
@@ -2977,7 +2979,8 @@ export class Session extends HeyApiClient {
           | string
           | {
               name: string
-              group: "local" | "remote"
+              group?: "local" | "remote"
+              label?: string
             }
       }
     },
