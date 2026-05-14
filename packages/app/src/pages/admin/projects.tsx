@@ -69,6 +69,10 @@ export default function AdminProjectsPage() {
     return `对 ${project.visibility.user_ids.length} 个用户隐藏`
   }
 
+  const toggleProjectGroup = (id: string) => {
+    setProjectGroupIDs((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
+  }
+
   const localizeProjectError = (message: string) => {
     const missingGit =
       /^No \.git directory was found in the selected path or its parent directories: (?<directory>.+)$/.exec(message)
@@ -407,9 +411,20 @@ export default function AdminProjectsPage() {
                     <tr class="border-b border-outline-dimmed last:border-0">
                       <td class="px-4 py-3">{project.name || "-"}</td>
                       <td class="px-4 py-3 text-sm text-color-secondary">
-                        <div class="line-clamp-3 whitespace-pre-wrap break-words">
-                          {project.groups.join(", ") || "未分组"}
-                        </div>
+                        <Show
+                          when={project.groups.length > 0}
+                          fallback={<span class="text-color-secondary">未分组</span>}
+                        >
+                          <div class="flex flex-wrap gap-1.5">
+                            <For each={project.groups}>
+                              {(group) => (
+                                <span class="rounded-full bg-background-stronger px-2 py-0.5 text-xs text-color-secondary">
+                                  {group}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
                       </td>
                       <td class="px-4 py-3 text-sm text-color-secondary">{projectVisibilityLabel(project)}</td>
                       <td class="max-w-md px-4 py-3 text-sm text-color-secondary">
@@ -466,19 +481,50 @@ export default function AdminProjectsPage() {
                 placeholder={language.t("admin.projectDialog.displayNamePlaceholder")}
               />
               <div>
-                <label class="block text-sm font-medium">所属分组</label>
-                <select
-                  multiple
-                  value={projectGroupIDs()}
-                  onChange={(e) => {
-                    const next = Array.from(e.currentTarget.selectedOptions).map((item) => item.value)
-                    setProjectGroupIDs(next)
-                  }}
-                  class="mt-1 min-h-36 w-full rounded border border-outline-dimmed bg-background-input px-3 py-2 text-sm"
-                >
-                  <For each={groups() ?? []}>{(group) => <option value={group.id}>{group.name}</option>}</For>
-                </select>
-                <p class="mt-1 text-xs text-color-secondary">未选择任何分组时，项目会归到“未分组”。</p>
+                <div class="flex items-center justify-between gap-3">
+                  <label class="block text-sm font-medium">所属分组</label>
+                  <div class="text-xs text-color-secondary">已选 {projectGroupIDs().length} 个</div>
+                </div>
+                <div class="mt-2 max-h-44 overflow-y-auto rounded border border-outline-dimmed bg-background-input p-2">
+                  <Show
+                    when={(groups() ?? []).length > 0}
+                    fallback={<div class="px-2 py-3 text-sm text-color-secondary">暂无分组，请先在上方新建分组。</div>}
+                  >
+                    <div class="grid gap-1.5">
+                      <For each={groups() ?? []}>
+                        {(group) => {
+                          const checked = () => projectGroupIDs().includes(group.id)
+                          return (
+                            <button
+                              type="button"
+                              class="flex items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-background-frame"
+                              onClick={() => toggleProjectGroup(group.id)}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked()}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleProjectGroup(group.id)}
+                                class="mt-0.5"
+                              />
+                              <div class="min-w-0 flex-1">
+                                <div class="text-sm text-color-primary">{group.name}</div>
+                                <Show when={group.description}>
+                                  <div class="mt-0.5 line-clamp-2 text-xs text-color-secondary">
+                                    {group.description}
+                                  </div>
+                                </Show>
+                              </div>
+                            </button>
+                          )
+                        }}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+                <p class="mt-1 text-xs text-color-secondary">
+                  一个项目可以属于多个分组；工作区选择多个分组时，会使用这些分组下项目的并集。未选择任何分组时，项目会归到“未分组”。
+                </p>
               </div>
               <div>
                 <label class="block text-sm font-medium">{language.t("admin.projectDialog.description")}</label>

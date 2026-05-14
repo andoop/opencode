@@ -38,6 +38,8 @@ export function DialogSelectProject(props: {
   const platform = usePlatform()
   const [query, setQuery] = createSignal("")
   const [selected, setSelected] = createSignal<string[]>(props.initialDirectories ?? [])
+  const [selectedGroups, setSelectedGroups] = createSignal<string[]>([])
+  const [expanded, setExpanded] = createSignal<string[]>([])
   const [items, setItems] = createSignal<ProjectItem[]>([])
   const [groups, setGroups] = createSignal<GroupInfo[]>([])
   const home = createMemo(() => "")
@@ -57,10 +59,10 @@ export function DialogSelectProject(props: {
       .then(setGroups)
       .catch(() => setGroups([]))
   })
+  const availableProjects = createMemo<ProjectItem[]>(() => items().filter((project) => !!project.worktree))
   const projects = createMemo<ProjectItem[]>(() => {
     const text = query().trim().toLowerCase()
-    return items()
-      .filter((project) => !!project.worktree)
+    return availableProjects()
       .filter((project) => {
         if (!text) return true
         return (
@@ -109,6 +111,17 @@ export function DialogSelectProject(props: {
     }
     return result
   })
+  const selectedByGroup = createMemo(() => {
+    const ids = new Set(selectedGroups())
+    return new Set(
+      availableProjects()
+        .filter((project) => project.group_ids?.some((id) => ids.has(id)))
+        .map((project) => project.worktree),
+    )
+  })
+  const directories = createMemo(() =>
+    Array.from(new Set([...selected(), ...(props.lockedDirectories ?? []), ...selectedByGroup()])),
+  )
 
   const label = (directory: string) => {
     const base = home()
@@ -124,33 +137,44 @@ export function DialogSelectProject(props: {
   }
 
   const submit = () => {
-    const directories = selected()
-    if (directories.length === 0) {
+    const current = directories()
+    if (current.length === 0) {
       resolve(null)
       return
     }
-    const selectedGroups = groupedProjects()
-      .filter((entry) => entry.id)
-      .filter((entry) => entry.projects.every((project) => directories.includes(project.worktree)))
-      .flatMap((entry) => (entry.id ? [entry.id] : []))
     resolve({
-      directories,
-      selected_group_ids: selectedGroups,
+      directories: current,
+      selected_group_ids: selectedGroups(),
     })
   }
 
   const toggle = (directory: string) => {
     if (locked().has(directory)) return
+    if (selectedByGroup().has(directory)) return
     setSelected((prev) => (prev.includes(directory) ? prev.filter((item) => item !== directory) : [...prev, directory]))
   }
 
-  const toggleGroup = (directories: string[]) => {
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
+  }
+
+  const toggleDirectories = (directories: string[]) => {
     setSelected((prev) => {
       const editable = directories.filter((directory) => !locked().has(directory))
       const allSelected = editable.every((directory) => prev.includes(directory))
       if (allSelected) return prev.filter((item) => !editable.includes(item))
-      return Array.from(new Set([...prev, ...directories]))
+      return Array.from(new Set([...prev, ...editable]))
     })
+  }
+
+  const toggleGroup = (entry: { id: string; projects: ProjectItem[] }) => {
+    if (!entry.id) {
+      toggleDirectories(entry.projects.map((project) => project.worktree))
+      return
+    }
+    setSelectedGroups((prev) =>
+      prev.includes(entry.id) ? prev.filter((item) => item !== entry.id) : [...prev, entry.id],
+    )
   }
 
   return (
@@ -167,7 +191,7 @@ export function DialogSelectProject(props: {
           <Button variant="ghost" onClick={() => resolve(null)}>
             {language.t("common.cancel")}
           </Button>
-          <Button onClick={submit} disabled={selected().length === 0}>
+          <Button onClick={submit} disabled={directories().length === 0}>
             确认
           </Button>
         </div>
@@ -180,53 +204,81 @@ export function DialogSelectProject(props: {
               </div>
             }
           >
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2">
               <For each={groupedProjects()}>
                 {(entry) => {
                   const directories = () => entry.projects.map((project) => project.worktree)
-                  const selectedCount = () => directories().filter((directory) => selected().includes(directory)).length
+                  const editable = () => directories().filter((directory) => !locked().has(directory))
+                  const selectedProject = (directory: string) =>
+                    selected().includes(directory) || selectedByGroup().has(directory) || locked().has(directory)
+                  const selectedCount = () => directories().filter(selectedProject).length
+                  const editableSelectedCount = () => editable().filter(selectedProject).length
+                  const open = () => query().trim().length > 0 || expanded().includes(entry.id)
+                  const canToggleGroup = () => editable().length > 0
+                  const groupSelected = () =>
+                    entry.id
+                      ? selectedGroups().includes(entry.id)
+                      : editableSelectedCount() === editable().length && editable().length > 0
                   return (
-                    <div class="flex flex-col gap-1">
-                      <button
-                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
-                        onClick={() => toggleGroup(directories())}
-                      >
-                        <div class="min-w-0">
-                          <div class="text-12-medium text-text-weak">{entry.group}</div>
-                          <Show when={entry.description}>
-                            <div class="mt-1 line-clamp-2 text-12-regular text-text-weak">{entry.description}</div>
-                          </Show>
-                        </div>
-                        <div class="text-12-regular text-text-weak">
-                          {selectedCount() === entry.projects.length ? "取消整组" : "选择整组"}
-                          {selectedCount() > 0 ? ` (${selectedCount()}/${entry.projects.length})` : ""}
-                        </div>
-                      </button>
-                      <div class="flex flex-col gap-1 pl-2">
-                        <For each={entry.projects}>
-                          {(project) => (
-                            <button
-                              class="flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
-                              onClick={() => toggle(project.worktree)}
-                            >
-                              <div class="flex w-full items-center justify-between gap-3">
-                                <div class="text-14-medium text-text-strong">
-                                  {project.name || getFilename(project.worktree)}
-                                </div>
-                                <Show when={selected().includes(project.worktree)}>
-                                  <div class="text-12-regular text-text-weak">
-                                    {locked().has(project.worktree) ? "已在工作区" : "Selected"}
-                                  </div>
-                                </Show>
+                    <div class="overflow-hidden rounded-md border border-border-base bg-background-base">
+                      <div class="flex items-center gap-2 px-2 py-1.5">
+                        <button
+                          class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-raised-base-hover"
+                          onClick={() => toggleExpanded(entry.id)}
+                          aria-expanded={open()}
+                        >
+                          <div class="w-4 shrink-0 text-center text-12-regular text-text-weak">{open() ? "▾" : "▸"}</div>
+                          <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                              <div class="truncate text-13-medium text-text-strong">{entry.group}</div>
+                              <div class="shrink-0 rounded-full bg-background-stronger px-2 py-0.5 text-11-regular text-text-weak">
+                                {selectedCount()}/{entry.projects.length}
                               </div>
-                              <Show when={project.description}>
-                                <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
-                              </Show>
-                              <div class="text-12-regular text-text-weak">{label(project.worktree)}</div>
-                            </button>
-                          )}
-                        </For>
+                            </div>
+                            <Show when={entry.description}>
+                              <div class="mt-0.5 line-clamp-1 text-12-regular text-text-weak">{entry.description}</div>
+                            </Show>
+                          </div>
+                        </button>
+                        <button
+                          class="shrink-0 rounded-md px-2 py-1 text-12-regular text-text-weak hover:bg-surface-raised-base-hover disabled:opacity-50"
+                          disabled={!canToggleGroup()}
+                          onClick={() => toggleGroup(entry)}
+                        >
+                          {groupSelected() ? "取消分组" : "选择分组"}
+                        </button>
                       </div>
+                      <Show when={open()}>
+                        <div class="flex flex-col gap-1 border-t border-border-base bg-background-frame p-2">
+                          <For each={entry.projects}>
+                            {(project) => (
+                              <button
+                                class="flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left hover:bg-surface-raised-base-hover"
+                                onClick={() => toggle(project.worktree)}
+                              >
+                                <div class="flex w-full items-center justify-between gap-3">
+                                  <div class="min-w-0 truncate text-14-medium text-text-strong">
+                                    {project.name || getFilename(project.worktree)}
+                                  </div>
+                                  <Show when={selectedProject(project.worktree)}>
+                                    <div class="shrink-0 text-12-regular text-text-weak">
+                                      {locked().has(project.worktree)
+                                        ? "已在工作区"
+                                        : selectedByGroup().has(project.worktree)
+                                          ? "来自分组"
+                                          : "已选择"}
+                                    </div>
+                                  </Show>
+                                </div>
+                                <Show when={project.description}>
+                                  <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
+                                </Show>
+                                <div class="max-w-full truncate text-12-regular text-text-weak">{label(project.worktree)}</div>
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
                     </div>
                   )
                 }}
