@@ -5756,6 +5756,55 @@ export type SessionRoomCreateResponses = {
 
 export type SessionRoomCreateResponse = SessionRoomCreateResponses[keyof SessionRoomCreateResponses]
 
+export type SessionRootsAddData = {
+  body?: {
+    branches?: {
+      [key: string]:
+        | string
+        | {
+            name: string
+            group: "local" | "remote"
+          }
+    }
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/roots"
+}
+
+export type SessionRootsAddErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Forbidden
+   */
+  403: ForbiddenError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionRootsAddError = SessionRootsAddErrors[keyof SessionRootsAddErrors]
+
+export type SessionRootsAddResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRootsAddResponse = SessionRootsAddResponses[keyof SessionRootsAddResponses]
+
 export type SessionWarmData = {
   body?: {
     agent: string

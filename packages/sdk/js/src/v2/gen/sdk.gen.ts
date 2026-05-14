@@ -213,6 +213,8 @@ import type {
   SessionRoomStageResponses,
   SessionRoomUpdateErrors,
   SessionRoomUpdateResponses,
+  SessionRootsAddErrors,
+  SessionRootsAddResponses,
   SessionShareErrors,
   SessionShareResponses,
   SessionShellErrors,
@@ -2722,6 +2724,52 @@ export class Room extends HeyApiClient {
   }
 }
 
+export class Roots extends HeyApiClient {
+  /**
+   * Add session roots
+   *
+   * Add any missing workspace project roots to an existing session.
+   */
+  public add<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      branches?: {
+        [key: string]:
+          | string
+          | {
+              name: string
+              group: "local" | "remote"
+            }
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "branches" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionRootsAddResponses, SessionRootsAddErrors, ThrowOnError>({
+      url: "/session/{sessionID}/roots",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Attachment extends HeyApiClient {
   /**
    * Initialize attachment upload
@@ -3779,6 +3827,11 @@ export class Session extends HeyApiClient {
   private _room?: Room
   get room(): Room {
     return (this._room ??= new Room({ client: this.client }))
+  }
+
+  private _roots?: Roots
+  get roots(): Roots {
+    return (this._roots ??= new Roots({ client: this.client }))
   }
 
   private _attachment?: Attachment

@@ -25,18 +25,24 @@ type SelectionResult = {
   selected_group_ids: string[]
 }
 
-export function DialogSelectProject(props: { title?: string; onSelect: (value: SelectionResult | null) => void }) {
+export function DialogSelectProject(props: {
+  title?: string
+  initialDirectories?: string[]
+  lockedDirectories?: string[]
+  onSelect: (value: SelectionResult | null) => void
+}) {
   const dialog = useDialog()
   const language = useLanguage()
   const sdk = useGlobalSDK()
   const auth = useAuth()
   const platform = usePlatform()
   const [query, setQuery] = createSignal("")
-  const [selected, setSelected] = createSignal<string[]>([])
+  const [selected, setSelected] = createSignal<string[]>(props.initialDirectories ?? [])
   const [items, setItems] = createSignal<ProjectItem[]>([])
   const [groups, setGroups] = createSignal<GroupInfo[]>([])
   const home = createMemo(() => "")
   const ungroupedLabel = "未分组"
+  const locked = createMemo(() => new Set(props.lockedDirectories ?? []))
   createEffect(() => {
     workspaceFetch<ProjectItem[]>(sdk.url, "/workspace/available-projects", {
       token: auth.token ?? undefined,
@@ -134,13 +140,15 @@ export function DialogSelectProject(props: { title?: string; onSelect: (value: S
   }
 
   const toggle = (directory: string) => {
+    if (locked().has(directory)) return
     setSelected((prev) => (prev.includes(directory) ? prev.filter((item) => item !== directory) : [...prev, directory]))
   }
 
   const toggleGroup = (directories: string[]) => {
     setSelected((prev) => {
-      const allSelected = directories.every((directory) => prev.includes(directory))
-      if (allSelected) return prev.filter((item) => !directories.includes(item))
+      const editable = directories.filter((directory) => !locked().has(directory))
+      const allSelected = editable.every((directory) => prev.includes(directory))
+      if (allSelected) return prev.filter((item) => !editable.includes(item))
       return Array.from(new Set([...prev, ...directories]))
     })
   }
@@ -206,7 +214,9 @@ export function DialogSelectProject(props: { title?: string; onSelect: (value: S
                                   {project.name || getFilename(project.worktree)}
                                 </div>
                                 <Show when={selected().includes(project.worktree)}>
-                                  <div class="text-12-regular text-text-weak">Selected</div>
+                                  <div class="text-12-regular text-text-weak">
+                                    {locked().has(project.worktree) ? "已在工作区" : "Selected"}
+                                  </div>
                                 </Show>
                               </div>
                               <Show when={project.description}>

@@ -59,6 +59,95 @@ describe("workspace session flow", () => {
     expect(sessions.some((item) => item.id === session.id)).toBe(true)
   }, 30000)
 
+  test("adds workspace projects to an existing session", async () => {
+    await using first = await tmpdir({ git: true })
+    await using second = await tmpdir({ git: true })
+
+    const app = Server.App()
+    const workspaceResponse = await app.request("/workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        directories: [first.path],
+      }),
+    })
+    expect(workspaceResponse.status).toBe(200)
+    const workspace = (await workspaceResponse.json()) as {
+      id: string
+      directory: string
+      primaryProjectID: string
+      projects: Array<{ projectID: string; sourceDirectory: string }>
+    }
+
+    const sessionResponse = await app.request(`/session?directory=${encodeURIComponent(workspace.directory)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    if (sessionResponse.status !== 200) {
+      throw new Error(await sessionResponse.text())
+    }
+    const session = (await sessionResponse.json()) as Session.Info
+    expect(session.roots).toHaveLength(1)
+
+    const updateResponse = await app.request(`/workspace/${workspace.id}/projects`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        directories: [first.path, second.path],
+        primaryProjectID: workspace.primaryProjectID,
+      }),
+    })
+    if (updateResponse.status !== 200) {
+      throw new Error(await updateResponse.text())
+    }
+    const updatedWorkspace = (await updateResponse.json()) as {
+      projects: Array<{ projectID: string; sourceDirectory: string }>
+    }
+    expect(updatedWorkspace.projects).toHaveLength(2)
+
+    const rootsResponse = await app.request(
+      `/session/${session.id}/roots?directory=${encodeURIComponent(session.directory)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    )
+    if (rootsResponse.status !== 200) {
+      throw new Error(await rootsResponse.text())
+    }
+    const withRoots = (await rootsResponse.json()) as Session.Info
+    expect(withRoots.roots).toHaveLength(2)
+    expect(withRoots.roots.map((root) => root.projectID).sort()).toEqual(
+      updatedWorkspace.projects.map((project) => project.projectID).sort(),
+    )
+
+    const added = withRoots.roots.find((root) => root.sourceDirectory === second.path)
+    expect(added).toBeDefined()
+    expect(added?.sessionWorktreeDirectory.startsWith(path.join(session.directory, "roots"))).toBe(true)
+    expect(
+      await fs
+        .stat(added!.sessionWorktreeDirectory)
+        .then(() => true)
+        .catch(() => false),
+    ).toBe(true)
+
+    const againResponse = await app.request(
+      `/session/${session.id}/roots?directory=${encodeURIComponent(session.directory)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    )
+    if (againResponse.status !== 200) {
+      throw new Error(await againResponse.text())
+    }
+    const again = (await againResponse.json()) as Session.Info
+    expect(again.roots).toHaveLength(2)
+  }, 30000)
+
   test("uploads attachments into the session temp directory", async () => {
     await using first = await tmpdir({ git: true })
 

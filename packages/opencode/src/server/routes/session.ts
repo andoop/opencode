@@ -868,6 +868,35 @@ export const SessionRoutes = lazy(() =>
         return c.json(await Session.createRoomThread(c.req.valid("json")))
       },
     )
+    .post(
+      "/:sessionID/roots",
+      describeRoute({
+        summary: "Add session roots",
+        description: "Add any missing workspace project roots to an existing session.",
+        operationId: "session.roots.add",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().meta({ description: "Session ID" }) })),
+      validator("json", Session.AddRootsInput),
+      async (c) => {
+        return c.json(
+          await Session.addRoots({
+            sessionID: c.req.valid("param").sessionID,
+            input: c.req.valid("json"),
+          }),
+        )
+      },
+    )
     .delete(
       "/:sessionID",
       describeRoute({

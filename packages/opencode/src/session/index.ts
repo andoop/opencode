@@ -757,6 +757,47 @@ export namespace Session {
     },
   )
 
+  export const AddRootsInput = z
+    .object({
+      branches: z.record(z.string(), BranchSelection).optional(),
+    })
+    .optional()
+
+  export const addRoots = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      input: AddRootsInput,
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      requireParticipant(session)
+      const workspace = await Workspace.read(session.workspaceID)
+      const existing = new Set(session.roots.map((root) => root.projectID))
+      const projects = workspace.projects.filter((project) => !existing.has(project.projectID))
+      const created = Date.now()
+      const roots = await Promise.all(
+        projects.map((project) =>
+          createSessionRoot({
+            workspaceProject: project,
+            sessionID: session.id,
+            sessionDirectory: session.directory,
+            baseBranch: input.input?.branches?.[project.projectID],
+            created,
+          }),
+        ),
+      )
+      if (roots.length === 0) return session
+      const primaryProjectID = workspace.primaryProjectID
+      return update(input.sessionID, (draft) => {
+        draft.roots = [...draft.roots, ...roots].map((root) => ({
+          ...root,
+          primary: root.projectID === primaryProjectID,
+        }))
+        draft.projectID = draft.roots.find((root) => root.primary)?.projectID ?? draft.projectID
+      })
+    },
+  )
+
   export const fork = fn(
     z.object({
       sessionID: Identifier.schema("session"),

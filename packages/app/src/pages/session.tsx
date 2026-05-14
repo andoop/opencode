@@ -51,11 +51,12 @@ import FileTree from "@/components/file-tree"
 import { DialogSelectModel } from "@/components/dialog-select-model"
 import { DialogSelectMcp } from "@/components/dialog-select-mcp"
 import { DialogFork } from "@/components/dialog-fork"
+import { DialogSelectProject } from "@/components/dialog-select-project"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useNavigate, useParams } from "@solidjs/router"
 import { UserMessage, type File as GitStatusFile } from "@opencode-ai/sdk/v2"
-import type { FileDiff } from "@opencode-ai/sdk/v2/client"
+import type { FileDiff, Session } from "@opencode-ai/sdk/v2/client"
 import type { QuestionAnswer } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePlatform } from "@/context/platform"
@@ -87,7 +88,7 @@ import { navMark, navParams } from "@/utils/perf"
 import { same } from "@/utils/same"
 import { DataProvider } from "@opencode-ai/ui/context"
 import { iife } from "@opencode-ai/util/iife"
-import { workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
+import { workspaceAsProject, workspaceFetch, type WorkspaceInfo } from "@/utils/workspace-api"
 
 type DiffStyle = "unified" | "split"
 type SessionCreateStep = "create" | "worktree" | "open"
@@ -909,6 +910,98 @@ export default function Page() {
     if (err instanceof Error) return err.message
     return language.t("common.requestFailed")
   }
+  const selectProjects = (workspace: WorkspaceInfo) =>
+    new Promise<{ directories: string[]; selected_group_ids: string[] } | null>((resolve) => {
+      const directories = workspace.projects.map((project) => project.sourceDirectory)
+      dialog.show(
+        () => (
+          <DialogSelectProject
+            title="添加项目到会话"
+            initialDirectories={directories}
+            lockedDirectories={directories}
+            onSelect={(value) => resolve(value)}
+          />
+        ),
+        () => resolve(null),
+      )
+    })
+  const upsertSession = (session: Session) => {
+    const [store, setStore] = globalSync.child(session.directory, { bootstrap: false })
+    setStore("session", () => {
+      const next = store.session.slice()
+      const match = Binary.search(next, session.id, (item) => item.id)
+      if (match.found) {
+        next[match.index] = session
+        return next
+      }
+      next.splice(match.index, 0, session)
+      return next
+    })
+  }
+  const addProjectsToSession = async () => {
+    const session = info()
+    if (!params.id || !session?.workspaceID) return
+    try {
+      const workspace = await workspaceFetch<WorkspaceInfo>(
+        sdk.url,
+        `/workspace/${encodeURIComponent(session.workspaceID)}`,
+        { token: auth.token ?? undefined, fetchFn: platform.fetch ?? fetch },
+      )
+      const selected = await selectProjects(workspace)
+      if (!selected?.directories.length) return
+      const current = new Set(workspace.projects.map((project) => project.sourceDirectory))
+      const directories = Array.from(new Set(selected.directories))
+      const added = directories.filter((directory) => !current.has(directory))
+      if (added.length === 0) {
+        showToast({ title: "没有新增项目", description: "请选择尚未加入当前工作区的项目。" })
+        return
+      }
+      const updated = await workspaceFetch<WorkspaceInfo>(
+        sdk.url,
+        `/workspace/${encodeURIComponent(workspace.id)}/projects`,
+        {
+          method: "PATCH",
+          token: auth.token ?? undefined,
+          fetchFn: platform.fetch ?? fetch,
+          body: JSON.stringify({
+            directories,
+            primaryProjectID: workspace.primaryProjectID,
+          }),
+        },
+      )
+      globalSync.set("project", (prev) => [
+        workspaceAsProject(updated),
+        ...prev.filter((project) => project.id !== updated.id),
+      ])
+      const existing = new Set(workspace.projects.map((project) => project.projectID))
+      const projects = updated.projects.filter((project) => !existing.has(project.projectID))
+      const branches: Record<string, Extract<BranchDialogConfirm, { kind: "pick" }>["branch"]> = {}
+      const git = projects.filter((project) => project.vcs === "git")
+      for (const project of git) {
+        const suffix = git.length > 1 ? ` (${git.indexOf(project) + 1}/${git.length})` : ""
+        const outcome = await selectBranch(
+          project.sourceDirectory,
+          project.name?.trim() || project.slug || getFilename(project.sourceDirectory),
+          suffix,
+        )
+        if (outcome.kind === "cancel") return
+        if (outcome.kind === "pick") branches[project.projectID] = outcome.branch
+      }
+      const result = await sdk.client.session.roots
+        .add({
+          sessionID: session.id,
+          directory: actualSessionDir(),
+          branches: Object.keys(branches).length ? branches : undefined,
+        })
+        .then((x) => x.data)
+      if (!result) return
+      upsertSession(result)
+      await globalSync.project.loadSessions(result.directory, { force: true }).catch(() => undefined)
+      showToast({ title: "项目已添加到会话" })
+    } catch (err) {
+      showToast({ variant: "error", title: language.t("common.requestFailed"), description: errorMessage(err) })
+    }
+  }
   const openRoomMembers = () => {
     dialog.show(() => <DialogRoomMembers />)
   }
@@ -1406,6 +1499,13 @@ export default function Page() {
           navigate(`/${params.dir}/session`)
         }
       },
+    },
+    {
+      id: "session.project.add",
+      title: "添加项目到会话",
+      category: language.t("command.category.session"),
+      disabled: !params.id || !info()?.workspaceID,
+      onSelect: addProjectsToSession,
     },
     {
       id: "file.open",
