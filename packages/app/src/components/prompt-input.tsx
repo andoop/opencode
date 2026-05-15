@@ -2200,7 +2200,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         return
       }
 
-      await client.session.prompt({
+      await client.session.promptAsync({
         sessionID: session.id,
         agent,
         model,

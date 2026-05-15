@@ -222,17 +222,9 @@ export function SessionTurn(
       if (!msg) return emptyAssistant
 
       const messages = allMessages() ?? emptyMessages
-      const index = messageIndex()
-      if (index < 0) return emptyAssistant
-
-      const result: AssistantMessage[] = []
-      for (let i = index + 1; i < messages.length; i++) {
-        const item = messages[i]
-        if (!item) continue
-        if (item.role === "user") break
-        if (item.role === "assistant" && item.parentID === msg.id) result.push(item as AssistantMessage)
-      }
-      return result
+      return messages
+        .filter((item): item is AssistantMessage => item?.role === "assistant" && item.parentID === msg.id)
+        .toSorted((a, b) => a.time.created - b.time.created)
     },
     emptyAssistant,
     { equals: same },

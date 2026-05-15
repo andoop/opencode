@@ -2,13 +2,12 @@ import { createInterface } from "readline"
 import { spawn } from "child_process"
 import type { ModelMessage } from "ai"
 import { Log } from "@/util/log"
-import { bridgeCommand, bridgeToolNames, prefixTool } from "./bridge"
+import { bridgeToolNames, prefixTool } from "./bridge"
 import { Installation } from "@/installation"
 import { CursorToolCall, instructions, parse, surface, toolPrompt } from "./toolcall"
 import { Identifier } from "@/id/id"
 import { addPromptUsage, extractPromptUsageInfo, type PromptUsage } from "@/util/prompt-usage"
 import { SessionStatus } from "@/session/status"
-import { Config } from "@/config/config"
 
 const log = Log.create({ service: "cursor-cli" })
 
@@ -31,30 +30,6 @@ function listKeys(input: unknown, max = 8) {
 
 function textLength(input: unknown) {
   return textFromContent(input).length
-}
-
-type CursorMcpServer = {
-  name: string
-  command?: string
-  args?: string[]
-  env?: Array<{ name: string; value: string }>
-}
-
-function mcpServers(config: Config.Info) {
-  return Object.entries(config.mcp ?? {}).flatMap(([name, entry]) => {
-    if (!entry || !("type" in entry) || entry.enabled === false) return []
-    if (entry.type === "remote") return []
-    const [command, ...args] = entry.command
-    if (!command) return []
-    return [
-      {
-        name,
-        command,
-        args,
-        env: Object.entries(entry.environment ?? {}).map(([name, value]) => ({ name, value })),
-      },
-    ]
-  })
 }
 
 function oneLine(text: string) {
@@ -585,19 +560,11 @@ export namespace CursorCLI {
       releaseLock()
       return { cached: true, warmed: true }
     }
-    const bridge = bridgeCommand({
-      cwd: input.cwd,
-      sessionID: input.sessionID,
-      agent: input.agent,
-      allowedTools: input.allowedTools,
-    })
     const proc = spawn(bin, cursorArgs(input.modelID), {
       cwd: input.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env },
     })
-    let bridgeUpdateAt = 0
-    const bridgeUpdateWaiters = new Set<() => void>()
     const slog: CursorStreamLog = {
       warn: (m, e) => log.warn(m, { sessionID: input.sessionID, modelID: input.modelID, ...e }),
       error: (m, e) => log.error(m, { sessionID: input.sessionID, modelID: input.modelID, ...e }),
@@ -605,12 +572,7 @@ export namespace CursorCLI {
     }
     const rpc = new Rpc(
       proc,
-      (msg) => {
-        const update = msg.params?.update
-        if (update?.sessionUpdate !== "available_commands_update") return
-        bridgeUpdateAt = Date.now()
-        for (const resolve of [...bridgeUpdateWaiters]) resolve()
-      },
+      () => {},
       slog,
     )
     try {
@@ -634,20 +596,11 @@ export namespace CursorCLI {
         await rpc
           .request("authenticate", { methodId: "cursor_login" }, CURSOR_SET_MODE_TIMEOUT_MS)
           .catch(() => undefined)
-      const servers: CursorMcpServer[] = [
-        {
-          name: "OpenCode",
-          command: bridge.command,
-          args: bridge.args,
-          env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
-        },
-        ...mcpServers(await Config.get()),
-      ]
       const session = await rpc.request(
         "session/new",
         {
           cwd: input.cwd,
-          mcpServers: servers,
+          mcpServers: [],
         },
         CURSOR_SESSION_NEW_TIMEOUT_MS,
       )
@@ -665,35 +618,12 @@ export namespace CursorCLI {
           CURSOR_SET_MODE_TIMEOUT_MS,
         )
       }
-      if (bridge.readyFile) {
-        const bridgeStarted = Date.now()
-        const deadline = bridgeStarted + 10_000
-        let ready = false
-        let update = bridgeUpdateAt > bridgeStarted
-        while (!ready && !update && Date.now() < deadline) {
-          ready = await Bun.file(bridge.readyFile).exists()
-          if (ready) break
-          let resolveUpdate: (() => void) | undefined
-          await Promise.race([
-            new Promise<void>((resolve) => {
-              resolveUpdate = resolve
-              bridgeUpdateWaiters.add(resolve)
-            }),
-            new Promise((resolve) => setTimeout(resolve, 100)),
-          ])
-          if (resolveUpdate) bridgeUpdateWaiters.delete(resolveUpdate)
-          update = bridgeUpdateAt > bridgeStarted
-        }
-        Bun.file(bridge.readyFile)
-          .unlink()
-          .catch(() => {})
-      }
       sessions.set(key, {
         key,
         proc,
         rpc,
         cursorSessionID,
-        bridgeReadyFile: bridge.readyFile,
+        bridgeReadyFile: undefined,
         prompted: false,
         lastUsed: Date.now(),
       })
@@ -752,12 +682,6 @@ export namespace CursorCLI {
         })
         .filter(([name]) => bridged.has(name)),
     )
-    const bridge = bridgeCommand({
-      cwd: input.cwd,
-      sessionID: input.sessionID,
-      agent: input.agent,
-      allowedTools: input.allowedTools,
-    })
     const mcpTools = Object.values(localMcpTools)
     const localToolsFull = instructions(mcpTools, "compact")
     const localToolsReminder = instructions(mcpTools, "reminder")
@@ -797,7 +721,7 @@ export namespace CursorCLI {
       agent: input.agent,
       promptChars: prompt.length,
       allowedTools: input.allowedTools.join(","),
-      bridgeCommand: bridge.command,
+      mcpServers: "disabled",
     })
     let stderrLines = 0
     const stderrMax = 10
@@ -1031,15 +955,10 @@ export namespace CursorCLI {
     })
     const textId = "cursor-text"
     const reasoningId = "cursor-reasoning"
-    let bridgeUpdateAt = 0
-    const bridgeUpdateWaiters = new Set<() => void>()
     const updateHandler = (msg: any) => {
       if (msg.method !== "session/update") return
       const update = msg.params?.update
       if (!update) return
-      bridgeUpdateAt = Date.now()
-      for (const waiter of bridgeUpdateWaiters) waiter()
-      bridgeUpdateWaiters.clear()
       rememberUsage(update)
       logSessionUpdate(update)
       switch (update.sessionUpdate) {
@@ -1261,20 +1180,11 @@ export namespace CursorCLI {
               })
           }
           progress("正在创建 Cursor 会话")
-          const servers: CursorMcpServer[] = [
-            {
-              name: "OpenCode",
-              command: bridge.command,
-              args: bridge.args,
-              env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
-            },
-            ...mcpServers(await Config.get()),
-          ]
           const session = await rpc.request(
             "session/new",
             {
               cwd: input.cwd,
-              mcpServers: servers,
+              mcpServers: [],
             },
             CURSOR_SESSION_NEW_TIMEOUT_MS,
           )
@@ -1302,40 +1212,12 @@ export namespace CursorCLI {
               CURSOR_SET_MODE_TIMEOUT_MS,
             )
           }
-          // Wait for the MCP bridge subprocess to finish registering tools with Cursor.
-          // Without this, Cursor's AI may not see opencode tools (like select/question)
-          // because the bridge hasn't connected yet when the first prompt is sent.
-          if (bridge.readyFile) {
-            const bridgeStarted = Date.now()
-            progress("正在等待 Cursor 工具初始化")
-            const deadline = bridgeStarted + 10_000
-            let ready = false
-            let update = bridgeUpdateAt > bridgeStarted
-            while (!ready && !update && Date.now() < deadline) {
-              ready = await Bun.file(bridge.readyFile).exists()
-              if (ready) break
-              let resolveUpdate: (() => void) | undefined
-              await Promise.race([
-                new Promise<void>((resolve) => {
-                  resolveUpdate = resolve
-                  bridgeUpdateWaiters.add(resolve)
-                }),
-                new Promise((resolve) => setTimeout(resolve, 100)),
-              ])
-              if (resolveUpdate) bridgeUpdateWaiters.delete(resolveUpdate)
-              update = bridgeUpdateAt > bridgeStarted
-            }
-            if (ready) slog.info("cursor bridge ready", { waitedMs: Date.now() - bridgeStarted })
-            Bun.file(bridge.readyFile)
-              .unlink()
-              .catch(() => {})
-          }
           sessions.set(key, {
             key,
             proc,
             rpc,
             cursorSessionID: sessionId!,
-            bridgeReadyFile: bridge.readyFile,
+            bridgeReadyFile: undefined,
             prompted: false,
             lastUsed: Date.now(),
           })
@@ -1345,7 +1227,8 @@ export namespace CursorCLI {
         }
         if (!sessionId) throw new Error("Cursor session was not initialized")
 
-        let next = cached?.prompted ? (serializeCachedPrompt({ messages: input.messages, localToolsReminder }) ?? prompt) : prompt
+        const cachedPrompt = serializeCachedPrompt({ messages: input.messages, localToolsReminder })
+        let next = cached?.prompted ? (cachedPrompt ?? prompt) : prompt
         let steps = 0
         while (true) {
           roundText = ""
