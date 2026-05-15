@@ -592,27 +592,49 @@ export namespace Config {
     return undefined
   }
 
+  function stringRecord(value: unknown) {
+    if (!isRecord(value)) return
+    const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    if (entries.length !== Object.keys(value).length) return
+    return Object.fromEntries(entries)
+  }
+
   function fromCursorMcp(entry: z.infer<typeof CursorMcpServer>): Mcp | undefined {
     if (!entry) return
-    if ("url" in entry) {
-      return {
+    if ("url" in entry && typeof entry.url === "string") {
+      const result: Extract<Mcp, { type: "remote" }> = {
         type: "remote",
         url: entry.url,
-        ...(entry.headers && { headers: entry.headers }),
-        ...(cursorMcpEnabled(entry) !== undefined && { enabled: cursorMcpEnabled(entry) }),
-        ...(entry.timeout && { timeout: entry.timeout }),
       }
+      const headers = "headers" in entry ? stringRecord(entry.headers) : undefined
+      const enabled = cursorMcpEnabled(entry)
+      if (headers) result.headers = headers
+      if (enabled !== undefined) result.enabled = enabled
+      if (typeof entry.timeout === "number") result.timeout = entry.timeout
+      return result
     }
 
-    const command = Array.isArray(entry.command) ? entry.command : [entry.command, ...(entry.args ?? [])]
+    if (!("command" in entry)) return
+    const args =
+      "args" in entry && Array.isArray(entry.args)
+        ? entry.args.filter((item): item is string => typeof item === "string")
+        : []
+    const command = Array.isArray(entry.command)
+      ? entry.command.filter((item): item is string => typeof item === "string")
+      : typeof entry.command === "string"
+        ? [entry.command, ...args]
+        : []
     if (command.length === 0) return
-    return {
+    const result: Extract<Mcp, { type: "local" }> = {
       type: "local",
       command,
-      ...((entry.environment ?? entry.env) && { environment: entry.environment ?? entry.env }),
-      ...(cursorMcpEnabled(entry) !== undefined && { enabled: cursorMcpEnabled(entry) }),
-      ...(entry.timeout && { timeout: entry.timeout }),
     }
+    const environment = stringRecord(("environment" in entry && entry.environment) || ("env" in entry && entry.env))
+    const enabled = cursorMcpEnabled(entry)
+    if (environment) result.environment = environment
+    if (enabled !== undefined) result.enabled = enabled
+    if (typeof entry.timeout === "number") result.timeout = entry.timeout
+    return result
   }
 
   async function loadCursorMcpFile(filepath: string): Promise<Info> {
