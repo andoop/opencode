@@ -96,6 +96,9 @@ export namespace Config {
       }
     }
 
+    // Cursor MCP config is treated as a compatibility source; native opencode config still wins.
+    result = mergeConfigConcatArrays(result, await loadCursorMcpFile(path.join(Global.Path.home, ".cursor", "mcp.json")))
+
     // Global user config overrides remote config.
     result = mergeConfigConcatArrays(result, await global())
 
@@ -107,6 +110,11 @@ export namespace Config {
 
     // Project config overrides global and remote config.
     if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
+      const found = await Filesystem.findUp(path.join(".cursor", "mcp.json"), Instance.directory, Instance.worktree)
+      for (const resolved of found.toReversed()) {
+        result = mergeConfigConcatArrays(result, await loadCursorMcpFile(resolved))
+      }
+
       for (const file of ["opencode.jsonc", "opencode.json"]) {
         const found = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
         for (const resolved of found.toReversed()) {
@@ -546,6 +554,95 @@ export namespace Config {
 
   export const Mcp = z.discriminatedUnion("type", [McpLocal, McpRemote])
   export type Mcp = z.infer<typeof Mcp>
+
+  const CursorMcpServer = z
+    .union([
+      z
+        .object({
+          command: z.union([z.string(), z.array(z.string())]),
+          args: z.array(z.string()).optional(),
+          env: z.record(z.string(), z.string()).optional(),
+          environment: z.record(z.string(), z.string()).optional(),
+          enabled: z.boolean().optional(),
+          disabled: z.boolean().optional(),
+          timeout: z.number().int().positive().optional(),
+        })
+        .passthrough(),
+      z
+        .object({
+          url: z.string(),
+          headers: z.record(z.string(), z.string()).optional(),
+          enabled: z.boolean().optional(),
+          disabled: z.boolean().optional(),
+          timeout: z.number().int().positive().optional(),
+        })
+        .passthrough(),
+    ])
+    .optional()
+
+  const CursorMcpConfig = z
+    .object({
+      mcpServers: z.record(z.string(), CursorMcpServer).optional(),
+    })
+    .passthrough()
+
+  function cursorMcpEnabled(entry: { enabled?: boolean; disabled?: boolean }) {
+    if (entry.enabled === false) return false
+    if (entry.disabled === true) return false
+    return undefined
+  }
+
+  function fromCursorMcp(entry: z.infer<typeof CursorMcpServer>): Mcp | undefined {
+    if (!entry) return
+    if ("url" in entry) {
+      return {
+        type: "remote",
+        url: entry.url,
+        ...(entry.headers && { headers: entry.headers }),
+        ...(cursorMcpEnabled(entry) !== undefined && { enabled: cursorMcpEnabled(entry) }),
+        ...(entry.timeout && { timeout: entry.timeout }),
+      }
+    }
+
+    const command = Array.isArray(entry.command) ? entry.command : [entry.command, ...(entry.args ?? [])]
+    if (command.length === 0) return
+    return {
+      type: "local",
+      command,
+      ...((entry.environment ?? entry.env) && { environment: entry.environment ?? entry.env }),
+      ...(cursorMcpEnabled(entry) !== undefined && { enabled: cursorMcpEnabled(entry) }),
+      ...(entry.timeout && { timeout: entry.timeout }),
+    }
+  }
+
+  async function loadCursorMcpFile(filepath: string): Promise<Info> {
+    if (!existsSync(filepath)) return {}
+    const text = await Bun.file(filepath)
+      .text()
+      .catch(() => "")
+    if (!text) return {}
+
+    const errors: JsoncParseError[] = []
+    const data = parseJsonc(text, errors, { allowTrailingComma: true })
+    if (errors.length) {
+      log.warn("failed to parse Cursor MCP config", { path: filepath })
+      return {}
+    }
+
+    const parsed = CursorMcpConfig.safeParse(data)
+    if (!parsed.success) {
+      log.warn("invalid Cursor MCP config", { path: filepath, issues: parsed.error.issues })
+      return {}
+    }
+
+    const mcp = Object.fromEntries(
+      Object.entries(parsed.data.mcpServers ?? {})
+        .map(([name, entry]) => [name, fromCursorMcp(entry)] as const)
+        .filter((entry): entry is [string, Mcp] => entry[1] !== undefined),
+    )
+    if (Object.keys(mcp).length === 0) return {}
+    return { mcp }
+  }
 
   export const PermissionAction = z.enum(["ask", "allow", "deny"]).meta({
     ref: "PermissionActionConfig",

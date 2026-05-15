@@ -8,6 +8,7 @@ import { CursorToolCall, instructions, parse, surface, toolPrompt } from "./tool
 import { Identifier } from "@/id/id"
 import { addPromptUsage, extractPromptUsageInfo, type PromptUsage } from "@/util/prompt-usage"
 import { SessionStatus } from "@/session/status"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "cursor-cli" })
 
@@ -30,6 +31,30 @@ function listKeys(input: unknown, max = 8) {
 
 function textLength(input: unknown) {
   return textFromContent(input).length
+}
+
+type CursorMcpServer = {
+  name: string
+  command?: string
+  args?: string[]
+  env?: Array<{ name: string; value: string }>
+}
+
+function mcpServers(config: Config.Info) {
+  return Object.entries(config.mcp ?? {}).flatMap(([name, entry]) => {
+    if (!entry || !("type" in entry) || entry.enabled === false) return []
+    if (entry.type === "remote") return []
+    const [command, ...args] = entry.command
+    if (!command) return []
+    return [
+      {
+        name,
+        command,
+        args,
+        env: Object.entries(entry.environment ?? {}).map(([name, value]) => ({ name, value })),
+      },
+    ]
+  })
 }
 
 function oneLine(text: string) {
@@ -609,18 +634,20 @@ export namespace CursorCLI {
         await rpc
           .request("authenticate", { methodId: "cursor_login" }, CURSOR_SET_MODE_TIMEOUT_MS)
           .catch(() => undefined)
+      const servers: CursorMcpServer[] = [
+        {
+          name: "OpenCode",
+          command: bridge.command,
+          args: bridge.args,
+          env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
+        },
+        ...mcpServers(await Config.get()),
+      ]
       const session = await rpc.request(
         "session/new",
         {
           cwd: input.cwd,
-          mcpServers: [
-            {
-              name: "OpenCode",
-              command: bridge.command,
-              args: bridge.args,
-              env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
-            },
-          ],
+          mcpServers: servers,
         },
         CURSOR_SESSION_NEW_TIMEOUT_MS,
       )
@@ -1234,18 +1261,20 @@ export namespace CursorCLI {
               })
           }
           progress("正在创建 Cursor 会话")
+          const servers: CursorMcpServer[] = [
+            {
+              name: "OpenCode",
+              command: bridge.command,
+              args: bridge.args,
+              env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
+            },
+            ...mcpServers(await Config.get()),
+          ]
           const session = await rpc.request(
             "session/new",
             {
               cwd: input.cwd,
-              mcpServers: [
-                {
-                  name: "OpenCode",
-                  command: bridge.command,
-                  args: bridge.args,
-                  env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
-                },
-              ],
+              mcpServers: servers,
             },
             CURSOR_SESSION_NEW_TIMEOUT_MS,
           )

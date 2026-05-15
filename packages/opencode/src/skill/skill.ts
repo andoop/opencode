@@ -40,10 +40,13 @@ export namespace Skill {
     }),
   )
 
-  // External skill directories to search for (project-level and global)
-  // These follow the directory layout used by Claude Code and other agents.
-  const EXTERNAL_DIRS = [".claude", ".agents"]
-  const EXTERNAL_SKILL_GLOB = new Bun.Glob("skills/**/SKILL.md")
+  // External skill directories to search for (project-level and global).
+  // These follow the directory layout used by Claude Code, Cursor, and other agents.
+  const EXTERNAL_SKILL_GLOBS: Record<string, Bun.Glob> = {
+    ".claude": new Bun.Glob("skills/**/SKILL.md"),
+    ".agents": new Bun.Glob("skills/**/SKILL.md"),
+    ".cursor": new Bun.Glob("{skills,skills-cursor}/**/SKILL.md"),
+  }
 
   const OPENCODE_SKILL_GLOB = new Bun.Glob("{skill,skills}/**/SKILL.md")
   const SKILL_GLOB = new Bun.Glob("**/SKILL.md")
@@ -86,9 +89,9 @@ export namespace Skill {
       }
     }
 
-    const scanExternal = async (root: string, scope: "global" | "project") => {
+    const scanExternal = async (root: string, glob: Bun.Glob, scope: "global" | "project") => {
       return Array.fromAsync(
-        EXTERNAL_SKILL_GLOB.scan({
+        glob.scan({
           cwd: root,
           absolute: true,
           onlyFiles: true,
@@ -102,21 +105,21 @@ export namespace Skill {
         })
     }
 
-    // Scan external skill directories (.claude/skills/, .agents/skills/, etc.)
+    // Scan external skill directories (.claude/skills/, .agents/skills/, .cursor/skills/, etc.)
     // Load global (home) first, then project-level (so project-level overwrites)
     if (!Flag.OPENCODE_DISABLE_EXTERNAL_SKILLS) {
-      for (const dir of EXTERNAL_DIRS) {
+      for (const [dir, glob] of Object.entries(EXTERNAL_SKILL_GLOBS)) {
         const root = path.join(Global.Path.home, dir)
         if (!(await Filesystem.isDir(root))) continue
-        await scanExternal(root, "global")
+        await scanExternal(root, glob, "global")
       }
 
       for await (const root of Filesystem.up({
-        targets: EXTERNAL_DIRS,
+        targets: Object.keys(EXTERNAL_SKILL_GLOBS),
         start: Instance.directory,
         stop: Instance.worktree,
       })) {
-        await scanExternal(root, "project")
+        await scanExternal(root, EXTERNAL_SKILL_GLOBS[path.basename(root)], "project")
       }
     }
 

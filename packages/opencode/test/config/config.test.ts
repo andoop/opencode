@@ -35,6 +35,101 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
+test("loads MCP servers from project .cursor/mcp.json", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".cursor", "mcp.json"),
+        JSON.stringify({
+          mcpServers: {
+            local: {
+              command: "bunx",
+              args: ["example-mcp"],
+              env: {
+                TOKEN: "secret",
+              },
+            },
+            remote: {
+              url: "https://example.com/mcp",
+              headers: {
+                Authorization: "Bearer token",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.mcp?.local).toEqual({
+        type: "local",
+        command: ["bunx", "example-mcp"],
+        environment: {
+          TOKEN: "secret",
+        },
+      })
+      expect(config.mcp?.remote).toEqual({
+        type: "remote",
+        url: "https://example.com/mcp",
+        headers: {
+          Authorization: "Bearer token",
+        },
+      })
+    },
+  })
+})
+
+test("loads global Cursor MCP before project Cursor MCP", async () => {
+  await using homeTmp = await tmpdir()
+  await using projectTmp = await tmpdir({ git: true })
+  const home = process.env.OPENCODE_TEST_HOME
+  process.env.OPENCODE_TEST_HOME = homeTmp.path
+
+  try {
+    await Bun.write(
+      path.join(homeTmp.path, ".cursor", "mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          shared: {
+            command: "global-mcp",
+          },
+        },
+      }),
+    )
+    await Bun.write(
+      path.join(projectTmp.path, ".cursor", "mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          shared: {
+            command: "project-mcp",
+          },
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: projectTmp.path,
+      fn: async () => {
+        expect((await Config.get()).mcp?.shared).toMatchObject({
+          type: "local",
+          command: ["project-mcp"],
+        })
+      },
+    })
+  } finally {
+    if (home === undefined) {
+      delete process.env.OPENCODE_TEST_HOME
+    } else {
+      process.env.OPENCODE_TEST_HOME = home
+    }
+  }
+})
+
 test("loads JSON config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

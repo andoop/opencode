@@ -1,9 +1,24 @@
-import { test, expect } from "bun:test"
+import { afterEach, beforeEach, test, expect } from "bun:test"
 import { Skill } from "../../src/skill"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
 import fs from "fs/promises"
+import os from "os"
+
+const originalHome = process.env.OPENCODE_TEST_HOME
+
+beforeEach(() => {
+  process.env.OPENCODE_TEST_HOME = path.join(os.tmpdir(), "opencode-test-home-" + Math.random().toString(36).slice(2))
+})
+
+afterEach(() => {
+  if (originalHome === undefined) {
+    delete process.env.OPENCODE_TEST_HOME
+    return
+  }
+  process.env.OPENCODE_TEST_HOME = originalHome
+})
 
 async function createGlobalSkill(homeDir: string) {
   const skillDir = path.join(homeDir, ".claude", "skills", "global-test-skill")
@@ -248,6 +263,67 @@ description: A skill in the .agents/skills directory.
       expect(agentSkill!.location).toContain(".agents/skills/agent-skill/SKILL.md")
     },
   })
+})
+
+test("discovers skills from .cursor/skills/ directory", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".cursor", "skills", "cursor-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: cursor-skill
+description: A skill in the .cursor/skills directory.
+---
+
+# Cursor Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.length).toBe(1)
+      expect(skills[0].location).toContain(".cursor/skills/cursor-skill/SKILL.md")
+    },
+  })
+})
+
+test("discovers global skills from ~/.cursor/skills-cursor/ directory", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  const originalHome = process.env.OPENCODE_TEST_HOME
+  process.env.OPENCODE_TEST_HOME = tmp.path
+
+  try {
+    const skillDir = path.join(tmp.path, ".cursor", "skills-cursor", "global-cursor-skill")
+    await fs.mkdir(skillDir, { recursive: true })
+    await Bun.write(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: global-cursor-skill
+description: A global skill from ~/.cursor/skills-cursor for testing.
+---
+
+# Global Cursor Skill
+`,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const skills = await Skill.all()
+        expect(skills.length).toBe(1)
+        expect(skills[0].name).toBe("global-cursor-skill")
+      },
+    })
+  } finally {
+    process.env.OPENCODE_TEST_HOME = originalHome
+  }
 })
 
 test("discovers global skills from ~/.agents/skills/ directory", async () => {
