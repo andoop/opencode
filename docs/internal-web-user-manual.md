@@ -57,8 +57,8 @@
 - 不开放模型、供应商、服务器等管理能力
 - 可用模型仅限：
   - `cursor-cli/auto`
-  - `cursor-cli/composer-1`
-  - `cursor-cli/composer-1.5`
+  - `cursor-cli/composer-2.5`
+  - `cursor-cli/composer-2.5-fast`
 
 这种默认策略适合先在公司内部低风险推广。
 

@@ -105,7 +105,7 @@ export function UserAuthRoutes() {
             description: "Token refreshed",
             content: {
               "application/json": {
-                schema: resolver(z.object({ token: z.string() }).meta({ ref: "RefreshResponse" })),
+                schema: resolver(UserAuth.RefreshResponse),
               },
             },
           },
@@ -119,12 +119,12 @@ export function UserAuthRoutes() {
         }
 
         const token = authHeader.slice(7)
-        const newToken = await UserAuth.refresh(token)
-        if (!newToken) {
+        const refreshed = await UserAuth.refresh(token)
+        if (!refreshed) {
           return c.json({ error: "Invalid or expired token" }, 401)
         }
 
-        return c.json({ token: newToken })
+        return c.json(refreshed)
       },
     )
     .get(

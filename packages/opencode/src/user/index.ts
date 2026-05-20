@@ -12,8 +12,8 @@ export namespace User {
   const log = Log.create({ service: "user" })
   type ModelRef = string | { providerID: string; modelID: string }
   const DEFAULT_REGISTERED_MODELS = [
-    "cursor-cli/composer-2",
-    "cursor-cli/composer-2-fast",
+    "cursor-cli/composer-2.5",
+    "cursor-cli/composer-2.5-fast",
     "kiro-cli/auto",
   ] as const
   const FEATURE_DEFAULTS = {
@@ -215,6 +215,20 @@ export namespace User {
     return `${input.providerID}/${input.modelID}`
   }
 
+  function normalizeModel(input: string) {
+    if (input === "cursor-cli/composer-1" || input === "cursor-cli/composer-1.5" || input === "cursor-cli/composer-2") {
+      return "cursor-cli/composer-2.5"
+    }
+    if (
+      input === "cursor-cli/composer-1-fast" ||
+      input === "cursor-cli/composer-1.5-fast" ||
+      input === "cursor-cli/composer-2-fast"
+    ) {
+      return "cursor-cli/composer-2.5-fast"
+    }
+    return input
+  }
+
   export function modelEnabled(model: ModelRef, input?: { role?: Role; permission?: Permission }) {
     const role = input?.role ?? current()?.role
     if (role === "admin") return true
@@ -222,7 +236,8 @@ export namespace User {
     const allowed = permission?.models
     if (allowed === null) return true
     if (!allowed?.length) return false
-    return allowed.includes(modelKey(model))
+    const key = normalizeModel(modelKey(model))
+    return allowed.some((item) => normalizeModel(item) === key)
   }
 
   export function requireModel(model: ModelRef, input?: { role?: Role; permission?: Permission }) {

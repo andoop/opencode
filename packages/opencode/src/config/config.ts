@@ -97,7 +97,10 @@ export namespace Config {
     }
 
     // Cursor MCP config is treated as a compatibility source; native opencode config still wins.
-    result = mergeConfigConcatArrays(result, await loadCursorMcpFile(path.join(Global.Path.home, ".cursor", "mcp.json")))
+    result = mergeConfigConcatArrays(
+      result,
+      await loadCursorMcpFile(path.join(Global.Path.home, ".cursor", "mcp.json")),
+    )
 
     // Global user config overrides remote config.
     result = mergeConfigConcatArrays(result, await global())

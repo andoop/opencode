@@ -227,7 +227,9 @@ export function DialogSelectProject(props: {
                           onClick={() => toggleExpanded(entry.id)}
                           aria-expanded={open()}
                         >
-                          <div class="w-4 shrink-0 text-center text-12-regular text-text-weak">{open() ? "▾" : "▸"}</div>
+                          <div class="w-4 shrink-0 text-center text-12-regular text-text-weak">
+                            {open() ? "▾" : "▸"}
+                          </div>
                           <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2">
                               <div class="truncate text-13-medium text-text-strong">{entry.group}</div>
@@ -273,7 +275,9 @@ export function DialogSelectProject(props: {
                                 <Show when={project.description}>
                                   <div class="line-clamp-2 text-12-regular text-text-weak">{project.description}</div>
                                 </Show>
-                                <div class="max-w-full truncate text-12-regular text-text-weak">{label(project.worktree)}</div>
+                                <div class="max-w-full truncate text-12-regular text-text-weak">
+                                  {label(project.worktree)}
+                                </div>
                               </button>
                             )}
                           </For>

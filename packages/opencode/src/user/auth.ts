@@ -34,6 +34,14 @@ export namespace UserAuth {
     .meta({ ref: "UserAuth.LoginResponse" })
   export type LoginResponse = z.infer<typeof LoginResponse>
 
+  export const RefreshResponse = z
+    .object({
+      token: z.string(),
+      user: User.PublicInfo,
+    })
+    .meta({ ref: "UserAuth.RefreshResponse" })
+  export type RefreshResponse = z.infer<typeof RefreshResponse>
+
   // Errors
   export const TokenExpiredError = NamedError.create("TokenExpiredError", z.object({ expired_at: z.number() }))
 
@@ -96,7 +104,7 @@ export namespace UserAuth {
   }
 
   // Refresh token (issue new token with same user data)
-  export async function refresh(token: string): Promise<string | null> {
+  export async function refresh(token: string): Promise<RefreshResponse | null> {
     const payload = await verify(token)
     if (!payload) return null
 
@@ -105,12 +113,17 @@ export namespace UserAuth {
       const user = await User.getInternal(payload.user_id)
       if (user.status !== "active") return null
 
-      return sign({
+      const token = await sign({
         user_id: user.id,
         username: user.username,
         role: user.role,
         permission: user.permission,
       })
+      const { password: _, ...publicUser } = user
+      return {
+        token,
+        user: publicUser,
+      }
     } catch {
       return null
     }
@@ -121,11 +134,17 @@ export namespace UserAuth {
     const payload = await verify(token)
     if (!payload) return null
 
-    return {
-      id: payload.user_id,
-      username: payload.username,
-      role: payload.role,
-      permission: payload.permission,
+    try {
+      const user = await User.getInternal(payload.user_id)
+      if (user.status !== "active") return null
+      return {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        permission: user.permission,
+      }
+    } catch {
+      return null
     }
   }
 }

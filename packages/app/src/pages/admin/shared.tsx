@@ -239,13 +239,7 @@ const FEATURE_ROWS = [
   { id: "mcp", label: "MCP 管理", description: "MCP 列表、开关与管理入口" },
 ] as const
 
-export const DEFAULT_REGISTER_MODELS = [
-  "cursor-cli/auto",
-  "cursor-cli/composer-1",
-  "cursor-cli/composer-1.5",
-  "cursor-cli/composer-2",
-  "cursor-cli/composer-2-fast",
-]
+export const DEFAULT_REGISTER_MODELS = ["cursor-cli/auto", "cursor-cli/composer-2.5", "cursor-cli/composer-2.5-fast"]
 
 export const DEFAULT_PROJECT_VISIBILITY: RegistryProject["visibility"] = {
   mode: "all",

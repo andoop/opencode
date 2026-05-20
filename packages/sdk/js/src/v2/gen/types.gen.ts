@@ -2303,8 +2303,44 @@ export type UnauthorizedError = {
   error: string
 }
 
-export type RefreshResponse = {
+export type UserAuthRefreshResponse = {
   token: string
+  user: {
+    id: string
+    username: string
+    email?: string
+    role: "admin" | "user"
+    status: "active" | "disabled"
+    permission: {
+      level: "full" | "readonly" | "custom"
+      custom?: {
+        edit?: "allow" | "ask" | "deny"
+        write?: "allow" | "ask" | "deny"
+        bash?: "allow" | "ask" | "deny"
+        read?: "allow" | "ask" | "deny"
+      }
+      allowed_agents?: Array<"build" | "ask" | "plan">
+      features?: {
+        modes?: {
+          ask?: boolean
+          build?: boolean
+          plan?: boolean
+        }
+        files?: boolean
+        models?: boolean
+        providers?: boolean
+        servers?: boolean
+        mcp?: boolean
+        commands?: boolean
+      }
+      models?: Array<string> | null
+    }
+    time: {
+      created: number
+      updated: number
+      last_login?: number
+    }
+  }
 }
 
 export type OAuth = {
@@ -3639,10 +3675,10 @@ export type UserAuthRefreshResponses = {
   /**
    * Token refreshed
    */
-  200: RefreshResponse
+  200: UserAuthRefreshResponse
 }
 
-export type UserAuthRefreshResponse = UserAuthRefreshResponses[keyof UserAuthRefreshResponses]
+export type UserAuthRefreshResponse2 = UserAuthRefreshResponses[keyof UserAuthRefreshResponses]
 
 export type UserAuthMeData = {
   body?: never

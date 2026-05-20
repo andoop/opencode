@@ -143,6 +143,32 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
     const [error, setError] = createSignal<string | null>(null)
     const [multiUserEnabled, setMultiUserEnabledSignal] = createSignal(storedMultiUser === "true")
 
+    const refreshUser = async (nextToken = token()) => {
+      if (!nextToken) {
+        setUser(null)
+        return false
+      }
+
+      try {
+        const response = await fetchFn(`${server.url}/user-auth/me`, {
+          headers: { Authorization: `Bearer ${nextToken}` },
+        })
+        if (!response.ok) {
+          if (response.status === 401) {
+            setToken(null)
+            setUser(null)
+          }
+          return false
+        }
+        const userData = await response.json()
+        setUser(userData)
+        setMultiUserEnabledSignal(true)
+        return true
+      } catch {
+        return false
+      }
+    }
+
     // Persist token and user to localStorage
     createEffect(() => {
       const currentToken = token()
@@ -185,18 +211,7 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
         // If we have a token, verify it
         const currentToken = storedToken
         if (currentToken) {
-          const meResponse = await fetchFn(`${server.url}/user-auth/me`, {
-            headers: { Authorization: `Bearer ${currentToken}` },
-          })
-          if (!meResponse.ok) {
-            // Token is invalid, clear it
-            setToken(null)
-            setUser(null)
-          } else {
-            const userData = await meResponse.json()
-            setUser(userData)
-            setMultiUserEnabledSignal(true)
-          }
+          await refreshUser(currentToken)
         }
       } catch {
         // Network error
@@ -288,6 +303,8 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
 
         const data = await response.json()
         setToken(data.token)
+        setUser(data.user)
+        setMultiUserEnabledSignal(true)
         return true
       } catch {
         return false
@@ -304,8 +321,22 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
       20 * 60 * 1000,
     )
 
+    const syncUser = () => {
+      if (!token()) return
+      void refreshUser()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") syncUser()
+    }
+
+    window.addEventListener("focus", syncUser)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
     onCleanup(() => {
       clearInterval(refreshInterval)
+      window.removeEventListener("focus", syncUser)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
     })
 
     return {
@@ -349,6 +380,7 @@ export const { use: useAuth, provider: AuthProvider } = createSimpleContext({
       register,
       logout,
       refreshToken,
+      refreshUser,
     }
   },
 })
