@@ -123,6 +123,8 @@ After login, the platform reuses the local Cursor login state.
 - Default restricted users typically only have `ask` mode
 - Default model whitelist usually includes:
   - `cursor-cli/auto`
+  - `cursor-cli/composer-2`
+  - `cursor-cli/composer-2-fast`
   - `cursor-cli/composer-2.5`
   - `cursor-cli/composer-2.5-fast`
 

@@ -715,6 +715,8 @@ export namespace Provider {
   function cursorProvider(): Info {
     const defs: Array<[id: string, name: string, reasoning?: boolean]> = [
       ["auto", "Auto"],
+      ["composer-2-fast", "Composer 2 Fast"],
+      ["composer-2", "Composer 2"],
       ["composer-2.5-fast", "Composer 2.5 Fast"],
       ["composer-2.5", "Composer 2.5"],
       ["opus-4.6-thinking", "Claude 4.6 Opus (Thinking)", true],
@@ -1369,15 +1371,11 @@ export namespace Provider {
   export function normalizeModel<T extends { providerID: string; modelID: string } | undefined>(model: T) {
     if (!model) return model
     if (model.providerID !== "cursor-cli") return model
-    if (model.modelID === "composer-1" || model.modelID === "composer-1.5" || model.modelID === "composer-2") {
-      return { providerID: model.providerID, modelID: "composer-2.5" }
+    if (model.modelID === "composer-1" || model.modelID === "composer-1.5") {
+      return { providerID: model.providerID, modelID: "composer-2" }
     }
-    if (
-      model.modelID === "composer-1-fast" ||
-      model.modelID === "composer-1.5-fast" ||
-      model.modelID === "composer-2-fast"
-    ) {
-      return { providerID: model.providerID, modelID: "composer-2.5-fast" }
+    if (model.modelID === "composer-1-fast" || model.modelID === "composer-1.5-fast") {
+      return { providerID: model.providerID, modelID: "composer-2-fast" }
     }
     return model
   }

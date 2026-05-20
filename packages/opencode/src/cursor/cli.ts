@@ -278,11 +278,11 @@ function cursorArgs(modelID: string) {
 }
 
 function cursorModelID(modelID: string) {
-  if (modelID === "composer-1" || modelID === "composer-1.5" || modelID === "composer-2") {
-    return "composer-2.5"
+  if (modelID === "composer-1" || modelID === "composer-1.5") {
+    return "composer-2"
   }
-  if (modelID === "composer-1-fast" || modelID === "composer-1.5-fast" || modelID === "composer-2-fast") {
-    return "composer-2.5-fast"
+  if (modelID === "composer-1-fast" || modelID === "composer-1.5-fast") {
+    return "composer-2-fast"
   }
   return modelID
 }

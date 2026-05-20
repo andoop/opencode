@@ -57,6 +57,8 @@
 - 不开放模型、供应商、服务器等管理能力
 - 可用模型仅限：
   - `cursor-cli/auto`
+  - `cursor-cli/composer-2`
+  - `cursor-cli/composer-2-fast`
   - `cursor-cli/composer-2.5`
   - `cursor-cli/composer-2.5-fast`
 

@@ -12,6 +12,8 @@ export namespace User {
   const log = Log.create({ service: "user" })
   type ModelRef = string | { providerID: string; modelID: string }
   const DEFAULT_REGISTERED_MODELS = [
+    "cursor-cli/composer-2",
+    "cursor-cli/composer-2-fast",
     "cursor-cli/composer-2.5",
     "cursor-cli/composer-2.5-fast",
     "kiro-cli/auto",
@@ -216,15 +218,11 @@ export namespace User {
   }
 
   function normalizeModel(input: string) {
-    if (input === "cursor-cli/composer-1" || input === "cursor-cli/composer-1.5" || input === "cursor-cli/composer-2") {
-      return "cursor-cli/composer-2.5"
+    if (input === "cursor-cli/composer-1" || input === "cursor-cli/composer-1.5") {
+      return "cursor-cli/composer-2"
     }
-    if (
-      input === "cursor-cli/composer-1-fast" ||
-      input === "cursor-cli/composer-1.5-fast" ||
-      input === "cursor-cli/composer-2-fast"
-    ) {
-      return "cursor-cli/composer-2.5-fast"
+    if (input === "cursor-cli/composer-1-fast" || input === "cursor-cli/composer-1.5-fast") {
+      return "cursor-cli/composer-2-fast"
     }
     return input
   }
