@@ -44,6 +44,7 @@ export namespace ProjectRegistry {
       id: z.string(),
       project_id: z.string(),
       directory: z.string(),
+      directory_exists: z.boolean().optional(),
       name: z.string().optional(),
       description: z.string().optional(),
       profile_markdown: z.string().optional(),
@@ -107,11 +108,17 @@ export namespace ProjectRegistry {
   export async function get(id: string) {
     return Storage.read<Info>(key(id)).then(Info.parse).then(hydrate)
   }
-  async function hydrate(info: Info) {
-    if (info.group_ids.length === 0) return info
+  async function hydrate(info: Info): Promise<Info> {
+    const exists = await Filesystem.isDir(info.directory)
+    if (info.group_ids.length === 0)
+      return {
+        ...info,
+        directory_exists: exists,
+      }
     const groups = await GroupRegistry.names(info.group_ids)
     return {
       ...info,
+      directory_exists: exists,
       groups: normalizeGroups(groups),
     }
   }
@@ -194,6 +201,29 @@ export namespace ProjectRegistry {
     await publishUpdated(parsed)
     log.info("updated", { id })
     return parsed
+  }
+
+  export async function relocate(id: string, directory: string) {
+    const gitHints = await Filesystem.findUp(".git", directory).catch(() => [])
+    const resolved = await resolveDirectory(directory)
+    if (resolved.vcs !== "git" || resolved.worktree === "/") {
+      throw new InvalidDirectoryError({
+        directory,
+        message:
+          gitHints.length === 0
+            ? `No .git directory was found in the selected path or its parent directories: ${directory}`
+            : `Only git projects can be added to the project registry: ${directory}`,
+      })
+    }
+
+    const existing = await findByDirectory(resolved.worktree)
+    if (existing && existing.id !== id) throw new DuplicateError({ directory: resolved.worktree })
+
+    return update(id, (draft) => {
+      draft.project_id = resolved.id
+      draft.directory = resolved.worktree
+      draft.vcs = resolved.vcs
+    })
   }
 
   export async function remove(id: string) {

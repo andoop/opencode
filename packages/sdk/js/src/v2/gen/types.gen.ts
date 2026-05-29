@@ -4,6 +4,35 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type DataRootStatus = {
+  configured: boolean
+  root: string
+  source: "env" | "pointer" | "setup"
+  pointer: string
+  layout: number
+  marker: string
+  needsSetup: boolean
+}
+
+export type DataRootValidation = {
+  ok: boolean
+  root: string
+  exists: boolean
+  initialized: boolean
+  reason?: string
+}
+
+export type DataRootBindResult = {
+  configured: boolean
+  root: string
+  source: "env" | "pointer" | "setup"
+  pointer: string
+  layout: number
+  marker: string
+  needsSetup: boolean
+  restartRequired: boolean
+}
+
 export type EventInstallationUpdated = {
   type: "installation.updated"
   properties: {
@@ -2390,6 +2419,7 @@ export type ProjectRegistry = {
   id: string
   project_id: string
   directory: string
+  directory_exists?: boolean
   name?: string
   description?: string
   profile_markdown?: string
@@ -2919,6 +2949,58 @@ export type HealthCheckResponses = {
 }
 
 export type HealthCheckResponse = HealthCheckResponses[keyof HealthCheckResponses]
+
+export type DataRootStatusData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/data-root/status"
+}
+
+export type DataRootStatusResponses = {
+  /**
+   * Portable data root status
+   */
+  200: DataRootStatus
+}
+
+export type DataRootStatusResponse = DataRootStatusResponses[keyof DataRootStatusResponses]
+
+export type DataRootValidateData = {
+  body?: {
+    path: string
+  }
+  path?: never
+  query?: never
+  url: "/data-root/validate"
+}
+
+export type DataRootValidateResponses = {
+  /**
+   * Validation result
+   */
+  200: DataRootValidation
+}
+
+export type DataRootValidateResponse = DataRootValidateResponses[keyof DataRootValidateResponses]
+
+export type DataRootBindData = {
+  body?: {
+    path: string
+  }
+  path?: never
+  query?: never
+  url: "/data-root/bind"
+}
+
+export type DataRootBindResponses = {
+  /**
+   * Bound portable data root
+   */
+  200: DataRootBindResult
+}
+
+export type DataRootBindResponse = DataRootBindResponses[keyof DataRootBindResponses]
 
 export type ConfigGetData = {
   body?: never
@@ -4410,6 +4492,7 @@ export type ProjectGroupDeleteResponse = ProjectGroupDeleteResponses[keyof Proje
 
 export type ProjectGroupUpdateData = {
   body?: {
+    directory?: string
     name?: string
     description?: string
     profile_markdown?: string
@@ -4554,6 +4637,7 @@ export type ProjectRegistryDeleteResponse = ProjectRegistryDeleteResponses[keyof
 
 export type ProjectRegistryUpdateData = {
   body?: {
+    directory?: string
     name?: string
     description?: string
     profile_markdown?: string

@@ -37,6 +37,108 @@
         ]
       }
     },
+    "/data-root/status": {
+      "get": {
+        "operationId": "dataRoot.status",
+        "summary": "Get portable data root status",
+        "responses": {
+          "200": {
+            "description": "Portable data root status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataRootStatus"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.dataRoot.status({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/data-root/validate": {
+      "post": {
+        "operationId": "dataRoot.validate",
+        "summary": "Validate portable data root",
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataRootValidation"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["path"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.dataRoot.validate({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/data-root/bind": {
+      "post": {
+        "operationId": "dataRoot.bind",
+        "summary": "Bind portable data root",
+        "responses": {
+          "200": {
+            "description": "Bound portable data root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataRootBindResult"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["path"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.dataRoot.bind({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/config": {
       "get": {
         "operationId": "config.get",
@@ -3529,6 +3631,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "directory": {
+                    "type": "string"
+                  },
                   "name": {
                     "type": "string"
                   },
@@ -3831,6 +3936,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "directory": {
+                    "type": "string"
+                  },
                   "name": {
                     "type": "string"
                   },
@@ -12980,6 +13088,86 @@
   },
   "components": {
     "schemas": {
+      "DataRootStatus": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["env", "pointer", "setup"]
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "layout": {
+            "type": "number"
+          },
+          "marker": {
+            "type": "string"
+          },
+          "needsSetup": {
+            "type": "boolean"
+          }
+        },
+        "required": ["configured", "root", "source", "pointer", "layout", "marker", "needsSetup"]
+      },
+      "DataRootValidation": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "root": {
+            "type": "string"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "initialized": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["ok", "root", "exists", "initialized"]
+      },
+      "DataRootBindResult": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["env", "pointer", "setup"]
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "layout": {
+            "type": "number"
+          },
+          "marker": {
+            "type": "string"
+          },
+          "needsSetup": {
+            "type": "boolean"
+          },
+          "restartRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": ["configured", "root", "source", "pointer", "layout", "marker", "needsSetup", "restartRequired"]
+      },
       "Event.installation.updated": {
         "type": "object",
         "properties": {
@@ -18822,6 +19010,9 @@
           },
           "directory": {
             "type": "string"
+          },
+          "directory_exists": {
+            "type": "boolean"
           },
           "name": {
             "type": "string"

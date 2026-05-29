@@ -29,6 +29,9 @@ import type {
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  DataRootBindResponses,
+  DataRootStatusResponses,
+  DataRootValidateResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
@@ -370,6 +373,62 @@ export class Health extends HeyApiClient {
     return (options?.client ?? this.client).get<HealthCheckResponses, unknown, ThrowOnError>({
       url: "/health",
       ...options,
+    })
+  }
+}
+
+export class DataRoot extends HeyApiClient {
+  /**
+   * Get portable data root status
+   */
+  public status<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<DataRootStatusResponses, unknown, ThrowOnError>({
+      url: "/data-root/status",
+      ...options,
+    })
+  }
+
+  /**
+   * Validate portable data root
+   */
+  public validate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "path" }] }])
+    return (options?.client ?? this.client).post<DataRootValidateResponses, unknown, ThrowOnError>({
+      url: "/data-root/validate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Bind portable data root
+   */
+  public bind<ThrowOnError extends boolean = false>(
+    parameters?: {
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "path" }] }])
+    return (options?.client ?? this.client).post<DataRootBindResponses, unknown, ThrowOnError>({
+      url: "/data-root/bind",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -1420,7 +1479,8 @@ export class Group extends HeyApiClient {
   public update<ThrowOnError extends boolean = false>(
     parameters: {
       id: string
-      directory?: string
+      query_directory?: string
+      body_directory?: string
       name?: string
       description?: string
       profile_markdown?: string
@@ -1433,7 +1493,16 @@ export class Group extends HeyApiClient {
         {
           args: [
             { in: "path", key: "id" },
-            { in: "query", key: "directory" },
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
             { in: "body", key: "name" },
             { in: "body", key: "description" },
             { in: "body", key: "profile_markdown" },
@@ -1576,7 +1645,8 @@ export class Registry extends HeyApiClient {
   public update<ThrowOnError extends boolean = false>(
     parameters: {
       id: string
-      directory?: string
+      query_directory?: string
+      body_directory?: string
       name?: string
       description?: string
       profile_markdown?: string
@@ -1594,7 +1664,16 @@ export class Registry extends HeyApiClient {
         {
           args: [
             { in: "path", key: "id" },
-            { in: "query", key: "directory" },
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
             { in: "body", key: "name" },
             { in: "body", key: "description" },
             { in: "body", key: "profile_markdown" },
@@ -5996,6 +6075,11 @@ export class OpencodeClient extends HeyApiClient {
   private _health?: Health
   get health(): Health {
     return (this._health ??= new Health({ client: this.client }))
+  }
+
+  private _dataRoot?: DataRoot
+  get dataRoot(): DataRoot {
+    return (this._dataRoot ??= new DataRoot({ client: this.client }))
   }
 
   private _config?: Config

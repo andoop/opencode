@@ -42,6 +42,7 @@ export interface RegistryProject {
   id: string
   project_id: string
   directory: string
+  directory_exists?: boolean
   name?: string
   description?: string
   profile_markdown?: string

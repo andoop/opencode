@@ -195,6 +195,7 @@ export default function AdminProjectsPage() {
           ...authHeaders(),
         },
         body: JSON.stringify({
+          directory: projectDirectory() !== project.directory ? projectDirectory() : undefined,
           name: projectName(),
           description: projectDescription(),
           profile_markdown: projectProfileMarkdown() || undefined,
@@ -430,7 +431,14 @@ export default function AdminProjectsPage() {
                       <td class="max-w-md px-4 py-3 text-sm text-color-secondary">
                         <div class="line-clamp-3 whitespace-pre-wrap break-words">{project.description || "-"}</div>
                       </td>
-                      <td class="px-4 py-3 text-sm text-color-secondary break-all">{project.directory}</td>
+                      <td class="px-4 py-3 text-sm text-color-secondary break-all">
+                        <div>{project.directory}</div>
+                        <Show when={project.directory_exists === false}>
+                          <div class="mt-1 rounded bg-auxiliary-error/10 px-2 py-1 text-xs text-auxiliary-error">
+                            路径不存在，请编辑后重新指定
+                          </div>
+                        </Show>
+                      </td>
                       <td class="px-4 py-3 text-sm text-color-secondary">{formatDate(project.time.created)}</td>
                       <td class="px-4 py-3">
                         <div class="flex gap-2">
@@ -581,7 +589,16 @@ export default function AdminProjectsPage() {
                   <p class="mt-1 text-xs text-color-secondary">按住 Command 或 Ctrl 可以多选。</p>
                 </div>
               </Show>
-              <TextField label={language.t("admin.projectDialog.directory")} value={projectDirectory()} disabled />
+              <TextField
+                label={language.t("admin.projectDialog.directory")}
+                value={projectDirectory()}
+                onChange={setProjectDirectory}
+              />
+              <Show when={editingProject()?.directory_exists === false}>
+                <p class="text-xs text-auxiliary-error">
+                  原路径在当前机器上不存在。请填写这台机器上的项目源码绝对路径后保存。
+                </p>
+              </Show>
             </div>
 
             <div class="mt-6 flex justify-end gap-3">

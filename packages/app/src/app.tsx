@@ -1,5 +1,14 @@
 import "@/index.css"
-import { ErrorBoundary, Show, lazy, type ParentProps, createEffect, createSignal, createMemo } from "solid-js"
+import {
+  ErrorBoundary,
+  Show,
+  lazy,
+  type ParentProps,
+  createEffect,
+  createSignal,
+  createMemo,
+  onCleanup,
+} from "solid-js"
 import { Router, Route, Navigate, useNavigate, useLocation } from "@solidjs/router"
 import { MetaProvider } from "@solidjs/meta"
 import { Font } from "@opencode-ai/ui/font"
@@ -37,6 +46,7 @@ const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
 const Login = lazy(() => import("@/pages/login"))
 const Register = lazy(() => import("@/pages/register"))
+const DataRootSetup = lazy(() => import("@/pages/data-root"))
 const Admin = lazy(() => import("@/pages/admin"))
 const AdminConfig = lazy(() => import("@/pages/admin/config"))
 const AdminUsers = lazy(() => import("@/pages/admin/users"))
@@ -140,6 +150,47 @@ function ServerKey(props: ParentProps) {
   )
 }
 
+function DataRootGate(props: ParentProps) {
+  const server = useServer()
+  const platform = usePlatform()
+  const [status, setStatus] = createSignal<"loading" | "ready" | "setup">("loading")
+
+  createEffect(() => {
+    const url = server.url
+    if (!url) return
+    let alive = true
+    setStatus("loading")
+    void (async () => {
+      const response = await (platform.fetch ?? fetch)(`${url}/data-root/status`).catch(() => undefined)
+      if (!alive) return
+      if (!response?.ok) {
+        setStatus("ready")
+        return
+      }
+      const data = (await response.json().catch(() => undefined)) as { needsSetup?: boolean } | undefined
+      setStatus(data?.needsSetup ? "setup" : "ready")
+    })()
+    onCleanup(() => {
+      alive = false
+    })
+  })
+
+  return (
+    <Show when={status() !== "loading"} fallback={<Loading />}>
+      <Show
+        when={status() === "ready"}
+        fallback={
+          <Suspense fallback={<Loading />}>
+            <DataRootSetup />
+          </Suspense>
+        }
+      >
+        {props.children}
+      </Show>
+    </Show>
+  )
+}
+
 export function AppInterface(props: { defaultUrl?: string }) {
   const platform = usePlatform()
 
@@ -176,143 +227,145 @@ export function AppInterface(props: { defaultUrl?: string }) {
   return (
     <ServerProvider defaultUrl={defaultServerUrl()}>
       <ServerKey>
-        <AuthProvider>
-          <GlobalSDKProvider>
-            <GlobalSyncProvider>
-              <Router
-                root={(props) => {
-                  const location = useLocation()
-                  const isAuthPage = createMemo(
-                    () => location.pathname === "/login" || location.pathname === "/register",
-                  )
+        <DataRootGate>
+          <AuthProvider>
+            <GlobalSDKProvider>
+              <GlobalSyncProvider>
+                <Router
+                  root={(props) => {
+                    const location = useLocation()
+                    const isAuthPage = createMemo(
+                      () => location.pathname === "/login" || location.pathname === "/register",
+                    )
 
-                  // Auth pages should not use Layout
-                  return (
-                    <Show when={!isAuthPage()} fallback={<>{props.children}</>}>
-                      <SettingsProvider>
-                        <PermissionProvider>
-                          <LayoutProvider>
-                            <NotificationProvider>
-                              <ModelsProvider>
-                                <CommandProvider>
-                                  <HighlightsProvider>
-                                    <Layout>{props.children}</Layout>
-                                  </HighlightsProvider>
-                                </CommandProvider>
-                              </ModelsProvider>
-                            </NotificationProvider>
-                          </LayoutProvider>
-                        </PermissionProvider>
-                      </SettingsProvider>
-                    </Show>
-                  )
-                }}
-              >
-                <Route
-                  path="/login"
-                  component={() => (
-                    <Suspense fallback={<Loading />}>
-                      <Login />
-                    </Suspense>
-                  )}
-                />
-                <Route
-                  path="/register"
-                  component={() => (
-                    <Suspense fallback={<Loading />}>
-                      <Register />
-                    </Suspense>
-                  )}
-                />
-                <Route
-                  path="/admin"
-                  component={(props) => (
-                    <AdminGuard>
-                      <Suspense fallback={<Loading />}>
-                        <Admin>{props.children}</Admin>
-                      </Suspense>
-                    </AdminGuard>
-                  )}
+                    // Auth pages should not use Layout
+                    return (
+                      <Show when={!isAuthPage()} fallback={<>{props.children}</>}>
+                        <SettingsProvider>
+                          <PermissionProvider>
+                            <LayoutProvider>
+                              <NotificationProvider>
+                                <ModelsProvider>
+                                  <CommandProvider>
+                                    <HighlightsProvider>
+                                      <Layout>{props.children}</Layout>
+                                    </HighlightsProvider>
+                                  </CommandProvider>
+                                </ModelsProvider>
+                              </NotificationProvider>
+                            </LayoutProvider>
+                          </PermissionProvider>
+                        </SettingsProvider>
+                      </Show>
+                    )
+                  }}
                 >
-                  <Route path="/" component={() => <Navigate href="config" />} />
                   <Route
-                    path="config"
+                    path="/login"
                     component={() => (
                       <Suspense fallback={<Loading />}>
-                        <AdminConfig />
+                        <Login />
                       </Suspense>
                     )}
                   />
                   <Route
-                    path="users"
+                    path="/register"
                     component={() => (
                       <Suspense fallback={<Loading />}>
-                        <AdminUsers />
+                        <Register />
                       </Suspense>
                     )}
                   />
                   <Route
-                    path="projects"
-                    component={() => (
-                      <Suspense fallback={<Loading />}>
-                        <AdminProjects />
-                      </Suspense>
+                    path="/admin"
+                    component={(props) => (
+                      <AdminGuard>
+                        <Suspense fallback={<Loading />}>
+                          <Admin>{props.children}</Admin>
+                        </Suspense>
+                      </AdminGuard>
                     )}
-                  />
+                  >
+                    <Route path="/" component={() => <Navigate href="config" />} />
+                    <Route
+                      path="config"
+                      component={() => (
+                        <Suspense fallback={<Loading />}>
+                          <AdminConfig />
+                        </Suspense>
+                      )}
+                    />
+                    <Route
+                      path="users"
+                      component={() => (
+                        <Suspense fallback={<Loading />}>
+                          <AdminUsers />
+                        </Suspense>
+                      )}
+                    />
+                    <Route
+                      path="projects"
+                      component={() => (
+                        <Suspense fallback={<Loading />}>
+                          <AdminProjects />
+                        </Suspense>
+                      )}
+                    />
+                    <Route
+                      path="audit"
+                      component={() => (
+                        <Suspense fallback={<Loading />}>
+                          <AdminAudit />
+                        </Suspense>
+                      )}
+                    />
+                    <Route
+                      path="storage"
+                      component={() => (
+                        <Suspense fallback={<Loading />}>
+                          <AdminStorage />
+                        </Suspense>
+                      )}
+                    />
+                  </Route>
                   <Route
-                    path="audit"
+                    path="/"
                     component={() => (
-                      <Suspense fallback={<Loading />}>
-                        <AdminAudit />
-                      </Suspense>
-                    )}
-                  />
-                  <Route
-                    path="storage"
-                    component={() => (
-                      <Suspense fallback={<Loading />}>
-                        <AdminStorage />
-                      </Suspense>
-                    )}
-                  />
-                </Route>
-                <Route
-                  path="/"
-                  component={() => (
-                    <AuthGuard>
-                      <Suspense fallback={<Loading />}>
-                        <Home />
-                      </Suspense>
-                    </AuthGuard>
-                  )}
-                />
-                <Route path="/:dir" component={DirectoryLayout}>
-                  <Route path="/" component={() => <Navigate href="session" />} />
-                  <Route
-                    path="/session/:id?"
-                    component={(p) => (
                       <AuthGuard>
-                        <Show when={p.params.id ?? "new"}>
-                          <TerminalProvider>
-                            <FileProvider>
-                              <PromptProvider>
-                                <CommentsProvider>
-                                  <Suspense fallback={<Loading />}>
-                                    <Session />
-                                  </Suspense>
-                                </CommentsProvider>
-                              </PromptProvider>
-                            </FileProvider>
-                          </TerminalProvider>
-                        </Show>
+                        <Suspense fallback={<Loading />}>
+                          <Home />
+                        </Suspense>
                       </AuthGuard>
                     )}
                   />
-                </Route>
-              </Router>
-            </GlobalSyncProvider>
-          </GlobalSDKProvider>
-        </AuthProvider>
+                  <Route path="/:dir" component={DirectoryLayout}>
+                    <Route path="/" component={() => <Navigate href="session" />} />
+                    <Route
+                      path="/session/:id?"
+                      component={(p) => (
+                        <AuthGuard>
+                          <Show when={p.params.id ?? "new"}>
+                            <TerminalProvider>
+                              <FileProvider>
+                                <PromptProvider>
+                                  <CommentsProvider>
+                                    <Suspense fallback={<Loading />}>
+                                      <Session />
+                                    </Suspense>
+                                  </CommentsProvider>
+                                </PromptProvider>
+                              </FileProvider>
+                            </TerminalProvider>
+                          </Show>
+                        </AuthGuard>
+                      )}
+                    />
+                  </Route>
+                </Router>
+              </GlobalSyncProvider>
+            </GlobalSDKProvider>
+          </AuthProvider>
+        </DataRootGate>
       </ServerKey>
     </ServerProvider>
   )

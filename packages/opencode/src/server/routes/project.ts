@@ -143,6 +143,7 @@ export const ProjectRoutes = lazy(() =>
       validator(
         "json",
         z.object({
+          directory: z.string().optional(),
           name: z.string().optional(),
           description: z.string().optional(),
           profile_markdown: z.string().optional(),
@@ -290,6 +291,7 @@ export const ProjectRoutes = lazy(() =>
       validator(
         "json",
         z.object({
+          directory: z.string().optional(),
           name: z.string().optional(),
           description: z.string().optional(),
           profile_markdown: z.string().optional(),
@@ -306,6 +308,9 @@ export const ProjectRoutes = lazy(() =>
         const { id } = c.req.valid("param")
         const body = c.req.valid("json")
         const groups = body.group_ids ? await GroupRegistry.names(body.group_ids) : undefined
+        if (body.directory !== undefined) {
+          await ProjectRegistry.relocate(id, body.directory)
+        }
         const project = await ProjectRegistry.update(id, (draft) => {
           if (body.name !== undefined) draft.name = body.name
           if (body.description !== undefined) draft.description = body.description
